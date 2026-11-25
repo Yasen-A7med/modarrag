@@ -1,0 +1,105 @@
+@import "tailwindcss";
+
+@custom-variant dark (&:where(.dark, .dark *));
+
+@theme inline {
+  --font-sans: var(--font-arabic), ui-sans-serif, system-ui, -apple-system, sans-serif;
+  --font-mono: var(--font-mono), ui-monospace, SFMono-Regular, Menlo, monospace;
+
+  --color-brand-primary: #1e3a8a;
+  --color-brand-accent: #d97706;
+}
+
+:root {
+  color-scheme: light;
+  --bg-canvas: #f8fafc;
+  --bg-surface: #ffffff;
+  --bg-sunken: #f5f7fa;
+  --bg-elevated: #ffffff;
+  --border-hairline: #e2e8f0;
+  --border-strong: #cbd5e1;
+  --text-primary: #0f172a;
+  --text-secondary: #475569;
+  --text-muted: #64748b;
+  --brand-primary: #1e3a8a;
+  --brand-primary-hover: #1d4ed8;
+  --brand-accent: #d97706;
+  --grid-line: rgba(15, 23, 42, 0.04);
+  --shadow-lift: 0 0 0 1px rgba(15, 35, 75, 0.06), 0 1px 2px rgba(15, 35, 75, 0.04);
+}
+
+.dark {
+  color-scheme: dark;
+  --bg-canvas: #090d16;
+  --bg-surface: #0f1623;
+  --bg-sunken: #060911;
+  --bg-elevated: #141d2e;
+  --border-hairline: rgba(255, 255, 255, 0.09);
+  --border-strong: rgba(255, 255, 255, 0.16);
+  --text-primary: #f8fafc;
+  --text-secondary: #cbd5e1;
+  --text-muted: #94a3b8;
+  --brand-primary: #3b82f6;
+  --brand-primary-hover: #2563eb;
+  --brand-accent: #f59e0b;
+  --grid-line: rgba(255, 255, 255, 0.035);
+  --shadow-lift: 0 0 0 1px rgba(255, 255, 255, 0.08), 0 1px 2px rgba(0, 0, 0, 0.35);
+}
+
+html,
+body {
+  background-color: var(--bg-canvas);
+  color: var(--text-primary);
+  font-family: var(--font-sans);
+  letter-spacing: 0;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  /* Never set overflow-x: hidden on html/body (preserves sticky positioning) */
+}
+
+/* Connected Arabic script must always keep letter-spacing strictly at 0 */
+:lang(ar),
+[dir="rtl"] {
+  letter-spacing: 0;
+}
+
+.font-mono,
+.tabular-nums {
+  font-variant-numeric: tabular-nums;
+}
+
+.arch-grid-bg {
+  background-image:
+    linear-gradient(to right, var(--grid-line) 1px, transparent 1px),
+    linear-gradient(to bottom, var(--grid-line) 1px, transparent 1px);
+  background-size: 32px 32px;
+}
+
+.hairline-lift {
+  box-shadow: var(--shadow-lift);
+}
+
+.safe-area-bottom {
+  padding-bottom: max(0.5rem, env(safe-area-inset-bottom));
+}
+
+@media (pointer: coarse) {
+  button,
+  a[role="button"],
+  [role="tab"],
+  input:not([type="checkbox"]):not([type="radio"]),
+  select {
+    min-height: 44px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}

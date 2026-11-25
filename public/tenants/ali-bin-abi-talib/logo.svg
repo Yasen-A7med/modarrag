@@ -1,0 +1,111 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" width="128" height="128" role="img" aria-labelledby="modarrag-school-emblem-title">
+  <title id="modarrag-school-emblem-title">Official Academic School Emblem</title>
+  <defs>
+    <linearGradient id="navy-shield" x1="64" y1="8" x2="64" y2="120" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#1E3A8A" />
+      <stop offset="100%" stop-color="#13255E" />
+    </linearGradient>
+    <linearGradient id="gold-trim" x1="20" y1="12" x2="108" y2="116" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#F59E0B" />
+      <stop offset="100%" stop-color="#D97706" />
+    </linearGradient>
+  </defs>
+
+  <!-- Outer Architectural Shield Badge -->
+  <path
+    d="M64 8 L108 22 V62 C108 90.5 89.2 110.8 64 120 C38.8 110.8 20 90.5 20 62 V22 Z"
+    fill="url(#navy-shield)"
+    stroke="url(#gold-trim)"
+    stroke-width="3.5"
+    stroke-linejoin="round"
+  />
+  <!-- Inner Precision Hairline Frame -->
+  <path
+    d="M64 15.5 L100.5 27.2 V61.5 C100.5 85.8 84.8 103.4 64 111.8 C43.2 103.4 27.5 85.8 27.5 61.5 V27.2 Z"
+    fill="none"
+    stroke="#D97706"
+    stroke-opacity="0.48"
+    stroke-width="1.25"
+    stroke-linejoin="round"
+  />
+
+  <!-- Architectural Amphitheater Arch & Keystone Accent -->
+  <path
+    d="M42 54 V43 C42 30.85 51.85 21 64 21 C76.15 21 86 30.85 86 43 V54"
+    fill="none"
+    stroke="url(#gold-trim)"
+    stroke-width="2.5"
+    stroke-linecap="round"
+  />
+  <polygon points="64,17 67.5,22.5 64,26.5 60.5,22.5" fill="#F59E0B" />
+
+  <!-- Symmetrical Academic Olive Wreath (Left Branch) -->
+  <g fill="#D97706">
+    <path d="M40 88 C33 78 31 66 34 53" fill="none" stroke="#D97706" stroke-width="1.8" stroke-linecap="round" />
+    <path d="M34 53 C29 50 28 44 32 41 C36 44 37 49 34 53 Z" />
+    <path d="M33 61 C27 59 25 53 29 49 C33 52 35 57 33 61 Z" />
+    <path d="M33.5 69 C27 68.5 25 63 28.5 59 C32.5 61 35 65 33.5 69 Z" />
+    <path d="M35.5 77.5 C29 78 26.5 73 29.5 68.5 C33.5 70 36.5 73.5 35.5 77.5 Z" />
+    <path d="M39 85.5 C33 87 29.5 82.5 32.5 77.5 C36.5 78.5 39.5 81.5 39 85.5 Z" />
+    <path d="M44 92.5 C39 95 34.5 91.5 37 86.5 C40.5 86.5 43.5 89 44 92.5 Z" />
+  </g>
+
+  <!-- Symmetrical Academic Olive Wreath (Right Branch) -->
+  <g fill="#D97706">
+    <path d="M88 88 C95 78 97 66 94 53" fill="none" stroke="#D97706" stroke-width="1.8" stroke-linecap="round" />
+    <path d="M94 53 C99 50 100 44 96 41 C92 44 91 49 94 53 Z" />
+    <path d="M95 61 C101 59 103 53 99 49 C95 52 93 57 95 61 Z" />
+    <path d="M94.5 69 C101 68.5 103 63 99.5 59 C95.5 61 93 65 94.5 69 Z" />
+    <path d="M92.5 77.5 C99 78 101.5 73 98.5 68.5 C94.5 70 91.5 73.5 92.5 77.5 Z" />
+    <path d="M89 85.5 C95 87 98.5 82.5 95.5 77.5 C91.5 78.5 88.5 81.5 89 85.5 Z" />
+    <path d="M84 92.5 C89 95 93.5 91.5 91 86.5 C87.5 86.5 84.5 89 84 92.5 Z" />
+  </g>
+
+  <!-- Wreath Base Tie -->
+  <path d="M46 94 Q64 102 82 94" fill="none" stroke="#F59E0B" stroke-width="2.2" stroke-linecap="round" />
+  <circle cx="64" cy="98.5" r="2.6" fill="#F59E0B" />
+
+  <!-- Open Academic Book (Crisp Architectural Geometry) -->
+  <g>
+    <!-- Book Cover Cradle -->
+    <path
+      d="M38 77 L64 84 L90 77 V81.5 L64 89 L38 81.5 Z"
+      fill="url(#gold-trim)"
+    />
+    <!-- Left Page -->
+    <path
+      d="M64 52 C56 47.5 47 47 39.5 49.5 V75.5 C47.5 73.5 56 74.5 64 79 Z"
+      fill="#FFFFFF"
+      stroke="#E2E8F0"
+      stroke-width="1"
+      stroke-linejoin="round"
+    />
+    <!-- Right Page -->
+    <path
+      d="M64 52 C72 47.5 81 47 88.5 49.5 V75.5 C80.5 73.5 72 74.5 64 79 Z"
+      fill="#F8FAFC"
+      stroke="#E2E8F0"
+      stroke-width="1"
+      stroke-linejoin="round"
+    />
+    <!-- Center Spine -->
+    <line x1="64" y1="52" x2="64" y2="83.5" stroke="#1E3A8A" stroke-width="1.8" stroke-linecap="round" />
+    <!-- Subtle Page Ruled Lines -->
+    <path
+      d="M44.5 56 C50 54.8 55 55.2 59.5 57.2 M44.5 62 C50 60.8 55 61.2 59.5 63.2 M44.5 68 C50 66.8 55 67.2 59.5 69.2"
+      fill="none"
+      stroke="#1E3A8A"
+      stroke-opacity="0.35"
+      stroke-width="1.5"
+      stroke-linecap="round"
+    />
+    <path
+      d="M83.5 56 C78 54.8 73 55.2 68.5 57.2 M83.5 62 C78 60.8 73 61.2 68.5 63.2 M83.5 68 C78 66.8 73 67.2 68.5 69.2"
+      fill="none"
+      stroke="#1E3A8A"
+      stroke-opacity="0.35"
+      stroke-width="1.5"
+      stroke-linecap="round"
+    />
+  </g>
+</svg>

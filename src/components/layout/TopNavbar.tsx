@@ -1,0 +1,265 @@
+"use client";
+
+import * as React from "react";
+import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { LogOut, Menu, ShieldCheck, X } from "lucide-react";
+import { signOutAction } from "@/application/auth/actions";
+import { ModarragLogo } from "@/components/brand/ModarragLogo";
+import { Badge } from "@/components/ui/Badge";
+import { Button, buttonVariants } from "@/components/ui/Button";
+import { ThemeToggle } from "@/components/ui/ThemeToggle";
+import type { UserRole } from "@/infrastructure/supabase/database.types";
+import { cn } from "@/lib/utils";
+
+export interface TopNavbarLink {
+  readonly href: string;
+  readonly label: string;
+  readonly active?: boolean;
+}
+
+export interface TopNavbarUser {
+  readonly role: UserRole;
+  readonly roleLabelAr: string;
+  readonly codeLabel?: string | null;
+}
+
+export interface TopNavbarProps {
+  readonly brandHref?: string;
+  readonly school?: {
+    readonly slug: string;
+    readonly nameAr: string;
+    readonly logoUrl?: string | null;
+  } | null;
+  readonly links?: readonly TopNavbarLink[];
+  readonly user?: TopNavbarUser | null;
+  readonly onSignOut?: () => void | Promise<void>;
+  readonly className?: string;
+}
+
+/**
+ * Flush 64px sticky top navigation bar matching Cal.com / Linear hairline discipline.
+ * Strictly zero personal names or initial-letter avatars.
+ */
+export function TopNavbar({
+  brandHref = "/",
+  school,
+  links = [],
+  user,
+  onSignOut,
+  className,
+}: TopNavbarProps) {
+  const router = useRouter();
+  const [mobileOpen, setMobileOpen] = React.useState(false);
+  const [signingOut, setSigningOut] = React.useState(false);
+
+  const handleSignOut = async () => {
+    setSigningOut(true);
+    try {
+      if (onSignOut) {
+        await onSignOut();
+      } else {
+        await signOutAction();
+      }
+      router.push("/login");
+      router.refresh();
+    } finally {
+      setSigningOut(false);
+      setMobileOpen(false);
+    }
+  };
+
+  return (
+    <header
+      className={cn(
+        "sticky top-0 z-40 border-b border-[var(--border-hairline)] bg-[var(--bg-surface)]/85 backdrop-blur-md",
+        className
+      )}
+    >
+      <div className="mx-auto flex h-16 max-w-7xl items-center justify-between gap-3 px-4 sm:px-6">
+        {/* Start: Brand & Optional Tenant Emblem */}
+        <div className="flex min-w-0 items-center gap-3">
+          <Link
+            href={brandHref}
+            className="inline-flex shrink-0 items-center rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600/40"
+          >
+            <ModarragLogo size="sm" showWordmark />
+          </Link>
+
+          {school && (
+            <>
+              <span
+                className="hidden h-5 w-px bg-[var(--border-hairline)] sm:inline-block"
+                aria-hidden="true"
+              />
+              <Link
+                href={`/s/${school.slug}`}
+                className="hidden min-w-0 items-center gap-2 rounded-lg border border-[var(--border-hairline)] bg-[var(--bg-sunken)] px-2.5 py-1 text-xs font-medium text-[var(--text-primary)] hover:border-[var(--border-strong)] sm:inline-flex"
+              >
+                {school.logoUrl && (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img
+                    src={school.logoUrl}
+                    alt={school.nameAr}
+                    className="h-5 w-5 shrink-0 rounded-md object-contain"
+                  />
+                )}
+                <span className="max-w-[200px] truncate">{school.nameAr}</span>
+              </Link>
+            </>
+          )}
+        </div>
+
+        {/* Center: Desktop Links */}
+        {links.length > 0 && (
+          <nav
+            className="hidden items-center gap-1 md:flex"
+            aria-label="التنقل الرئيسي"
+          >
+            {links.map((item) => (
+              <Link
+                key={item.href}
+                href={item.href}
+                className={cn(
+                  "rounded-lg px-3 py-2 text-sm font-medium transition-colors whitespace-nowrap",
+                  item.active
+                    ? "bg-[var(--bg-sunken)] text-[var(--text-primary)]"
+                    : "text-[var(--text-secondary)] hover:bg-[var(--bg-sunken)] hover:text-[var(--text-primary)]"
+                )}
+              >
+                {item.label}
+              </Link>
+            ))}
+          </nav>
+        )}
+
+        {/* End: Theme Toggle & Auth Controls */}
+        <div className="flex items-center gap-2">
+          <ThemeToggle />
+
+          {user ? (
+            <div className="hidden items-center gap-2 sm:flex">
+              <Badge variant="primary" size="md" className="gap-1.5">
+                <ShieldCheck className="h-3.5 w-3.5 shrink-0" />
+                <span>{user.codeLabel || user.roleLabelAr}</span>
+              </Badge>
+              <Button
+                variant="outline"
+                size="sm"
+                loading={signingOut}
+                onClick={handleSignOut}
+                leftIcon={<LogOut className="h-3.5 w-3.5" />}
+              >
+                خروج
+              </Button>
+            </div>
+          ) : (
+            <div className="hidden items-center gap-2 sm:flex">
+              <Link
+                href="/login"
+                className={buttonVariants({ variant: "outline", size: "md" })}
+              >
+                تسجيل الدخول
+              </Link>
+              <Link
+                href="/register"
+                className={buttonVariants({ variant: "primary", size: "md" })}
+              >
+                حساب جديد
+              </Link>
+            </div>
+          )}
+
+          {/* Mobile Drawer Trigger */}
+          <button
+            type="button"
+            onClick={() => setMobileOpen((prev) => !prev)}
+            className="inline-flex h-10 w-10 items-center justify-center rounded-lg border border-[var(--border-hairline)] bg-[var(--bg-surface)] text-[var(--text-primary)] md:hidden cursor-pointer"
+            aria-label={mobileOpen ? "إغلاق القائمة" : "فتح القائمة"}
+            aria-expanded={mobileOpen}
+          >
+            {mobileOpen ? <X className="h-4 w-4" /> : <Menu className="h-4 w-4" />}
+          </button>
+        </div>
+      </div>
+
+      {/* Mobile Collapsible Navigation Drawer */}
+      {mobileOpen && (
+        <div className="border-t border-[var(--border-hairline)] bg-[var(--bg-surface)] px-4 py-3 md:hidden">
+          {school && (
+            <div className="mb-3 flex items-center gap-2 rounded-lg border border-[var(--border-hairline)] bg-[var(--bg-sunken)] px-3 py-2 text-xs font-medium text-[var(--text-primary)]">
+              {school.logoUrl && (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                  src={school.logoUrl}
+                  alt={school.nameAr}
+                  className="h-5 w-5 shrink-0 rounded-md object-contain"
+                />
+              )}
+              <span className="truncate">{school.nameAr}</span>
+            </div>
+          )}
+
+          {links.length > 0 && (
+            <nav className="flex flex-col gap-1" aria-label="قائمة الجوال">
+              {links.map((item) => (
+                <Link
+                  key={item.href}
+                  href={item.href}
+                  onClick={() => setMobileOpen(false)}
+                  className={cn(
+                    "flex min-h-[44px] items-center rounded-lg px-3 text-sm font-medium",
+                    item.active
+                      ? "bg-[var(--bg-sunken)] text-[var(--text-primary)]"
+                      : "text-[var(--text-secondary)] hover:bg-[var(--bg-sunken)]"
+                  )}
+                >
+                  {item.label}
+                </Link>
+              ))}
+            </nav>
+          )}
+
+          <div className="mt-3 flex flex-col gap-2 border-t border-[var(--border-hairline)] pt-3 sm:hidden">
+            {user ? (
+              <>
+                <div className="flex items-center justify-between px-1">
+                  <span className="text-xs text-[var(--text-muted)]">الدور الحالي</span>
+                  <Badge variant="primary" size="sm">
+                    {user.codeLabel || user.roleLabelAr}
+                  </Badge>
+                </div>
+                <Button
+                  variant="outline"
+                  fullWidth
+                  loading={signingOut}
+                  onClick={handleSignOut}
+                  leftIcon={<LogOut className="h-4 w-4" />}
+                >
+                  تسجيل الخروج
+                </Button>
+              </>
+            ) : (
+              <div className="grid grid-cols-2 gap-2">
+                <Link
+                  href="/login"
+                  onClick={() => setMobileOpen(false)}
+                  className={buttonVariants({ variant: "outline", size: "md", fullWidth: true })}
+                >
+                  دخول
+                </Link>
+                <Link
+                  href="/register"
+                  onClick={() => setMobileOpen(false)}
+                  className={buttonVariants({ variant: "primary", size: "md", fullWidth: true })}
+                >
+                  حساب جديد
+                </Link>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+    </header>
+  );
+}
