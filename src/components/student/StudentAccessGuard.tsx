@@ -1,5 +1,6 @@
+import Image from "next/image";
 import Link from "next/link";
-import { AlertCircle, ArrowRight, Lock, LogIn, ShieldAlert } from "lucide-react";
+import { ArrowRight, LogIn } from "lucide-react";
 import { buttonVariants } from "@/components/ui/Button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/Card";
 import type { AppError } from "@/domain/common/errors";
@@ -24,18 +25,18 @@ export function StudentAccessGuard({
   const isForbidden = error.code === "FORBIDDEN";
 
   return (
-    <Card className="mx-auto max-w-lg">
+    <Card className="mx-auto max-w-lg rounded-3xl">
       <CardHeader className="pb-3">
-        <div className="flex items-center gap-3">
-          <span className="inline-flex h-12 w-12 shrink-0 items-center justify-center rounded-xl border border-[var(--border-hairline)] bg-[var(--bg-sunken)]">
-            {isUnauthorized ? (
-              <Lock className="h-6 w-6 text-[#0B63CE] dark:text-blue-400" />
-            ) : isForbidden ? (
-              <ShieldAlert className="h-6 w-6 text-amber-600 dark:text-amber-400" />
-            ) : (
-              <AlertCircle className="h-6 w-6 text-red-600 dark:text-red-400" />
-            )}
-          </span>
+        <div className="flex items-center gap-3.5">
+          <div className="art-pedestal h-16 w-16 shrink-0 overflow-hidden rounded-2xl p-1">
+            <Image
+              src={isUnauthorized || isForbidden ? "/images/role-student-3d.webp" : "/images/empty-calm-3d.webp"}
+              alt="بوابة الطالب"
+              width={64}
+              height={64}
+              className="h-full w-full rounded-xl object-cover"
+            />
+          </div>
           <CardTitle className="text-xl">
             {isUnauthorized
               ? "سجّل دخولك لعرض حصصك"

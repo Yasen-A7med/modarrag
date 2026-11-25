@@ -1,6 +1,7 @@
 "use client";
 
 import * as React from "react";
+import { AnimatePresence, motion } from "framer-motion";
 import { Moon, Sun } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -77,11 +78,31 @@ export function ThemeToggle({ className }: ThemeToggleProps) {
       aria-label={isDark ? "التبديل للوضع الفاتح" : "التبديل للوضع الداكن"}
       title={isDark ? "الوضع الفاتح" : "الوضع الداكن"}
     >
-      {isDark ? (
-        <Sun className="h-5 w-5 text-amber-400" strokeWidth={2} />
-      ) : (
-        <Moon className="h-5 w-5" strokeWidth={2} />
-      )}
+      <AnimatePresence mode="popLayout" initial={false}>
+        {isDark ? (
+          <motion.span
+            key="sun"
+            initial={{ opacity: 0, rotate: -35, scale: 0.72 }}
+            animate={{ opacity: 1, rotate: 0, scale: 1 }}
+            exit={{ opacity: 0, rotate: 35, scale: 0.72 }}
+            transition={{ duration: 0.16, ease: [0.22, 1, 0.36, 1] }}
+            className="inline-flex items-center justify-center"
+          >
+            <Sun className="h-5 w-5 text-amber-400" strokeWidth={2} />
+          </motion.span>
+        ) : (
+          <motion.span
+            key="moon"
+            initial={{ opacity: 0, rotate: 35, scale: 0.72 }}
+            animate={{ opacity: 1, rotate: 0, scale: 1 }}
+            exit={{ opacity: 0, rotate: -35, scale: 0.72 }}
+            transition={{ duration: 0.16, ease: [0.22, 1, 0.36, 1] }}
+            className="inline-flex items-center justify-center"
+          >
+            <Moon className="h-5 w-5" strokeWidth={2} />
+          </motion.span>
+        )}
+      </AnimatePresence>
     </button>
   );
 }

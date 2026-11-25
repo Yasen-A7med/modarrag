@@ -156,7 +156,7 @@ export function LiveOccupancyBento({
               <Card
                 key={hall.id}
                 className={cn(
-                  "flex flex-col justify-between gap-3 p-4",
+                  "hover-lift-card flex flex-col justify-between gap-3 p-4",
                   hasActiveSession && "border-emerald-300/80 dark:border-emerald-500/35"
                 )}
               >

@@ -1,16 +1,13 @@
 "use client";
 
 import * as React from "react";
+import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
   AlertCircle,
-  BookOpen,
-  Building2,
-  ClipboardCheck,
   Eye,
   EyeOff,
-  GraduationCap,
   Lock,
   Mail,
   Shield,
@@ -19,6 +16,11 @@ import {
   signInDemoRoleAction,
   signInWithPasswordAction,
 } from "@/application/auth/actions";
+import {
+  MotionReveal,
+  MotionStaggerCard,
+  MotionStaggerGrid,
+} from "@/components/motion/MotionPrimitives";
 import { Button } from "@/components/ui/Button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/Card";
 import { Input } from "@/components/ui/Input";
@@ -36,7 +38,7 @@ interface DemoAccountCard {
   readonly roleKey: DemoRoleKey;
   readonly labelAr: string;
   readonly hintAr: string;
-  readonly icon: React.ComponentType<{ className?: string }>;
+  readonly artwork: string;
   readonly accentClass: string;
 }
 
@@ -45,29 +47,29 @@ const PRIMARY_DEMO_ROLES: readonly DemoAccountCard[] = [
     roleKey: "student_201",
     labelAr: "طالب الهندسة",
     hintAr: "احجز حصصك بالاسم بضغطة واحدة",
-    icon: GraduationCap,
-    accentClass: "border-blue-200 bg-[#EEF5FF]/60 hover:border-[#0B63CE] dark:border-blue-500/30 dark:bg-blue-500/10",
+    artwork: "/images/role-student-3d.webp",
+    accentClass: "border-blue-200 bg-[#EEF5FF]/65 hover:border-[#0B63CE] dark:border-blue-500/30 dark:bg-blue-500/12",
   },
   {
     roleKey: "student_202",
     labelAr: "طالب الآداب",
     hintAr: "طالب مسار الآداب واللغة الإيطالية",
-    icon: BookOpen,
-    accentClass: "border-sky-200 bg-sky-50/70 hover:border-sky-600 dark:border-sky-500/30 dark:bg-sky-500/10",
+    artwork: "/images/track-arts.webp",
+    accentClass: "border-sky-200 bg-sky-50/75 hover:border-sky-600 dark:border-sky-500/30 dark:bg-sky-500/12",
   },
   {
     roleKey: "teacher_101",
     labelAr: "معلم المادة",
     hintAr: "افتح كشف الأسماء وسجّل الحضور ✓",
-    icon: ClipboardCheck,
-    accentClass: "border-emerald-200 bg-emerald-50/70 hover:border-[#16A34A] dark:border-emerald-500/30 dark:bg-emerald-500/10",
+    artwork: "/images/role-teacher-3d.webp",
+    accentClass: "border-emerald-200 bg-emerald-50/75 hover:border-[#16A34A] dark:border-emerald-500/30 dark:bg-emerald-500/12",
   },
   {
     roleKey: "school_admin",
     labelAr: "إدارة المدرسة",
     hintAr: "القاعات والمناهج والتقارير اليومية",
-    icon: Building2,
-    accentClass: "border-amber-200 bg-amber-50/70 hover:border-amber-600 dark:border-amber-500/30 dark:bg-amber-500/10",
+    artwork: "/images/role-admin-3d.webp",
+    accentClass: "border-amber-200 bg-amber-50/75 hover:border-amber-600 dark:border-amber-500/30 dark:bg-amber-500/12",
   },
 ] as const;
 
@@ -147,9 +149,9 @@ export function LoginClient() {
   };
 
   return (
-    <div className="mx-auto flex w-full max-w-2xl flex-col gap-6">
-      {/* 1-Tap Friendly Demo Section */}
-      <Card>
+    <MotionReveal className="mx-auto flex w-full max-w-2xl flex-col gap-6">
+      {/* 1-Tap Friendly Demo Section with 3D Role Art */}
+      <Card className="rounded-3xl">
         <CardHeader className="pb-3">
           <CardTitle className="text-xl">تجربة فورية بضغطة واحدة</CardTitle>
           <p className="text-base text-[var(--text-secondary)]">
@@ -158,37 +160,43 @@ export function LoginClient() {
         </CardHeader>
 
         <CardContent className="flex flex-col gap-4">
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+          <MotionStaggerGrid className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             {PRIMARY_DEMO_ROLES.map((item) => {
-              const Icon = item.icon;
               const isBusy = loadingRole === item.roleKey;
               return (
-                <button
-                  key={item.roleKey}
-                  type="button"
-                  disabled={loadingRole !== null || submitting}
-                  onClick={() => handleDemoSignIn(item.roleKey, item.labelAr)}
-                  className={cn(
-                    "flex min-h-[76px] items-center gap-3.5 rounded-2xl border p-4 text-start transition-[border-color,transform] cursor-pointer",
-                    "active:scale-[0.98] disabled:opacity-60",
-                    item.accentClass
-                  )}
-                >
-                  <span className="inline-flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-[var(--bg-surface)] text-[#0B63CE] shadow-xs dark:text-blue-300">
-                    <Icon className="h-6 w-6" />
-                  </span>
-                  <div className="min-w-0 flex-1">
-                    <p className="text-base font-bold text-[var(--text-primary)]">
-                      {isBusy ? "جاري الدخول..." : item.labelAr}
-                    </p>
-                    <p className="mt-0.5 text-sm text-[var(--text-secondary)]">
-                      {item.hintAr}
-                    </p>
-                  </div>
-                </button>
+                <MotionStaggerCard key={item.roleKey}>
+                  <button
+                    type="button"
+                    disabled={loadingRole !== null || submitting}
+                    onClick={() => handleDemoSignIn(item.roleKey, item.labelAr)}
+                    className={cn(
+                      "group hover-lift-card flex min-h-[84px] w-full items-center gap-3.5 rounded-2xl border p-3.5 text-start cursor-pointer",
+                      "active:scale-[0.98] disabled:opacity-60",
+                      item.accentClass
+                    )}
+                  >
+                    <span className="art-pedestal h-14 w-14 shrink-0 overflow-hidden rounded-xl p-1">
+                      <Image
+                        src={item.artwork}
+                        alt={item.labelAr}
+                        width={56}
+                        height={56}
+                        className="h-full w-full rounded-lg object-cover transition-transform duration-300 group-hover:scale-105"
+                      />
+                    </span>
+                    <div className="min-w-0 flex-1">
+                      <p className="text-base font-bold text-[var(--text-primary)]">
+                        {isBusy ? "جاري الدخول..." : item.labelAr}
+                      </p>
+                      <p className="mt-0.5 text-sm text-[var(--text-secondary)]">
+                        {item.hintAr}
+                      </p>
+                    </div>
+                  </button>
+                </MotionStaggerCard>
               );
             })}
-          </div>
+          </MotionStaggerGrid>
 
           <div className="flex items-center justify-between border-t border-[var(--border-hairline)] pt-3">
             <span className="text-sm text-[var(--text-muted)]">
@@ -291,6 +299,6 @@ export function LoginClient() {
           </form>
         </CardContent>
       </Card>
-    </div>
+    </MotionReveal>
   );
 }

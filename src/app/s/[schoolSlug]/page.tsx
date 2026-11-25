@@ -1,13 +1,14 @@
+import Image from "next/image";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import {
-  ArrowLeft,
-  Building2,
-  CalendarCheck,
-  ClipboardCheck,
-} from "lucide-react";
+import { ArrowLeft } from "lucide-react";
 import { getCurrentUserContext } from "@/application/auth/actions";
-import { TrackIcon } from "@/components/brand/TrackIcon";
+import { TrackArtwork } from "@/components/brand/TrackIcon";
+import {
+  MotionReveal,
+  MotionStaggerCard,
+  MotionStaggerGrid,
+} from "@/components/motion/MotionPrimitives";
 import { buttonVariants } from "@/components/ui/Button";
 import {
   getSchoolCatalogBySlug,
@@ -58,37 +59,34 @@ export default async function SchoolPortalPage({ params }: SchoolPortalPageProps
       title: "بوابة الطالب",
       description: "تصفّح حصص موادك واحجز مقعدك باسمك بضغطة واحدة",
       ctaLabel: "احجز حصتك",
-      icon: CalendarCheck,
+      artwork: "/images/role-student-3d.webp",
       accentClass: "border-t-4 border-t-[#16A34A] dark:border-t-emerald-500",
-      iconBg: "bg-emerald-50 text-[#16A34A] dark:bg-emerald-500/15 dark:text-emerald-300",
     },
     {
       href: `/s/${school.slug}/teacher`,
       title: "بوابة المعلم",
       description: "افتح كشف أسماء الطلاب وسجّل الحضور بالاسم أو احجز مدرجاً",
       ctaLabel: "كشوف الحضور",
-      icon: ClipboardCheck,
+      artwork: "/images/role-teacher-3d.webp",
       accentClass: "border-t-4 border-t-[#0B63CE] dark:border-t-blue-500",
-      iconBg: "bg-[#EEF5FF] text-[#0B63CE] dark:bg-blue-500/15 dark:text-blue-300",
     },
     {
       href: `/s/${school.slug}/admin`,
       title: "إدارة المدرسة",
       description: "متابعة إشغال القاعات، اعتماد المعلمين، وتقارير الحضور",
       ctaLabel: "لوحة الإدارة",
-      icon: Building2,
+      artwork: "/images/role-admin-3d.webp",
       accentClass: "border-t-4 border-t-[#D97706] dark:border-t-amber-500",
-      iconBg: "bg-amber-50 text-[#B45309] dark:bg-amber-500/15 dark:text-amber-300",
     },
   ] as const;
 
   return (
     <div className="flex flex-col gap-6">
-      {/* Friendly School Welcome Card */}
-      <div className="rounded-2xl border border-[var(--border-hairline)] bg-[var(--bg-surface)] p-6 hairline-lift">
+      {/* Friendly School Welcome Card with ambient backdrop */}
+      <MotionReveal className="ambient-mesh rounded-3xl border border-[var(--border-hairline)] p-6 hairline-lift">
         <div className="flex flex-col gap-5 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex items-center gap-4 min-w-0">
-            <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-2xl border border-[var(--border-hairline)] bg-[var(--bg-sunken)] p-2">
+            <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-2xl border border-[var(--border-hairline)] bg-[var(--bg-surface)] p-2 shadow-xs">
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img
                 src={school.logo_url || "/tenants/ali-bin-abi-talib/logo.svg"}
@@ -114,30 +112,29 @@ export default async function SchoolPortalPage({ params }: SchoolPortalPageProps
             <ArrowLeft className="h-5 w-5" />
           </Link>
         </div>
-      </div>
+      </MotionReveal>
 
-      {/* 3 Big Clear Doorway Cards */}
-      <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
-        {portalDoorways.map((doorway) => {
-          const Icon = doorway.icon;
-          return (
+      {/* 3 Big Clear Doorway Cards with 3D Sculptures */}
+      <MotionStaggerGrid className="grid grid-cols-1 gap-4 md:grid-cols-3">
+        {portalDoorways.map((doorway) => (
+          <MotionStaggerCard key={doorway.href}>
             <Link
-              key={doorway.href}
               href={doorway.href}
               className={cn(
-                "group flex flex-col justify-between rounded-2xl border border-[var(--border-hairline)] bg-[var(--bg-surface)] p-6 hairline-lift transition-colors hover:border-[var(--border-strong)]",
+                "group hover-lift-card flex h-full flex-col justify-between rounded-3xl border border-[var(--border-hairline)] bg-[var(--bg-surface)] p-6 hairline-lift",
                 doorway.accentClass
               )}
             >
               <div>
-                <span
-                  className={cn(
-                    "inline-flex h-12 w-12 items-center justify-center rounded-xl",
-                    doorway.iconBg
-                  )}
-                >
-                  <Icon className="h-6 w-6" />
-                </span>
+                <div className="art-pedestal inline-flex h-20 w-20 overflow-hidden rounded-2xl p-1.5">
+                  <Image
+                    src={doorway.artwork}
+                    alt={doorway.title}
+                    width={80}
+                    height={80}
+                    className="h-full w-full rounded-xl object-cover transition-transform duration-300 group-hover:scale-105"
+                  />
+                </div>
                 <h2 className="mt-4 text-xl font-bold text-[var(--text-primary)]">
                   {doorway.title}
                 </h2>
@@ -151,12 +148,12 @@ export default async function SchoolPortalPage({ params }: SchoolPortalPageProps
                 <ArrowLeft className="h-4 w-4 transition-transform group-hover:-translate-x-1" />
               </div>
             </Link>
-          );
-        })}
-      </div>
+          </MotionStaggerCard>
+        ))}
+      </MotionStaggerGrid>
 
-      {/* Tracks Summary */}
-      <div className="rounded-2xl border border-[var(--border-hairline)] bg-[var(--bg-surface)] p-6 hairline-lift">
+      {/* Tracks Summary with 3D Thumbnails */}
+      <MotionReveal className="rounded-3xl border border-[var(--border-hairline)] bg-[var(--bg-surface)] p-6 hairline-lift">
         <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
           <h2 className="text-xl font-bold text-[var(--text-primary)]">
             المسارات المتاحة بالمدرسة
@@ -176,10 +173,10 @@ export default async function SchoolPortalPage({ params }: SchoolPortalPageProps
             return (
               <div
                 key={track.id}
-                className="rounded-xl border border-[var(--border-hairline)] bg-[var(--bg-sunken)] p-4"
+                className="group hover-lift-card rounded-2xl border border-[var(--border-hairline)] bg-[var(--bg-sunken)] p-4"
               >
-                <div className="flex items-center gap-2.5">
-                  <TrackIcon
+                <div className="flex items-center gap-3">
+                  <TrackArtwork
                     trackCode={track.code}
                     iconKey={track.icon_key}
                     size="sm"
@@ -188,7 +185,7 @@ export default async function SchoolPortalPage({ params }: SchoolPortalPageProps
                     {track.name_ar}
                   </h3>
                 </div>
-                <p className="mt-2.5 text-sm text-[var(--text-secondary)]">
+                <p className="mt-3 text-sm text-[var(--text-secondary)]">
                   {subs
                     .filter((s) => s.subject_type === "track_core")
                     .map((s) => s.name_ar)
@@ -201,7 +198,7 @@ export default async function SchoolPortalPage({ params }: SchoolPortalPageProps
             );
           })}
         </div>
-      </div>
+      </MotionReveal>
     </div>
   );
 }

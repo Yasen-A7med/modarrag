@@ -36,7 +36,7 @@ export default async function OnboardingPage() {
   );
 
   return (
-    <div className="min-h-dvh bg-[var(--bg-hero)] text-[var(--text-primary)]">
+    <div className="ambient-mesh min-h-dvh text-[var(--text-primary)]">
       <TopNavbar
         brandHref="/"
         links={[

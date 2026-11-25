@@ -28,7 +28,7 @@ export function ModarragLogo({
     <span className={cn("inline-flex items-center gap-3 select-none", className)}>
       <span
         className={cn(
-          "inline-flex shrink-0 items-center justify-center rounded-xl bg-[#0B63CE] text-white dark:bg-blue-600",
+          "inline-flex shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-[#254EDB] to-[#0B63CE] text-white shadow-md shadow-blue-900/20 dark:from-[#3B66F5] dark:to-[#1D3FA8]",
           dims.box
         )}
         aria-hidden="true"

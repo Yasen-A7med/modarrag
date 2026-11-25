@@ -1,6 +1,7 @@
 "use client";
 
 import * as React from "react";
+import Image from "next/image";
 import Link from "next/link";
 import {
   Building2,
@@ -14,7 +15,12 @@ import type { SchoolAdminDashboardData } from "@/application/academic/actions";
 import type { HallOccupancyData } from "@/application/halls/actions";
 import { HallGaugeRing } from "@/components/admin/LiveOccupancyBento";
 import { ModarragLogo } from "@/components/brand/ModarragLogo";
-import { TrackIcon } from "@/components/brand/TrackIcon";
+import { TrackArtwork } from "@/components/brand/TrackIcon";
+import {
+  MotionReveal,
+  MotionStaggerCard,
+  MotionStaggerGrid,
+} from "@/components/motion/MotionPrimitives";
 import { Badge } from "@/components/ui/Badge";
 import { Button, buttonVariants } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
@@ -115,7 +121,7 @@ export function MinistryPresentationClient({
       `}</style>
 
       {/* Executive Presentation Header Bar */}
-      <Card className="p-5 sm:p-6">
+      <MotionReveal className="ambient-mesh rounded-3xl border border-[var(--border-hairline)] p-5 sm:p-6 hairline-lift">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
           <div className="flex items-start gap-4 min-w-0">
             <ModarragLogo size="lg" showWordmark showSubtitle />
@@ -134,6 +140,16 @@ export function MinistryPresentationClient({
           </div>
 
           <div className="flex flex-wrap items-center gap-2 print:hidden">
+            <div className="art-pedestal hidden h-12 w-12 shrink-0 overflow-hidden rounded-xl p-1 xl:block">
+              <Image
+                src="/images/role-admin-3d.webp"
+                alt="لوحة متابعة المدرسة"
+                width={48}
+                height={48}
+                loading="eager"
+                className="h-full w-full rounded-lg object-cover"
+              />
+            </div>
             <ThemeToggle />
 
             <a
@@ -174,7 +190,7 @@ export function MinistryPresentationClient({
             </Button>
           </div>
         </div>
-      </Card>
+      </MotionReveal>
 
       {/* Safety + Simplicity Pillars */}
       <section className="grid grid-cols-1 gap-4 lg:grid-cols-3">
@@ -308,7 +324,7 @@ export function MinistryPresentationClient({
           </span>
         </div>
 
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+        <MotionStaggerGrid className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           {dashboard.tracks.map((track) => {
             const linkedSubjects = dashboard.trackSubjects
               .filter((ts) => ts.trackId === track.id)
@@ -316,30 +332,32 @@ export function MinistryPresentationClient({
               .filter((s): s is NonNullable<typeof s> => Boolean(s));
 
             return (
-              <Card key={track.id} className="p-4">
-                <div className="flex items-center justify-between gap-2">
-                  <div className="flex items-center gap-2.5 min-w-0">
-                    <TrackIcon trackCode={track.code} size="sm" />
+              <MotionStaggerCard key={track.id}>
+                <Card className="hover-lift-card p-4">
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="flex items-center gap-3 min-w-0">
+                      <TrackArtwork trackCode={track.code} size="sm" />
                       <h3 className="truncate text-base font-bold text-[var(--text-primary)]">
                         {track.nameAr}
                       </h3>
-                  </div>
-                  <Badge variant="success">
-                    {formatArabicNumber(linkedSubjects.length)} مواد مرتبطة
-                  </Badge>
-                </div>
-
-                <div className="mt-3 flex flex-wrap gap-1.5">
-                  {linkedSubjects.map((subj) => (
-                    <Badge key={subj.id} variant="neutral" size="sm">
-                      {subj.nameAr}
+                    </div>
+                    <Badge variant="success">
+                      {formatArabicNumber(linkedSubjects.length)} مواد مرتبطة
                     </Badge>
-                  ))}
-                </div>
-              </Card>
+                  </div>
+
+                  <div className="mt-3 flex flex-wrap gap-1.5">
+                    {linkedSubjects.map((subj) => (
+                      <Badge key={subj.id} variant="neutral" size="sm">
+                        {subj.nameAr}
+                      </Badge>
+                    ))}
+                  </div>
+                </Card>
+              </MotionStaggerCard>
             );
           })}
-        </div>
+        </MotionStaggerGrid>
       </section>
 
       {isFullscreenMode && (

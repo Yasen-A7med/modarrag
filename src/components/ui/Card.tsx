@@ -13,7 +13,7 @@ const CARD_VARIANTS: Readonly<Record<CardVariant, string>> = {
   sunken:
     "rounded-2xl border border-[var(--border-hairline)] bg-[var(--bg-sunken)]",
   interactive:
-    "rounded-2xl border border-[var(--border-hairline)] bg-[var(--bg-surface)] hairline-lift transition-colors duration-150 hover:border-[var(--border-strong)]",
+    "rounded-2xl border border-[var(--border-hairline)] bg-[var(--bg-surface)] hairline-lift hover-lift-card",
   frame:
     "rounded-2xl border border-[var(--border-hairline)] bg-[var(--bg-surface)] hairline-lift",
 };

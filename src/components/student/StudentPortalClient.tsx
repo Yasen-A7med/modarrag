@@ -1,16 +1,16 @@
 "use client";
 
 import * as React from "react";
+import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { motion } from "framer-motion";
 import {
   Calendar,
   CheckCircle2,
   Clock,
-  GraduationCap,
   MapPin,
   Trash2,
-  UserCheck,
 } from "lucide-react";
 import {
   bookStudentSeatAction,
@@ -19,6 +19,15 @@ import {
   type StudentPortalData,
   type StudentPortalSession,
 } from "@/application/bookings/actions";
+import { TrackArtwork } from "@/components/brand/TrackIcon";
+import {
+  AnimatedFilterTabs,
+  MotionMetricBar,
+  MotionReveal,
+  MotionStaggerCard,
+  MotionStaggerGrid,
+  TACTILE_SPRING,
+} from "@/components/motion/MotionPrimitives";
 import { Badge } from "@/components/ui/Badge";
 import { Button, buttonVariants } from "@/components/ui/Button";
 import { Card, CardContent } from "@/components/ui/Card";
@@ -72,6 +81,7 @@ export function StudentPortalClient({
   schoolNameAr,
   initialData,
   userRole,
+  trackCode,
 }: StudentPortalClientProps) {
   const router = useRouter();
   const { toast } = useToast();
@@ -280,30 +290,49 @@ export function StudentPortalClient({
 
   return (
     <div className="flex flex-col gap-6">
-      {/* Greeting Header Card */}
-      <div className="rounded-2xl border border-[var(--border-hairline)] bg-[var(--bg-surface)] p-5 sm:p-6 hairline-lift">
+      {/* Greeting Header Card with Track 3D Art */}
+      <MotionReveal className="ambient-mesh rounded-3xl border border-[var(--border-hairline)] p-5 sm:p-6 hairline-lift">
         <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-          <div>
-            <p className="text-sm font-semibold text-[#0B63CE] dark:text-blue-400">
-              {schoolNameAr}
-            </p>
-            <h1 className="mt-1 text-2xl font-bold text-[var(--text-primary)]">
-              أهلاً، {initialData.studentName}
-            </h1>
-            {initialData.enrollment && (
-              <p className="mt-1 text-base text-[var(--text-secondary)]">
-                مسارك المسجل:{" "}
-                <strong className="font-bold text-[var(--text-primary)]">
-                  {initialData.enrollment.trackNameAr}
-                </strong>
-              </p>
+          <div className="flex items-center gap-4 min-w-0">
+            {trackCode ? (
+              <TrackArtwork trackCode={trackCode} size="md" />
+            ) : (
+              <div className="art-pedestal h-16 w-16 shrink-0 overflow-hidden rounded-2xl p-1">
+                <Image
+                  src="/images/role-student-3d.webp"
+                  alt="بوابة الطالب"
+                  width={64}
+                  height={64}
+                  className="h-full w-full rounded-xl object-cover"
+                />
+              </div>
             )}
+            <div className="min-w-0">
+              <p className="text-sm font-semibold text-[#0B63CE] dark:text-blue-300">
+                {schoolNameAr}
+              </p>
+              <h1 className="mt-1 text-2xl font-bold text-[var(--text-primary)]">
+                أهلاً، {initialData.studentName}
+              </h1>
+              {initialData.enrollment && (
+                <p className="mt-1 text-base text-[var(--text-secondary)]">
+                  مسارك المسجل:{" "}
+                  <strong className="font-bold text-[var(--text-primary)]">
+                    {initialData.enrollment.trackNameAr}
+                  </strong>
+                </p>
+              )}
+            </div>
           </div>
 
           {initialData.enrollment ? (
             <Link
               href="/onboarding"
-              className={buttonVariants({ variant: "outline", size: "md" })}
+              className={buttonVariants({
+                variant: "outline",
+                size: "md",
+                className: "bg-[var(--bg-surface)]/90",
+              })}
             >
               تغيير المسار أو البيانات
             </Link>
@@ -318,20 +347,26 @@ export function StudentPortalClient({
         </div>
 
         {!isStudentAccount && (
-          <div className="mt-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-base text-amber-900 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-200">
+          <div className="mt-4 rounded-xl border border-amber-200 bg-amber-50/90 px-4 py-3 text-base text-amber-900 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-200">
             أنت تتصفح الجدول للمعاينة فقط. الحجز الفعلي متاح لحسابات الطلاب.
           </div>
         )}
-      </div>
+      </MotionReveal>
 
       {/* Prominent Next Booking Banner ("أنت مسجل بالاسم ✓") */}
       {nextUpcomingBooking && (
-        <div className="rounded-2xl border-2 border-[#16A34A]/40 bg-emerald-50/75 p-5 sm:p-6 dark:border-emerald-500/40 dark:bg-emerald-500/10">
+        <MotionReveal className="hover-lift-card rounded-3xl border-2 border-[#16A34A]/40 bg-emerald-50/80 p-5 sm:p-6 dark:border-emerald-500/40 dark:bg-emerald-500/12">
           <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
             <div className="flex items-start gap-3.5">
-              <span className="inline-flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-[#16A34A] text-white">
-                <UserCheck className="h-6 w-6" />
-              </span>
+              <div className="art-pedestal h-14 w-14 shrink-0 overflow-hidden rounded-2xl p-1">
+                <Image
+                  src="/images/step-seat-3d.webp"
+                  alt="مقعدك المؤكد"
+                  width={56}
+                  height={56}
+                  className="h-full w-full rounded-xl object-cover"
+                />
+              </div>
               <div>
                 <p className="text-base font-bold text-emerald-900 dark:text-emerald-200">
                   أنت مسجل بالاسم ✓ — {nextUpcomingBooking.subjectNameAr}
@@ -356,7 +391,7 @@ export function StudentPortalClient({
             </div>
 
             {nextUpcomingBooking.seatNumber && (
-              <div className="shrink-0 rounded-xl border border-emerald-300 bg-white px-4 py-2 text-center dark:border-emerald-500/40 dark:bg-emerald-950/60">
+              <div className="shrink-0 rounded-2xl border border-emerald-300 bg-white px-4 py-2 text-center shadow-xs dark:border-emerald-500/40 dark:bg-emerald-950/60">
                 <p className="text-xs font-semibold text-emerald-700 dark:text-emerald-300">
                   رقم المقعد
                 </p>
@@ -366,7 +401,7 @@ export function StudentPortalClient({
               </div>
             )}
           </div>
-        </div>
+        </MotionReveal>
       )}
 
       {/* Section 1: Student's Active Bookings */}
@@ -453,50 +488,32 @@ export function StudentPortalClient({
           </span>
         </div>
 
-        {/* Big Subject Filter Pills */}
+        {/* Big Animated Subject Filter Pills */}
         {subjectFilterOptions.length > 1 && (
-          <div
-            className="flex items-center gap-2 overflow-x-auto pb-1"
-            role="group"
-            aria-label="تصفية حسب المادة"
-          >
-            <button
-              type="button"
-              onClick={() => setSelectedSubjectId("all")}
-              className={cn(
-                "min-h-[44px] shrink-0 rounded-xl border px-4 text-sm font-bold transition-colors cursor-pointer",
-                selectedSubjectId === "all"
-                  ? "border-[#0B63CE] bg-[#0B63CE] text-white dark:border-blue-500 dark:bg-blue-600"
-                  : "border-[var(--border-hairline)] bg-[var(--bg-surface)] text-[var(--text-secondary)] hover:border-[var(--border-strong)]"
-              )}
-            >
-              كل المواد
-            </button>
-            {subjectFilterOptions.map((subj) => {
-              const active = selectedSubjectId === subj.id;
-              return (
-                <button
-                  key={subj.id}
-                  type="button"
-                  onClick={() => setSelectedSubjectId(subj.id)}
-                  className={cn(
-                    "min-h-[44px] shrink-0 rounded-xl border px-4 text-sm font-bold transition-colors cursor-pointer",
-                    active
-                      ? "border-[#0B63CE] bg-[#0B63CE] text-white dark:border-blue-500 dark:bg-blue-600"
-                      : "border-[var(--border-hairline)] bg-[var(--bg-surface)] text-[var(--text-secondary)] hover:border-[var(--border-strong)]"
-                  )}
-                >
-                  {subj.nameAr}
-                </button>
-              );
-            })}
-          </div>
+          <AnimatedFilterTabs
+            layoutId="student-subject-pill"
+            ariaLabel="تصفية حسب المادة"
+            value={selectedSubjectId}
+            onChange={setSelectedSubjectId}
+            options={[
+              { id: "all", label: "كل المواد" },
+              ...subjectFilterOptions.map((s) => ({ id: s.id, label: s.nameAr })),
+            ]}
+          />
         )}
 
         {visibleSessions.length === 0 ? (
-          <Card>
-            <CardContent className="flex flex-col items-center gap-3 py-12 text-center">
-              <GraduationCap className="h-10 w-10 text-[var(--text-muted)]" />
+          <Card className="rounded-3xl">
+            <CardContent className="flex flex-col items-center gap-4 py-12 text-center">
+              <div className="art-pedestal h-24 w-24 overflow-hidden rounded-2xl p-1.5">
+                <Image
+                  src="/images/empty-calm-3d.webp"
+                  alt="لا توجد حصص متاحة"
+                  width={96}
+                  height={96}
+                  className="h-full w-full rounded-xl object-cover"
+                />
+              </div>
               <p className="text-lg font-bold text-[var(--text-primary)]">
                 لا توجد حصص متاحة في هذه المادة حالياً
               </p>
@@ -506,7 +523,7 @@ export function StudentPortalClient({
             </CardContent>
           </Card>
         ) : (
-          <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+          <MotionStaggerGrid className="grid grid-cols-1 gap-4 md:grid-cols-2">
             {visibleSessions.map((session) => {
               const existingBooking = activeBookingBySessionId.get(session.id);
               const sessionStartMs = Date.parse(session.startsAt);
@@ -537,10 +554,10 @@ export function StudentPortalClient({
               const isBusy = bookingSessionId === session.id;
 
               return (
-                <div
+                <MotionStaggerCard
                   key={session.id}
                   className={cn(
-                    "flex flex-col justify-between rounded-2xl border border-[var(--border-hairline)] bg-[var(--bg-surface)] p-5 hairline-lift",
+                    "hover-lift-card flex flex-col justify-between rounded-3xl border border-[var(--border-hairline)] bg-[var(--bg-surface)] p-5 hairline-lift",
                     existingBooking
                       ? "border-t-4 border-t-[#16A34A]"
                       : conflictingBooking
@@ -586,9 +603,9 @@ export function StudentPortalClient({
                       </div>
                     </div>
 
-                    {/* Clear Remaining Seats Bar */}
+                    {/* Clear Animated Remaining Seats Bar */}
                     <div className="mt-4 rounded-xl bg-[var(--bg-sunken)] p-3">
-                      <div className="flex items-center justify-between text-sm font-semibold">
+                      <div className="mb-2 flex items-center justify-between text-sm font-semibold">
                         <span
                           className={
                             remainingSeats === 0
@@ -605,19 +622,15 @@ export function StudentPortalClient({
                           {formatArabicNumber(fillPct)}%
                         </span>
                       </div>
-                      <div className="mt-2 h-2 w-full overflow-hidden rounded-full bg-slate-200 dark:bg-slate-800">
-                        <div
-                          className={cn(
-                            "h-full rounded-full transition-[width] duration-150",
-                            remainingSeats === 0
-                              ? "bg-amber-500"
-                              : fillPct >= 80
-                                ? "bg-amber-500"
-                                : "bg-[#16A34A]"
-                          )}
-                          style={{ width: `${fillPct}%` }}
-                        />
-                      </div>
+                      <MotionMetricBar
+                        percentage={fillPct}
+                        trackClassName="h-2"
+                        barClassName={
+                          remainingSeats === 0 || fillPct >= 80
+                            ? "bg-amber-500"
+                            : "bg-[#16A34A]"
+                        }
+                      />
                     </div>
                   </div>
 
@@ -657,10 +670,10 @@ export function StudentPortalClient({
                       </Button>
                     )}
                   </div>
-                </div>
+                </MotionStaggerCard>
               );
             })}
-          </div>
+          </MotionStaggerGrid>
         )}
       </section>
 
@@ -675,9 +688,20 @@ export function StudentPortalClient({
           {successModal && (
             <>
               <DialogHeader>
-                <div className="mb-2 inline-flex h-12 w-12 items-center justify-center rounded-2xl bg-emerald-100 text-[#16A34A] dark:bg-emerald-500/15 dark:text-emerald-300">
-                  <CheckCircle2 className="h-7 w-7" />
-                </div>
+                <motion.div
+                  initial={{ scale: 0.72, opacity: 0 }}
+                  animate={{ scale: 1, opacity: 1 }}
+                  transition={TACTILE_SPRING}
+                  className="art-pedestal mb-3 h-20 w-20 overflow-hidden rounded-2xl p-1.5"
+                >
+                  <Image
+                    src="/images/success-seat-3d.webp"
+                    alt="تم تسجيل مقعدك بنجاح"
+                    width={80}
+                    height={80}
+                    className="h-full w-full rounded-xl object-cover"
+                  />
+                </motion.div>
                 <DialogTitle>
                   {successModal.status === "confirmed"
                     ? "تم تسجيل اسمك في الحصة بنجاح!"

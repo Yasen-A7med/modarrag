@@ -147,6 +147,13 @@ async function loginAsDemoRole(
   expectedPathPrefix: string
 ): Promise<void> {
   await page.goto("/login", { waitUntil: "load" });
+  if (buttonText === "طالب الهندسة") {
+    await page.waitForTimeout(450);
+    await page.screenshot({
+      path: shotPath("03c-login-desktop-1440.png"),
+      fullPage: true,
+    });
+  }
   const roleButton = page.locator("button", { hasText: buttonText }).first();
   await expect(roleButton).toBeVisible();
   await roleButton.click();
@@ -181,6 +188,15 @@ test.describe("Modarrag Redesigned E2E Verification", () => {
     try {
       await page.setViewportSize({ width: 1440, height: 900 });
       await page.goto("/", { waitUntil: "load" });
+      // Trigger scroll-reveal sections and wait briefly for Framer Motion transforms to settle
+      await page.evaluate(async () => {
+        window.scrollTo(0, Math.round(document.body.scrollHeight * 0.45));
+        await new Promise((r) => setTimeout(r, 250));
+        window.scrollTo(0, Math.round(document.body.scrollHeight * 0.85));
+        await new Promise((r) => setTimeout(r, 250));
+        window.scrollTo(0, 0);
+        await new Promise((r) => setTimeout(r, 350));
+      });
 
       await assertRtlAndNoOverflow(page, "Landing Desktop 1440");
       await assertImagesAndSvgsHealthy(page, "Landing Desktop 1440");
@@ -212,6 +228,7 @@ test.describe("Modarrag Redesigned E2E Verification", () => {
           page.evaluate(() => document.documentElement.classList.contains("dark"))
         )
         .toBe(true);
+      await page.waitForTimeout(220);
 
       await page.screenshot({
         path: shotPath("02-landing-desktop-1440-dark.png"),
@@ -256,6 +273,11 @@ test.describe("Modarrag Redesigned E2E Verification", () => {
       await assertRtlAndNoOverflow(page, "School Doorway Desktop");
       await expect(page.getByRole("heading", { name: "بوابة الطالب" })).toBeVisible();
       await expect(page.getByRole("heading", { name: "بوابة المعلم" })).toBeVisible();
+      await page.waitForTimeout(450);
+      await page.screenshot({
+        path: shotPath("03b-school-doorway-desktop-1440.png"),
+        fullPage: true,
+      });
 
       await loginAsDemoRole(page, "طالب الهندسة", `/s/${SCHOOL_SLUG}/student`);
       await assertRtlAndNoOverflow(page, "Student Portal Desktop");

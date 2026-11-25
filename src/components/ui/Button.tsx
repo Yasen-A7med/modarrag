@@ -46,7 +46,8 @@ export function buttonVariants(options?: {
   const size = options?.size ?? "md";
 
   return cn(
-    "inline-flex items-center justify-center whitespace-nowrap transition-[transform,colors] duration-150 select-none cursor-pointer",
+    "relative overflow-hidden inline-flex items-center justify-center whitespace-nowrap transition-[transform,background-color,border-color,box-shadow] duration-200 select-none cursor-pointer",
+    (variant === "primary" || variant === "emerald") && "cta-shimmer shadow-sm hover:-translate-y-0.5 hover:shadow-md",
     "active:scale-[0.97] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0B63CE]/40 focus-visible:ring-offset-1",
     "disabled:pointer-events-none disabled:opacity-50",
     VARIANT_CLASSES[variant],

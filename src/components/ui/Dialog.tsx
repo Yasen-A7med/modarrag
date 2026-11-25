@@ -81,6 +81,48 @@ export interface DialogContentProps extends React.HTMLAttributes<HTMLDivElement>
   readonly hideClose?: boolean;
 }
 
+let supportsDisplayTransition: boolean | undefined;
+
+function canTransitionDisplay(): boolean {
+  if (typeof window === "undefined") return false;
+  if (supportsDisplayTransition !== undefined) return supportsDisplayTransition;
+  if (!window.CSS?.supports?.("transition-behavior", "allow-discrete") || !document.body) {
+    return false;
+  }
+  const probe = document.createElement("div");
+  probe.style.cssText = "transition: display 1s allow-discrete !important; display: block;";
+  document.body.appendChild(probe);
+  void getComputedStyle(probe).display;
+  probe.style.display = "none";
+  supportsDisplayTransition = getComputedStyle(probe).display === "block";
+  probe.remove();
+  return supportsDisplayTransition;
+}
+
+function supportsTopLayerExit(): boolean {
+  if (typeof window === "undefined") return false;
+  return Boolean(window.CSS?.supports?.("overlay", "auto") && canTransitionDisplay());
+}
+
+async function closeTopLayer(element: HTMLDialogElement): Promise<void> {
+  if (!element.open) return;
+  if (!supportsTopLayerExit()) {
+    element.setAttribute("data-closing", "");
+    const animations = element.getAnimations({ subtree: true });
+    if (animations.length > 0) {
+      await Promise.race([
+        Promise.allSettled(animations.map((a) => a.finished)),
+        new Promise((r) => window.setTimeout(r, 260)),
+      ]);
+    }
+    if (!element.hasAttribute("data-closing")) return;
+    element.removeAttribute("data-closing");
+  }
+  if (element.open) {
+    element.close();
+  }
+}
+
 export const DialogContent = React.forwardRef<HTMLDialogElement, DialogContentProps>(
   ({ className, children, hideClose = false, ...props }, ref) => {
     const ctx = React.useContext(DialogContext);
@@ -104,11 +146,12 @@ export const DialogContent = React.forwardRef<HTMLDialogElement, DialogContentPr
       if (!dialog) return;
 
       if (open) {
+        dialog.removeAttribute("data-closing");
         if (!dialog.open) {
           dialog.showModal();
         }
       } else if (dialog.open) {
-        dialog.close();
+        void closeTopLayer(dialog);
       }
     }, [open]);
 
@@ -140,8 +183,8 @@ export const DialogContent = React.forwardRef<HTMLDialogElement, DialogContentPr
         onCancel={handleCancel}
         onClick={handleDialogClick}
         className={cn(
-          "w-[calc(100%-2rem)] max-w-lg rounded-2xl border border-[var(--border-hairline)] bg-[var(--bg-surface)] p-0 text-[var(--text-primary)] shadow-xl",
-          "backdrop:bg-slate-950/55 focus:outline-none"
+          "w-[calc(100%-2rem)] max-w-lg rounded-3xl border border-[var(--border-hairline)] bg-[var(--bg-surface)] p-0 text-[var(--text-primary)] shadow-2xl",
+          "focus:outline-none"
         )}
       >
         <div className={cn("relative p-5 sm:p-6", className)} {...props}>

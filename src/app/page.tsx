@@ -4,14 +4,22 @@ import {
   ArrowLeft,
   Building2,
   CalendarCheck,
-  CheckCircle2,
   ClipboardCheck,
+  LayoutGrid,
   ShieldCheck,
   UserCheck,
+  Zap,
 } from "lucide-react";
 import { ModarragLogo } from "@/components/brand/ModarragLogo";
-import { TrackIcon } from "@/components/brand/TrackIcon";
+import { TrackArtwork } from "@/components/brand/TrackIcon";
+import { HeroShowcase } from "@/components/landing/HeroShowcase";
 import { TopNavbar } from "@/components/layout/TopNavbar";
+import {
+  MotionMetricBar,
+  MotionReveal,
+  MotionStaggerCard,
+  MotionStaggerGrid,
+} from "@/components/motion/MotionPrimitives";
 import { buttonVariants } from "@/components/ui/Button";
 import {
   getActiveSchools,
@@ -78,6 +86,8 @@ const HOW_IT_WORKS_STEPS = [
     description: "اختَر مدرستك ومسارك في البكالوريا مرة واحدة فقط برقم هاتفك واسمك.",
     accentClass: "border-t-4 border-t-[#0B63CE] dark:border-t-blue-500",
     numBgClass: "bg-[#EEF5FF] text-[#0B63CE] dark:bg-blue-500/15 dark:text-blue-300",
+    artwork: "/images/step-school-3d.webp",
+    artworkAlt: "مجسم ثلاثي الأبعاد لبوابة المدرسة وبطاقة تسجيل الطالب",
     icon: UserCheck,
   },
   {
@@ -86,6 +96,8 @@ const HOW_IT_WORKS_STEPS = [
     description: "تصفّح مواعيد حصص موادك داخل المدرسة واحجز مكانك قبل اكتمال القاعة.",
     accentClass: "border-t-4 border-t-[#16A34A] dark:border-t-emerald-500",
     numBgClass: "bg-emerald-50 text-[#16A34A] dark:bg-emerald-500/15 dark:text-emerald-300",
+    artwork: "/images/step-seat-3d.webp",
+    artworkAlt: "مجسم ثلاثي الأبعاد لمقعد مدرج مريح وعلامة الحجز المؤكد",
     icon: CalendarCheck,
   },
   {
@@ -94,6 +106,8 @@ const HOW_IT_WORKS_STEPS = [
     description: "بدون تذاكر أو باركود — معلمك يبحث عن اسمك في كشف الحضور ويسجلك بضغطة.",
     accentClass: "border-t-4 border-t-[#D97706] dark:border-t-amber-500",
     numBgClass: "bg-amber-50 text-[#B45309] dark:bg-amber-500/15 dark:text-amber-300",
+    artwork: "/images/step-attend-3d.webp",
+    artworkAlt: "مجسم ثلاثي الأبعاد لكشف الحضور الإلكتروني وتسجيل الأسماء",
     icon: ClipboardCheck,
   },
 ] as const;
@@ -143,8 +157,8 @@ export default async function HomePage() {
 
   return (
     <div className="min-h-dvh bg-[var(--bg-canvas)] text-[var(--text-primary)]">
-      {/* Warm Sky Hero Wrapper */}
-      <div className="bg-[var(--bg-hero)] pb-12 sm:pb-16">
+      {/* Atmospheric Radiant Hero Backdrop */}
+      <div className="ambient-mesh pb-12 sm:pb-16">
         <TopNavbar
           brandHref="/"
           links={[
@@ -154,132 +168,147 @@ export default async function HomePage() {
           ]}
         />
 
-        {/* Hero Section */}
-        <section className="mx-auto max-w-6xl px-4 pt-8 sm:px-6 sm:pt-12">
-          <div className="grid grid-cols-1 items-center gap-8 lg:grid-cols-12 lg:gap-10">
-            {/* Hero Copy (Start / Right in RTL) */}
-            <div className="flex flex-col items-start lg:col-span-6">
-              <div className="inline-flex items-center gap-2 rounded-full border border-blue-200 bg-[var(--bg-surface)] px-4 py-1.5 text-sm font-semibold text-[#0B63CE] dark:border-blue-500/30 dark:text-blue-300">
-                <ShieldCheck className="h-4 w-4 shrink-0" />
-                <span>السنتر المدرسي الرسمي الآمن</span>
-              </div>
-
-              <h1 className="mt-5 text-3xl font-bold text-[var(--text-primary)] sm:text-4xl lg:text-5xl">
-                احجز مكانك في مدرج مدرستك{" "}
-                <span className="text-[#0B63CE] dark:text-blue-400">
-                  باسمك وفي ثانية واحدة
-                </span>
-              </h1>
-
-              <p className="mt-4 max-w-xl text-base leading-relaxed text-[var(--text-secondary)] sm:text-lg">
-                تنظيم رسمي لحصص المراجعة داخل قاعات المدرسة بسعة آمنة ومعلمين معتمدين — بدون تكدس السناتر، وبدون تذاكر معقدة.
-              </p>
-
-              <div className="mt-7 flex w-full flex-col gap-3 sm:w-auto sm:flex-row sm:items-center">
-                <Link
-                  href={`/s/${schoolSlug}`}
-                  className={buttonVariants({
-                    variant: "emerald",
-                    size: "lg",
-                    className: "w-full sm:w-auto shadow-sm",
-                  })}
-                >
-                  <span>ابدأ الحجز الآن</span>
-                  <ArrowLeft className="h-5 w-5" />
-                </Link>
-
-                <Link
-                  href="/login"
-                  className={buttonVariants({
-                    variant: "outline",
-                    size: "lg",
-                    className: "w-full sm:w-auto bg-[var(--bg-surface)]",
-                  })}
-                >
-                  <span>جرّب الحسابات الجاهزة</span>
-                </Link>
-              </div>
-
-              <div className="mt-6 flex flex-wrap items-center gap-x-6 gap-y-2 text-sm font-medium text-[var(--text-secondary)]">
-                <span className="inline-flex items-center gap-2">
-                  <CheckCircle2 className="h-4 w-4 text-[#16A34A] dark:text-emerald-400" />
-                  تسجيل حضور بالاسم مباشرة
-                </span>
-                <span className="inline-flex items-center gap-2">
-                  <CheckCircle2 className="h-4 w-4 text-[#16A34A] dark:text-emerald-400" />
-                  مقاعد آمنة ومحددة السعة
-                </span>
-              </div>
-            </div>
-
-            {/* Hero Illustration */}
-            <div className="lg:col-span-6">
-              <div className="relative overflow-hidden rounded-2xl border border-transparent bg-[#F4F8FF] dark:border-white/10 dark:bg-[#EBF2FF]">
-                <Image
-                  src="/images/hero-lecture-hall.webp"
-                  alt="قاعة مدرج مدرسي منظم ومجهز للطلاب"
-                  width={1280}
-                  height={714}
-                  priority
-                  className="h-auto w-full object-cover"
-                />
-              </div>
-            </div>
-          </div>
-        </section>
+        <HeroShowcase schoolSlug={schoolSlug} />
       </div>
 
-      {/* 3 Simple Numbered Steps (Bassthalk Style) */}
+      {/* Tactile Bento Strip (4 Quick Clarity Signals) */}
+      <section className="mx-auto max-w-6xl px-4 pt-10 sm:px-6">
+        <MotionStaggerGrid className="grid grid-cols-2 gap-4 lg:grid-cols-4">
+          <MotionStaggerCard className="hover-lift-card flex min-h-[146px] flex-col justify-between rounded-3xl border border-[var(--border-hairline)] bg-[var(--bg-surface)] p-5 hairline-lift">
+            <div className="flex items-center justify-between gap-2">
+              <span className="inline-flex h-11 w-11 items-center justify-center rounded-2xl bg-blue-50 text-[#254EDB] dark:bg-blue-950/60 dark:text-blue-300">
+                <Zap className="h-5 w-5" />
+              </span>
+              <span className="text-xl font-bold text-[var(--text-primary)] tabular-nums">
+                ٣ ثوانٍ
+              </span>
+            </div>
+            <div className="mt-5">
+              <p className="text-sm font-bold text-[var(--text-primary)]">حجز بضغطة</p>
+              <MotionMetricBar
+                percentage={84}
+                trackClassName="mt-2.5 h-1.5"
+                barClassName="bg-[#254EDB] dark:bg-blue-500"
+              />
+            </div>
+          </MotionStaggerCard>
+
+          <MotionStaggerCard className="hover-lift-card flex min-h-[146px] flex-col justify-between rounded-3xl border border-[var(--border-hairline)] bg-[var(--bg-surface)] p-5 hairline-lift">
+            <div className="flex items-center justify-between gap-2">
+              <span className="inline-flex h-11 w-11 items-center justify-center rounded-2xl bg-teal-50 text-teal-700 dark:bg-teal-950/60 dark:text-teal-300">
+                <LayoutGrid className="h-5 w-5" />
+              </span>
+              <span className="text-xl font-bold text-[var(--text-primary)] tabular-nums">
+                سعة منضبطة
+              </span>
+            </div>
+            <div className="mt-5">
+              <p className="text-sm font-bold text-[var(--text-primary)]">قاعات آمنة منظمة</p>
+              <MotionMetricBar
+                percentage={72}
+                trackClassName="mt-2.5 h-1.5"
+                barClassName="bg-teal-600 dark:bg-teal-400"
+              />
+            </div>
+          </MotionStaggerCard>
+
+          <MotionStaggerCard className="hover-lift-card flex min-h-[146px] flex-col justify-between rounded-3xl border border-[var(--border-hairline)] bg-[var(--bg-surface)] p-5 hairline-lift">
+            <div className="flex items-center justify-between gap-2">
+              <span className="inline-flex h-11 w-11 items-center justify-center rounded-2xl bg-emerald-50 text-[#16A34A] dark:bg-emerald-950/60 dark:text-emerald-300">
+                <ClipboardCheck className="h-5 w-5" />
+              </span>
+              <span className="rounded-full bg-emerald-500/15 px-2.5 py-1 text-xs font-bold text-[#16A34A] dark:text-emerald-300">
+                فوري
+              </span>
+            </div>
+            <div className="mt-5">
+              <p className="text-sm font-bold text-[var(--text-primary)]">الحضور بالاسم</p>
+              <p className="mt-0.5 text-xs text-[var(--text-muted)]">بدون ورق أو تذاكر</p>
+            </div>
+          </MotionStaggerCard>
+
+          <MotionStaggerCard className="hover-lift-card flex min-h-[146px] flex-col justify-between rounded-3xl border border-[var(--border-hairline)] bg-[var(--bg-surface)] p-5 hairline-lift">
+            <div className="flex items-center justify-between gap-2">
+              <span className="inline-flex h-11 w-11 items-center justify-center rounded-2xl bg-amber-50 text-amber-600 dark:bg-amber-950/60 dark:text-amber-300">
+                <ShieldCheck className="h-5 w-5" />
+              </span>
+              <span className="text-xl font-bold text-[var(--text-primary)] tabular-nums">
+                ١٠٠٪
+              </span>
+            </div>
+            <div className="mt-5">
+              <p className="text-sm font-bold text-[var(--text-primary)]">أمان كامل</p>
+              <p className="mt-0.5 text-xs text-[var(--text-muted)]">إشراف مدرسي رسمي</p>
+            </div>
+          </MotionStaggerCard>
+        </MotionStaggerGrid>
+      </section>
+
+      {/* 3 Simple Numbered Steps anchored by 3D Frosted Artworks */}
       <section id="steps" className="mx-auto max-w-6xl px-4 py-14 sm:px-6 sm:py-16">
-        <div className="mb-8 text-center sm:mb-10">
+        <MotionReveal className="mb-8 text-center sm:mb-10">
           <h2 className="text-2xl font-bold text-[var(--text-primary)] sm:text-3xl">
             الموضوع بسيط جداً.. ٣ خطوات فقط
           </h2>
           <p className="mt-2 text-base text-[var(--text-secondary)]">
             مصمم ليكون واضحاً وسهلاً لكل طالب وولي أمر ومعلم من أول مرة
           </p>
-        </div>
+        </MotionReveal>
 
-        <div className="grid grid-cols-1 gap-5 md:grid-cols-3">
+        <MotionStaggerGrid className="grid grid-cols-1 gap-5 md:grid-cols-3">
           {HOW_IT_WORKS_STEPS.map((step) => {
             const Icon = step.icon;
             return (
-              <div
+              <MotionStaggerCard
                 key={step.num}
                 className={cn(
-                  "flex flex-col justify-between rounded-2xl border border-[var(--border-hairline)] bg-[var(--bg-surface)] p-6 hairline-lift",
+                  "group hover-lift-card flex flex-col justify-between rounded-3xl border border-[var(--border-hairline)] bg-[var(--bg-surface)] p-6 hairline-lift",
                   step.accentClass
                 )}
               >
                 <div>
-                  <div className="flex items-center justify-between gap-3">
+                  <div className="flex items-start justify-between gap-4">
                     <span
                       className={cn(
-                        "inline-flex h-12 w-12 items-center justify-center rounded-xl text-2xl font-bold tabular-nums",
+                        "inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl text-xl font-bold tabular-nums",
                         step.numBgClass
                       )}
                     >
                       {step.num}
                     </span>
-                    <Icon className="h-6 w-6 text-[var(--text-muted)]" />
+
+                    <div className="art-pedestal h-24 w-24 shrink-0 overflow-hidden rounded-2xl p-1.5">
+                      <Image
+                        src={step.artwork}
+                        alt={step.artworkAlt}
+                        width={96}
+                        height={96}
+                        loading="eager"
+                        className="h-full w-full rounded-xl object-cover transition-transform duration-300 ease-out group-hover:scale-105"
+                      />
+                    </div>
                   </div>
-                  <h3 className="mt-5 text-xl font-bold text-[var(--text-primary)]">
-                    {step.title}
-                  </h3>
+
+                  <div className="mt-5 flex items-center gap-2">
+                    <Icon className="h-5 w-5 text-[var(--text-muted)]" />
+                    <h3 className="text-xl font-bold text-[var(--text-primary)]">
+                      {step.title}
+                    </h3>
+                  </div>
                   <p className="mt-2 text-base leading-relaxed text-[var(--text-secondary)]">
                     {step.description}
                   </p>
                 </div>
-              </div>
+              </MotionStaggerCard>
             );
           })}
-        </div>
+        </MotionStaggerGrid>
       </section>
 
-      {/* Baccalaureate Tracks */}
+      {/* Baccalaureate Tracks Showcase */}
       <section id="tracks" className="bg-[var(--bg-sunken)] py-14 sm:py-16">
         <div className="mx-auto max-w-6xl px-4 sm:px-6">
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+          <MotionReveal className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
             <div>
               <h2 className="text-2xl font-bold text-[var(--text-primary)] sm:text-3xl">
                 مسارات نظام البكالوريا المصرية
@@ -293,20 +322,27 @@ export default async function HomePage() {
               className={buttonVariants({ variant: "outline", size: "md" })}
             >
               <span>تحديد المسار الدراسي</span>
+              <ArrowLeft className="h-4 w-4" />
             </Link>
-          </div>
+          </MotionReveal>
 
-          <div className="mt-7 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          <MotionStaggerGrid className="mt-7 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
             {tracksToRender.map((track) => {
               const style = getTrackStyle(track.code || track.iconKey);
               return (
-                <div
+                <MotionStaggerCard
                   key={track.code}
-                  className="flex flex-col justify-between rounded-2xl border border-[var(--border-hairline)] bg-[var(--bg-surface)] p-5 hairline-lift"
+                  className="group hover-lift-card flex flex-col justify-between rounded-3xl border border-[var(--border-hairline)] bg-[var(--bg-surface)] p-5 hairline-lift"
                   style={{ borderTopWidth: "4px", borderTopColor: style.hex }}
                 >
                   <div>
-                    <TrackIcon trackCode={track.code} iconKey={track.iconKey} size="lg" />
+                    <div className="flex items-start justify-between gap-2">
+                      <TrackArtwork
+                        trackCode={track.code}
+                        iconKey={track.iconKey}
+                        size="lg"
+                      />
+                    </div>
                     <h3 className="mt-4 text-lg font-bold text-[var(--text-primary)]">
                       {track.nameAr}
                     </h3>
@@ -326,13 +362,13 @@ export default async function HomePage() {
                       )}
                     </div>
                   </div>
-                </div>
+                </MotionStaggerCard>
               );
             })}
-          </div>
+          </MotionStaggerGrid>
 
           {/* Common Subjects */}
-          <div className="mt-5 rounded-2xl border border-[var(--border-hairline)] bg-[var(--bg-surface)] p-5">
+          <MotionReveal className="mt-5 rounded-3xl border border-[var(--border-hairline)] bg-[var(--bg-surface)] p-5 hairline-lift">
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
               <span className="text-base font-bold text-[var(--text-primary)]">
                 المواد المشتركة لجميع الطلاب:
@@ -348,16 +384,16 @@ export default async function HomePage() {
                 ))}
               </div>
             </div>
-          </div>
+          </MotionReveal>
         </div>
       </section>
 
       {/* Active School Callout */}
       <section className="mx-auto max-w-6xl px-4 py-14 sm:px-6 sm:py-16">
-        <div className="rounded-2xl border border-[var(--border-hairline)] bg-[var(--bg-surface)] p-6 sm:p-8 hairline-lift">
+        <MotionReveal className="hover-lift-card ambient-mesh rounded-3xl border border-[var(--border-hairline)] p-6 sm:p-8 hairline-lift">
           <div className="flex flex-col gap-6 lg:flex-row lg:items-center lg:justify-between">
             <div className="flex items-start gap-4 sm:items-center">
-              <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-2xl border border-[var(--border-hairline)] bg-[var(--bg-sunken)] p-2">
+              <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-2xl border border-[var(--border-hairline)] bg-[var(--bg-surface)] p-2 shadow-xs">
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img
                   src={featuredSchool?.logo_url || "/tenants/ali-bin-abi-talib/logo.svg"}
@@ -389,13 +425,17 @@ export default async function HomePage() {
               </Link>
               <Link
                 href={`/s/${schoolSlug}`}
-                className={buttonVariants({ variant: "outline", size: "lg" })}
+                className={buttonVariants({
+                  variant: "outline",
+                  size: "lg",
+                  className: "bg-[var(--bg-surface)]/90",
+                })}
               >
                 <span>صفحة المدرسة</span>
               </Link>
             </div>
           </div>
-        </div>
+        </MotionReveal>
       </section>
 
       {/* Clean Footer */}

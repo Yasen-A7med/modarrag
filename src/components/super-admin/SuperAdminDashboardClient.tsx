@@ -1,6 +1,7 @@
 "use client";
 
 import * as React from "react";
+import Image from "next/image";
 import Link from "next/link";
 import {
   ArrowUpLeft,
@@ -17,6 +18,11 @@ import {
   Users,
 } from "lucide-react";
 import type { SuperAdminConsoleData } from "@/application/schools/actions";
+import {
+  MotionReveal,
+  MotionStaggerCard,
+  MotionStaggerGrid,
+} from "@/components/motion/MotionPrimitives";
 import { Badge } from "@/components/ui/Badge";
 import { buttonVariants } from "@/components/ui/Button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/Card";
@@ -145,17 +151,28 @@ export function SuperAdminDashboardClient({
 
   return (
     <div className="flex flex-col gap-6">
-      {/* Header Bar */}
-      <Card>
-        <div className="flex flex-col gap-4 p-4 sm:flex-row sm:items-center sm:justify-between sm:p-5">
-          <div>
-            <Badge variant="primary">المركز الوطني لإدارة المنصة</Badge>
-            <h1 className="mt-2 text-xl font-bold text-[var(--text-primary)] sm:text-2xl">
-              لوحة التحكم الوطنية — مُدَرَّج
-            </h1>
-            <p className="mt-0.5 text-xs sm:text-sm text-[var(--text-muted)]">
-              إشراف موحد على المدارس المشاركة، إطلاق المدارس بقوالب البكالوريا، ومراجعة سجلات الأمان
-            </p>
+      {/* Header Bar with 3D Shield */}
+      <MotionReveal className="ambient-mesh rounded-3xl border border-[var(--border-hairline)] hairline-lift">
+        <div className="flex flex-col gap-4 p-4 sm:flex-row sm:items-center sm:justify-between sm:p-6">
+          <div className="flex items-start gap-4 sm:items-center">
+            <div className="art-pedestal h-16 w-16 shrink-0 overflow-hidden rounded-2xl p-1">
+              <Image
+                src="/images/role-admin-3d.webp"
+                alt="لوحة التحكم الوطنية"
+                width={64}
+                height={64}
+                className="h-full w-full rounded-xl object-cover"
+              />
+            </div>
+            <div>
+              <Badge variant="primary">المركز الوطني لإدارة المنصة</Badge>
+              <h1 className="mt-2 text-xl font-bold text-[var(--text-primary)] sm:text-2xl">
+                لوحة التحكم الوطنية — مُدَرَّج
+              </h1>
+              <p className="mt-0.5 text-xs sm:text-sm text-[var(--text-muted)]">
+                إشراف موحد على المدارس المشاركة، إطلاق المدارس بقوالب البكالوريا، ومراجعة سجلات الأمان
+              </p>
+            </div>
           </div>
 
           <div className="flex flex-wrap items-center gap-2">
@@ -164,7 +181,7 @@ export function SuperAdminDashboardClient({
               className={buttonVariants({
                 variant: "outline",
                 size: "md",
-                className: "min-h-[44px]",
+                className: "min-h-[44px] bg-[var(--bg-surface)]/90",
               })}
             >
               <ScrollText className="h-4 w-4" />
@@ -183,27 +200,29 @@ export function SuperAdminDashboardClient({
             </Link>
           </div>
         </div>
-      </Card>
+      </MotionReveal>
 
       {/* 5 National KPI Cards */}
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-5">
+      <MotionStaggerGrid className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-5">
         {kpis.map((kpi) => {
           const Icon = kpi.icon;
           return (
-            <Card key={kpi.label} className="p-4">
-              <div className="flex items-center justify-between">
-                <span className="text-xs font-medium text-[var(--text-muted)]">
-                  {kpi.label}
-                </span>
-                <Icon className={cn("h-4 w-4", kpi.color)} />
-              </div>
-              <p className="mt-2 text-2xl font-bold text-[var(--text-primary)] tabular-nums">
-                {formatArabicNumber(kpi.value)}
-              </p>
-            </Card>
+            <MotionStaggerCard key={kpi.label}>
+              <Card className="hover-lift-card p-4">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-medium text-[var(--text-muted)]">
+                    {kpi.label}
+                  </span>
+                  <Icon className={cn("h-4 w-4", kpi.color)} />
+                </div>
+                <p className="mt-2 text-2xl font-bold text-[var(--text-primary)] tabular-nums">
+                  {formatArabicNumber(kpi.value)}
+                </p>
+              </Card>
+            </MotionStaggerCard>
           );
         })}
-      </div>
+      </MotionStaggerGrid>
 
       {/* Active Tenant Schools Directory */}
       <Card>

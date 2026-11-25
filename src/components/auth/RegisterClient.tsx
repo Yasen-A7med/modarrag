@@ -1,6 +1,7 @@
 "use client";
 
 import * as React from "react";
+import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
@@ -14,6 +15,7 @@ import {
   UserCheck,
 } from "lucide-react";
 import { signUpStudentAction } from "@/application/auth/actions";
+import { MotionReveal } from "@/components/motion/MotionPrimitives";
 import { Button } from "@/components/ui/Button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/Card";
 import { Input } from "@/components/ui/Input";
@@ -69,13 +71,27 @@ export function RegisterClient() {
   };
 
   return (
-    <Card className="mx-auto w-full max-w-md">
-      <CardHeader>
-        <CardTitle className="text-2xl">سجّل حسابك في دقيقة</CardTitle>
-        <p className="text-base text-[var(--text-secondary)]">
-          اكتب اسمك كما تحب أن يظهر للمعلم في كشف الحضور
-        </p>
-      </CardHeader>
+    <MotionReveal className="mx-auto w-full max-w-md">
+      <Card className="rounded-3xl">
+        <CardHeader>
+          <div className="flex items-center gap-3.5">
+            <div className="art-pedestal h-16 w-16 shrink-0 overflow-hidden rounded-2xl p-1">
+              <Image
+                src="/images/role-student-3d.webp"
+                alt="إنشاء حساب طالب"
+                width={64}
+                height={64}
+                className="h-full w-full rounded-xl object-cover"
+              />
+            </div>
+            <div>
+              <CardTitle className="text-2xl">سجّل حسابك في دقيقة</CardTitle>
+              <p className="mt-1 text-base text-[var(--text-secondary)]">
+                اكتب اسمك كما تحب أن يظهر للمعلم في كشف الحضور
+              </p>
+            </div>
+          </div>
+        </CardHeader>
 
       <CardContent>
         <form onSubmit={handleSubmit} className="flex flex-col gap-4">
@@ -175,6 +191,7 @@ export function RegisterClient() {
           </p>
         </form>
       </CardContent>
-    </Card>
+      </Card>
+    </MotionReveal>
   );
 }

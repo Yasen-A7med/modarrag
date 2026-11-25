@@ -3,9 +3,11 @@
 import * as React from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { AnimatePresence, motion } from "framer-motion";
 import { LogOut, Menu, User, X } from "lucide-react";
 import { signOutAction } from "@/application/auth/actions";
 import { ModarragLogo } from "@/components/brand/ModarragLogo";
+import { TACTILE_SPRING, SPRING_EASE } from "@/components/motion/MotionPrimitives";
 import { Button, buttonVariants } from "@/components/ui/Button";
 import { ThemeToggle } from "@/components/ui/ThemeToggle";
 import type { UserRole } from "@/infrastructure/supabase/database.types";
@@ -70,13 +72,13 @@ export function TopNavbar({
 
   return (
     <header className={cn("sticky top-0 z-40 px-3 pt-3 sm:px-6", className)}>
-      <div className="mx-auto max-w-6xl rounded-2xl border border-[var(--border-hairline)] bg-[var(--bg-surface)]/95 px-4 shadow-sm backdrop-blur-md sm:px-5">
+      <div className="mx-auto max-w-6xl glass-bar rounded-2xl px-4 sm:px-5">
         <div className="flex h-16 items-center justify-between gap-3">
           {/* Brand + School Name */}
           <div className="flex min-w-0 items-center gap-3">
             <Link
               href={brandHref}
-              className="inline-flex shrink-0 items-center rounded-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0B63CE]/40"
+              className="group inline-flex shrink-0 items-center rounded-xl transition-transform duration-200 hover:scale-[1.02] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0B63CE]/40"
             >
               <ModarragLogo size="sm" showWordmark />
             </Link>
@@ -89,7 +91,7 @@ export function TopNavbar({
                 />
                 <Link
                   href={`/s/${school.slug}`}
-                  className="hidden min-w-0 items-center gap-2 rounded-xl border border-[var(--border-hairline)] bg-[var(--bg-sunken)] px-3 py-1.5 text-sm font-semibold text-[var(--text-primary)] hover:border-[var(--border-strong)] sm:inline-flex"
+                  className="hidden min-w-0 items-center gap-2 rounded-xl border border-[var(--border-hairline)] bg-[var(--bg-sunken)]/85 px-3 py-1.5 text-sm font-semibold text-[var(--text-primary)] transition-colors hover:border-[var(--border-strong)] sm:inline-flex"
                 >
                   {school.logoUrl && (
                     // eslint-disable-next-line @next/next/no-img-element
@@ -105,7 +107,7 @@ export function TopNavbar({
             )}
           </div>
 
-          {/* Center Navigation Links (max 3 clear links) */}
+          {/* Center Navigation Links with Framer Motion layoutId active indicator */}
           {links.length > 0 && (
             <nav
               className="hidden items-center gap-1 md:flex"
@@ -116,13 +118,21 @@ export function TopNavbar({
                   key={item.href}
                   href={item.href}
                   className={cn(
-                    "inline-flex min-h-[44px] items-center rounded-xl px-4 text-sm font-semibold transition-colors whitespace-nowrap",
+                    "relative inline-flex min-h-[44px] items-center rounded-xl px-4 text-sm font-semibold transition-colors whitespace-nowrap",
                     item.active
-                      ? "bg-[#EEF5FF] text-[#0B63CE] dark:bg-blue-500/15 dark:text-blue-300"
-                      : "text-[var(--text-secondary)] hover:bg-[var(--bg-sunken)] hover:text-[var(--text-primary)]"
+                      ? "text-[#0B63CE] dark:text-blue-300"
+                      : "text-[var(--text-secondary)] hover:bg-[var(--bg-sunken)]/80 hover:text-[var(--text-primary)]"
                   )}
                 >
-                  {item.label}
+                  {item.active && (
+                    <motion.span
+                      layoutId="top-navbar-active-pill"
+                      transition={TACTILE_SPRING}
+                      aria-hidden="true"
+                      className="absolute inset-0 rounded-xl bg-[#EEF5FF] dark:bg-blue-500/18"
+                    />
+                  )}
+                  <span className="relative z-10">{item.label}</span>
                 </Link>
               ))}
             </nav>
@@ -179,9 +189,17 @@ export function TopNavbar({
           </div>
         </div>
 
-        {/* Collapsible Mobile Drawer */}
-        {mobileOpen && (
-          <div className="border-t border-[var(--border-hairline)] py-3 md:hidden">
+        {/* Animated Collapsible Mobile Drawer */}
+        <AnimatePresence initial={false}>
+          {mobileOpen && (
+            <motion.div
+              initial={{ opacity: 0, height: 0 }}
+              animate={{ opacity: 1, height: "auto" }}
+              exit={{ opacity: 0, height: 0 }}
+              transition={{ duration: 0.22, ease: SPRING_EASE }}
+              className="overflow-hidden border-t border-[var(--border-hairline)] md:hidden"
+            >
+              <div className="py-3">
             {school && (
               <div className="mb-3 flex items-center gap-2.5 rounded-xl border border-[var(--border-hairline)] bg-[var(--bg-sunken)] px-3.5 py-2.5 text-sm font-semibold text-[var(--text-primary)]">
                 {school.logoUrl && (
@@ -255,8 +273,10 @@ export function TopNavbar({
                 </div>
               )}
             </div>
-          </div>
-        )}
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
       </div>
     </header>
   );

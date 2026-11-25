@@ -1,8 +1,10 @@
 "use client";
 
 import * as React from "react";
+import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { motion } from "framer-motion";
 import {
   ArrowUpLeft,
   BookOpen,
@@ -19,6 +21,12 @@ import {
 import type { SchoolAdminDashboardData } from "@/application/academic/actions";
 import type { HallOccupancyData } from "@/application/halls/actions";
 import { LiveOccupancyBento } from "@/components/admin/LiveOccupancyBento";
+import {
+  MotionReveal,
+  MotionStaggerCard,
+  MotionStaggerGrid,
+  TACTILE_SPRING,
+} from "@/components/motion/MotionPrimitives";
 import { Badge } from "@/components/ui/Badge";
 import { buttonVariants } from "@/components/ui/Button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/Card";
@@ -87,19 +95,30 @@ export function AdminPortalNav({
               key={tab.href}
               href={tab.href}
               className={cn(
-                "inline-flex min-h-[44px] shrink-0 items-center gap-2 rounded-lg border px-3 py-2 text-xs sm:text-sm font-medium transition-colors whitespace-nowrap",
+                "relative inline-flex min-h-[44px] shrink-0 items-center gap-2 rounded-xl border px-3.5 py-2 text-xs sm:text-sm font-medium transition-colors whitespace-nowrap",
                 tab.active
-                  ? "border-[#1E3A8A] bg-[#1E3A8A] text-white dark:border-blue-500 dark:bg-blue-600"
+                  ? "border-transparent text-white"
                   : "border-[var(--border-hairline)] bg-[var(--bg-surface)] text-[var(--text-secondary)] hover:border-[var(--border-strong)] hover:text-[var(--text-primary)]"
               )}
             >
-              <Icon className="h-4 w-4 shrink-0" />
-              <span>{tab.label}</span>
+              {tab.active && (
+                <motion.span
+                  layoutId="admin-portal-tab-pill"
+                  transition={TACTILE_SPRING}
+                  aria-hidden="true"
+                  className="absolute inset-0 rounded-xl bg-[#1E3A8A] shadow-sm dark:bg-blue-600"
+                />
+              )}
+              <Icon className="relative z-10 h-4 w-4 shrink-0" />
+              <span className="relative z-10">{tab.label}</span>
               {"badge" in tab && tab.badge && (
                 <Badge
                   variant={tab.active ? "mono" : "warning"}
                   size="sm"
-                  className={tab.active ? "border-white/25 bg-white/15 text-white" : ""}
+                  className={cn(
+                    "relative z-10",
+                    tab.active && "border-white/25 bg-white/15 text-white"
+                  )}
                 >
                   {tab.badge}
                 </Badge>
@@ -260,19 +279,30 @@ export function AdminOverviewClient({
 
   return (
     <div className="flex flex-col gap-6">
-      {/* Header Identity Card */}
-      <Card>
-        <div className="flex flex-col gap-4 p-4 sm:flex-row sm:items-center sm:justify-between sm:p-5">
-          <div>
-            <Badge variant={school.isActive ? "success" : "neutral"} dot size="md">
-              {school.isActive ? "مدرسة مفعلة" : "غير نشطة"}
-            </Badge>
-            <h1 className="mt-2.5 text-xl font-bold text-[var(--text-primary)] sm:text-2xl">
-              لوحة إدارة {school.nameAr}
-            </h1>
-            <p className="mt-1 text-sm text-[var(--text-secondary)]">
-              التحكم المركزي في المناهج الدراسية، القاعات، اعتماد المعلمين، وتقارير الوزارة
-            </p>
+      {/* Header Identity Card with 3D Shield Art */}
+      <MotionReveal className="ambient-mesh rounded-3xl border border-[var(--border-hairline)] hairline-lift">
+        <div className="flex flex-col gap-4 p-4 sm:flex-row sm:items-center sm:justify-between sm:p-6">
+          <div className="flex items-start gap-4 sm:items-center">
+            <div className="art-pedestal h-18 w-18 shrink-0 overflow-hidden rounded-2xl p-1.5">
+              <Image
+                src="/images/role-admin-3d.webp"
+                alt="لوحة إدارة المدرسة"
+                width={72}
+                height={72}
+                className="h-full w-full rounded-xl object-cover"
+              />
+            </div>
+            <div>
+              <Badge variant={school.isActive ? "success" : "neutral"} dot size="md">
+                {school.isActive ? "مدرسة مفعلة" : "غير نشطة"}
+              </Badge>
+              <h1 className="mt-2.5 text-xl font-bold text-[var(--text-primary)] sm:text-2xl">
+                لوحة إدارة {school.nameAr}
+              </h1>
+              <p className="mt-1 text-sm text-[var(--text-secondary)]">
+                التحكم المركزي في المناهج الدراسية، القاعات، اعتماد المعلمين، وتقارير الوزارة
+              </p>
+            </div>
           </div>
 
           <div className="flex flex-wrap items-center gap-2">
@@ -281,7 +311,7 @@ export function AdminOverviewClient({
               className={buttonVariants({
                 variant: "outline",
                 size: "md",
-                className: "min-h-[44px]",
+                className: "min-h-[44px] bg-[var(--bg-surface)]/90",
               })}
             >
               <Download className="h-4 w-4" />
@@ -300,28 +330,30 @@ export function AdminOverviewClient({
             </Link>
           </div>
         </div>
-      </Card>
+      </MotionReveal>
 
       {/* Bento Telemetry Stats */}
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
+      <MotionStaggerGrid className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
         {kpiCards.map((item) => {
           const Icon = item.icon;
           return (
-            <Card key={item.label} className="p-4">
-              <div className="flex items-center justify-between">
-                <span className="text-xs font-medium text-[var(--text-muted)]">
-                  {item.label}
-                </span>
-                <Icon className={cn("h-4 w-4", item.accentClass)} />
-              </div>
-              <p className="mt-2 text-2xl font-bold text-[var(--text-primary)] tabular-nums">
-                {formatArabicNumber(item.value)}
-              </p>
-              <p className="mt-1 text-xs text-[var(--text-muted)]">{item.meta}</p>
-            </Card>
+            <MotionStaggerCard key={item.label}>
+              <Card className="hover-lift-card p-4">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-medium text-[var(--text-muted)]">
+                    {item.label}
+                  </span>
+                  <Icon className={cn("h-4 w-4", item.accentClass)} />
+                </div>
+                <p className="mt-2 text-2xl font-bold text-[var(--text-primary)] tabular-nums">
+                  {formatArabicNumber(item.value)}
+                </p>
+                <p className="mt-1 text-xs text-[var(--text-muted)]">{item.meta}</p>
+              </Card>
+            </MotionStaggerCard>
           );
         })}
-      </div>
+      </MotionStaggerGrid>
 
       {/* Live Hall Occupancy SVG Rings */}
       <LiveOccupancyBento schoolSlug={schoolSlug} halls={occupancy.halls} />
@@ -331,37 +363,39 @@ export function AdminOverviewClient({
         <h2 className="text-base font-bold text-[var(--text-primary)]">
           الإجراءات الإدارية السريعة
         </h2>
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        <MotionStaggerGrid className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
           {quickActions.map((action) => {
             const Icon = action.icon;
             return (
-              <Link key={action.href} href={action.href} className="group block">
-                <Card variant="interactive" className="flex h-full flex-col justify-between p-4">
-                  <div>
-                    <div className="flex items-center justify-between gap-2">
-                      <span className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-[var(--border-hairline)] bg-[var(--bg-sunken)] text-[var(--text-primary)]">
-                        <Icon className="h-4 w-4" strokeWidth={1.85} />
-                      </span>
-                      <Badge variant="neutral" size="sm">
-                        {action.badge}
-                      </Badge>
+              <MotionStaggerCard key={action.href}>
+                <Link href={action.href} className="group block h-full">
+                  <Card variant="interactive" className="flex h-full flex-col justify-between p-4">
+                    <div>
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-[var(--border-hairline)] bg-[var(--bg-sunken)] text-[var(--text-primary)]">
+                          <Icon className="h-4 w-4" strokeWidth={1.85} />
+                        </span>
+                        <Badge variant="neutral" size="sm">
+                          {action.badge}
+                        </Badge>
+                      </div>
+                      <h3 className="mt-3 text-sm font-bold text-[var(--text-primary)]">
+                        {action.title}
+                      </h3>
+                      <p className="mt-1 text-xs text-[var(--text-muted)] leading-relaxed">
+                        {action.subtitle}
+                      </p>
                     </div>
-                    <h3 className="mt-3 text-sm font-bold text-[var(--text-primary)]">
-                      {action.title}
-                    </h3>
-                    <p className="mt-1 text-xs text-[var(--text-muted)] leading-relaxed">
-                      {action.subtitle}
-                    </p>
-                  </div>
-                  <div className="mt-3 flex items-center gap-1 text-xs font-semibold text-[#1E3A8A] dark:text-blue-400">
-                    <span>فتح القسم</span>
-                    <ArrowUpLeft className="h-3.5 w-3.5 transition-transform group-hover:-translate-x-0.5 group-hover:-translate-y-0.5" />
-                  </div>
-                </Card>
-              </Link>
+                    <div className="mt-3 flex items-center gap-1 text-xs font-semibold text-[#1E3A8A] dark:text-blue-400">
+                      <span>فتح القسم</span>
+                      <ArrowUpLeft className="h-3.5 w-3.5 transition-transform group-hover:-translate-x-0.5 group-hover:-translate-y-0.5" />
+                    </div>
+                  </Card>
+                </Link>
+              </MotionStaggerCard>
             );
           })}
-        </div>
+        </MotionStaggerGrid>
       </section>
     </div>
   );

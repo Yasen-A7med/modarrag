@@ -1,14 +1,15 @@
 "use client";
 
 import * as React from "react";
+import Image from "next/image";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
+import { motion } from "framer-motion";
 import {
   BookOpen,
   Building2,
   Calendar,
   CalendarPlus,
-  CheckCircle2,
   ClipboardCheck,
   Clock,
   ShieldAlert,
@@ -19,6 +20,13 @@ import {
   cancelSessionAction,
   type TeacherConsoleData,
 } from "@/application/sessions/actions";
+import {
+  AnimatedFilterTabs,
+  MotionReveal,
+  MotionStaggerCard,
+  MotionStaggerGrid,
+  TACTILE_SPRING,
+} from "@/components/motion/MotionPrimitives";
 import { Badge } from "@/components/ui/Badge";
 import { Button, buttonVariants } from "@/components/ui/Button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/Card";
@@ -104,14 +112,22 @@ export function TeacherSubNav({ schoolSlug }: TeacherSubNavProps) {
               key={tab.href}
               href={tab.href}
               className={cn(
-                "inline-flex min-h-[46px] shrink-0 items-center gap-2 rounded-xl border px-4 text-sm font-bold transition-colors whitespace-nowrap",
+                "relative inline-flex min-h-[46px] shrink-0 items-center gap-2 rounded-xl border px-4 text-sm font-bold transition-colors whitespace-nowrap",
                 tab.active
-                  ? "border-[#0B63CE] bg-[#0B63CE] text-white dark:border-blue-500 dark:bg-blue-600"
+                  ? "border-transparent text-white"
                   : "border-[var(--border-hairline)] bg-[var(--bg-surface)] text-[var(--text-secondary)] hover:border-[var(--border-strong)] hover:text-[var(--text-primary)]"
               )}
             >
-              <Icon className="h-4 w-4 shrink-0" />
-              <span>{tab.label}</span>
+              {tab.active && (
+                <motion.span
+                  layoutId="teacher-subnav-pill"
+                  transition={TACTILE_SPRING}
+                  aria-hidden="true"
+                  className="absolute inset-0 rounded-xl bg-[#0B63CE] shadow-sm dark:bg-blue-600"
+                />
+              )}
+              <Icon className="relative z-10 h-4 w-4 shrink-0" />
+              <span className="relative z-10">{tab.label}</span>
             </Link>
           );
         })}
@@ -261,21 +277,32 @@ export function TeacherDashboardClient({
 
   return (
     <div className="flex flex-col gap-6">
-      {/* Header Summary Card */}
-      <Card>
-        <div className="flex flex-col gap-5 p-5 sm:flex-row sm:items-center sm:justify-between">
-          <div>
-            <div className="flex flex-wrap items-center gap-2.5">
-              <Badge variant={data.isApproved ? "success" : "warning"} size="md" dot>
-                {data.isApproved ? "معلم معتمد بالمدرسة" : "بانتظار اعتماد الإدارة"}
-              </Badge>
+      {/* Header Summary Card with Teacher 3D Art */}
+      <MotionReveal className="ambient-mesh rounded-3xl border border-[var(--border-hairline)] hairline-lift">
+        <div className="flex flex-col gap-5 p-5 sm:flex-row sm:items-center sm:justify-between sm:p-6">
+          <div className="flex items-start gap-4 sm:items-center">
+            <div className="art-pedestal h-20 w-20 shrink-0 overflow-hidden rounded-2xl p-1.5">
+              <Image
+                src="/images/role-teacher-3d.webp"
+                alt="بوابة المعلم"
+                width={80}
+                height={80}
+                className="h-full w-full rounded-xl object-cover"
+              />
             </div>
-            <h1 className="mt-2.5 text-2xl font-bold text-[var(--text-primary)]">
-              {data.specialtyAr}
-            </h1>
-            <p className="mt-1 text-base text-[var(--text-secondary)]">
-              افتح كشف الحضور لأي حصة لتسجيل أسماء الطلاب الحاضرين بضغطة واحدة
-            </p>
+            <div>
+              <div className="flex flex-wrap items-center gap-2.5">
+                <Badge variant={data.isApproved ? "success" : "warning"} size="md" dot>
+                  {data.isApproved ? "معلم معتمد بالمدرسة" : "بانتظار اعتماد الإدارة"}
+                </Badge>
+              </div>
+              <h1 className="mt-2 text-2xl font-bold text-[var(--text-primary)]">
+                {data.specialtyAr}
+              </h1>
+              <p className="mt-1 text-base text-[var(--text-secondary)]">
+                افتح كشف الحضور لأي حصة لتسجيل أسماء الطلاب الحاضرين بضغطة واحدة
+              </p>
+            </div>
           </div>
 
           <Link
@@ -290,11 +317,11 @@ export function TeacherDashboardClient({
             <span>حجز قاعة لحصة جديدة</span>
           </Link>
         </div>
-      </Card>
+      </MotionReveal>
 
       {/* Simple Summary Numbers */}
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-        <div className="rounded-2xl border border-[var(--border-hairline)] bg-[var(--bg-surface)] p-4 hairline-lift">
+      <MotionStaggerGrid className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+        <MotionStaggerCard className="hover-lift-card rounded-2xl border border-[var(--border-hairline)] bg-[var(--bg-surface)] p-4 hairline-lift">
           <div className="flex items-center justify-between text-sm font-medium text-[var(--text-muted)]">
             <span>حصصك الحالية والقادمة</span>
             <Calendar className="h-5 w-5 text-[#0B63CE]" />
@@ -302,9 +329,9 @@ export function TeacherDashboardClient({
           <p className="mt-2 text-2xl font-bold text-[var(--text-primary)] tabular-nums">
             {formatArabicNumber(ownSessions.length)}
           </p>
-        </div>
+        </MotionStaggerCard>
 
-        <div className="rounded-2xl border border-[var(--border-hairline)] bg-[var(--bg-surface)] p-4 hairline-lift">
+        <MotionStaggerCard className="hover-lift-card rounded-2xl border border-[var(--border-hairline)] bg-[var(--bg-surface)] p-4 hairline-lift">
           <div className="flex items-center justify-between text-sm font-medium text-[var(--text-muted)]">
             <span>المواد المسجلة لك</span>
             <BookOpen className="h-5 w-5 text-[#16A34A]" />
@@ -312,9 +339,9 @@ export function TeacherDashboardClient({
           <p className="mt-2 text-base font-bold text-[var(--text-primary)]">
             {data.subjects.map((s) => s.nameAr).join("، ") || "غير محددة بعد"}
           </p>
-        </div>
+        </MotionStaggerCard>
 
-        <div className="rounded-2xl border border-[var(--border-hairline)] bg-[var(--bg-surface)] p-4 hairline-lift">
+        <MotionStaggerCard className="hover-lift-card rounded-2xl border border-[var(--border-hairline)] bg-[var(--bg-surface)] p-4 hairline-lift">
           <div className="flex items-center justify-between text-sm font-medium text-[var(--text-muted)]">
             <span>القاعات المتاحة بالمدرسة</span>
             <Building2 className="h-5 w-5 text-amber-600" />
@@ -322,52 +349,46 @@ export function TeacherDashboardClient({
           <p className="mt-2 text-2xl font-bold text-[var(--text-primary)] tabular-nums">
             {formatArabicNumber(data.halls.length)}
           </p>
-        </div>
-      </div>
+        </MotionStaggerCard>
+      </MotionStaggerGrid>
 
-      {/* Sessions List + Filter Toggle */}
+      {/* Sessions List + Animated Filter Toggle */}
       <div className="flex flex-col gap-4">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <h2 className="text-xl font-bold text-[var(--text-primary)]">
             جدول الحصص وكشوف الحضور
           </h2>
 
-          <div
-            className="inline-flex rounded-xl border border-[var(--border-hairline)] bg-[var(--bg-sunken)] p-1"
-            role="group"
-            aria-label="نطاق العرض"
-          >
-            <button
-              type="button"
-              onClick={() => setScope("own")}
-              className={cn(
-                "min-h-[42px] rounded-lg px-4 text-sm font-bold transition-colors cursor-pointer",
-                scope === "own"
-                  ? "bg-[var(--bg-surface)] text-[#0B63CE] shadow-xs dark:text-blue-300"
-                  : "text-[var(--text-secondary)] hover:text-[var(--text-primary)]"
-              )}
-            >
-              حصصي ({formatArabicNumber(ownSessions.length)})
-            </button>
-            <button
-              type="button"
-              onClick={() => setScope("school")}
-              className={cn(
-                "min-h-[42px] rounded-lg px-4 text-sm font-bold transition-colors cursor-pointer",
-                scope === "school"
-                  ? "bg-[var(--bg-surface)] text-[#0B63CE] shadow-xs dark:text-blue-300"
-                  : "text-[var(--text-secondary)] hover:text-[var(--text-primary)]"
-              )}
-            >
-              جدول المدرسة ({formatArabicNumber(data.sessions.length)})
-            </button>
-          </div>
+          <AnimatedFilterTabs
+            layoutId="teacher-scope-pill"
+            ariaLabel="نطاق العرض"
+            value={scope}
+            onChange={setScope}
+            options={[
+              {
+                id: "own",
+                label: `حصصي (${formatArabicNumber(ownSessions.length)})`,
+              },
+              {
+                id: "school",
+                label: `جدول المدرسة (${formatArabicNumber(data.sessions.length)})`,
+              },
+            ]}
+          />
         </div>
 
         {visibleSessions.length === 0 ? (
-          <Card>
+          <Card className="rounded-3xl">
             <CardContent className="flex flex-col items-center gap-4 py-12 text-center">
-              <CheckCircle2 className="h-10 w-10 text-[var(--text-muted)]" />
+              <div className="art-pedestal h-24 w-24 overflow-hidden rounded-2xl p-1.5">
+                <Image
+                  src="/images/empty-calm-3d.webp"
+                  alt="لا توجد حصص مجدولة حالياً"
+                  width={96}
+                  height={96}
+                  className="h-full w-full rounded-xl object-cover"
+                />
+              </div>
               <div className="max-w-md">
                 <p className="text-lg font-bold text-[var(--text-primary)]">
                   لا توجد حصص مجدولة حالياً
@@ -388,7 +409,7 @@ export function TeacherDashboardClient({
             </CardContent>
           </Card>
         ) : (
-          <div className="flex flex-col gap-3">
+          <MotionStaggerGrid className="flex flex-col gap-3">
             {visibleSessions.map((session) => {
               const meta = resolveSessionMeta(session.status);
               const canCancel =
@@ -396,7 +417,10 @@ export function TeacherDashboardClient({
                 (session.status === "scheduled" || session.status === "full");
 
               return (
-                <Card key={session.id}>
+                <MotionStaggerCard
+                  key={session.id}
+                  className="hover-lift-card rounded-2xl border border-[var(--border-hairline)] bg-[var(--bg-surface)] hairline-lift"
+                >
                   <div className="flex flex-col gap-4 p-5 lg:flex-row lg:items-center lg:justify-between">
                     <div className="min-w-0 flex-1">
                       <div className="flex flex-wrap items-center gap-2">
@@ -465,10 +489,10 @@ export function TeacherDashboardClient({
                       )}
                     </div>
                   </div>
-                </Card>
+                </MotionStaggerCard>
               );
             })}
-          </div>
+          </MotionStaggerGrid>
         )}
       </div>
 
