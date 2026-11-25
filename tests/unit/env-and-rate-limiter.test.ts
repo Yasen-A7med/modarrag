@@ -3,56 +3,23 @@ import {
   checkRateLimit,
   resetRateLimitStoreForTesting,
 } from "@/infrastructure/security/rate-limiter";
-import { DEV_QR_SIGNING_SECRET_FALLBACK, parseServerEnv } from "@/lib/env";
+import { parseServerEnv } from "@/lib/env";
 
 describe("parseServerEnv", () => {
-  it("uses development fallback for QR_SIGNING_SECRET outside production", () => {
+  it("resolves server env safely with optional Upstash/Turnstile/ServiceRole fallbacks", () => {
     const env = parseServerEnv(
       {
-        NODE_ENV: "development",
+        NODE_ENV: "production",
         UPSTASH_REDIS_REST_URL: "",
         UPSTASH_REDIS_REST_TOKEN: "",
         TURNSTILE_SECRET_KEY: "",
-        QR_SIGNING_SECRET: "",
       },
       { suppressWarnings: true }
     );
 
-    expect(env.QR_SIGNING_SECRET).toBe(DEV_QR_SIGNING_SECRET_FALLBACK);
-    expect(env.isUsingDevQrFallback).toBe(true);
+    expect(env.NODE_ENV).toBe("production");
     expect(env.isUpstashConfigured).toBe(false);
     expect(env.isTurnstileConfigured).toBe(false);
-  });
-
-  it("requires a strong non-fallback QR_SIGNING_SECRET in production", () => {
-    expect(() =>
-      parseServerEnv(
-        {
-          NODE_ENV: "production",
-          QR_SIGNING_SECRET: "",
-        },
-        { suppressWarnings: true }
-      )
-    ).toThrow();
-
-    expect(() =>
-      parseServerEnv(
-        {
-          NODE_ENV: "production",
-          QR_SIGNING_SECRET: DEV_QR_SIGNING_SECRET_FALLBACK,
-        },
-        { suppressWarnings: true }
-      )
-    ).toThrow();
-
-    const validProd = parseServerEnv(
-      {
-        NODE_ENV: "production",
-        QR_SIGNING_SECRET: "prod-secret-key-with-plenty-of-entropy-123456",
-      },
-      { suppressWarnings: true }
-    );
-    expect(validProd.isUsingDevQrFallback).toBe(false);
   });
 });
 

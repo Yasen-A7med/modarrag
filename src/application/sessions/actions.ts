@@ -114,6 +114,7 @@ export interface TeacherConsoleData {
     readonly subjectId: string;
     readonly teacherId: string;
     readonly teacherCode: string;
+    readonly teacherSpecialtyAr: string;
     readonly isOwnSession: boolean;
     readonly titleAr: string;
     readonly startsAt: string;
@@ -121,9 +122,12 @@ export interface TeacherConsoleData {
     readonly bufferMinutes: number;
     readonly maxCapacity: number;
     readonly bookedSeatsCount: number;
+    readonly checkedInCount: number;
     readonly status: string;
     readonly hallCode: string;
+    readonly hallNameAr: string;
     readonly subjectCode: string;
+    readonly subjectNameAr: string;
   }[];
 }
 
@@ -193,30 +197,53 @@ export async function getTeacherConsoleData(
   const now = new Date();
   const twoWeeksLater = new Date(now.getTime() + 14 * 86_400_000);
 
+  const recentCutoff = new Date(now.getTime() - 12 * 3_600_000);
   const { data: sessionsData } = await supabase
     .from("sessions")
     .select(`
       id, hall_id, subject_id, teacher_id, title_ar, starts_at, ends_at, buffer_minutes, max_capacity, booked_seats_count, status,
-      halls!sessions_hall_id_fkey ( code ),
-      subjects!sessions_subject_id_fkey ( code ),
-      teacher_profiles!sessions_teacher_id_fkey ( teacher_code )
+      halls!sessions_hall_id_fkey ( code, name_ar ),
+      subjects!sessions_subject_id_fkey ( code, name_ar ),
+      teacher_profiles!sessions_teacher_id_fkey ( teacher_code, specialty_ar )
     `)
     .eq("school_id", schoolId)
-    .neq("status", "cancelled")
-    .gte("starts_at", now.toISOString())
+    .in("status", ["scheduled", "full", "ongoing", "completed"])
+    .gte("ends_at", recentCutoff.toISOString())
     .lte("starts_at", twoWeeksLater.toISOString())
     .order("starts_at", { ascending: true });
 
+  const sessionIds = (sessionsData ?? []).map((s) => s.id);
+  const checkedInCountBySession = new Map<string, number>();
+
+  if (sessionIds.length > 0) {
+    const { data: checkedRows } = await supabase
+      .from("bookings")
+      .select("session_id")
+      .in("session_id", sessionIds)
+      .eq("status", "checked_in");
+
+    for (const row of checkedRows ?? []) {
+      checkedInCountBySession.set(
+        row.session_id,
+        (checkedInCountBySession.get(row.session_id) ?? 0) + 1
+      );
+    }
+  }
+
   const sessions = (sessionsData ?? []).map((s) => {
-    const hall = s.halls as unknown as { code: string } | null;
-    const subject = s.subjects as unknown as { code: string } | null;
-    const teacher = s.teacher_profiles as unknown as { teacher_code: string } | null;
+    const hall = s.halls as unknown as { code: string; name_ar: string } | null;
+    const subject = s.subjects as unknown as { code: string; name_ar: string } | null;
+    const teacher = s.teacher_profiles as unknown as {
+      teacher_code: string;
+      specialty_ar: string;
+    } | null;
     return {
       id: s.id,
       hallId: s.hall_id,
       subjectId: s.subject_id,
       teacherId: s.teacher_id,
       teacherCode: teacher?.teacher_code ?? "",
+      teacherSpecialtyAr: teacher?.specialty_ar ?? "معلم المادة",
       isOwnSession: s.teacher_id === user.id,
       titleAr: s.title_ar,
       startsAt: s.starts_at,
@@ -224,9 +251,12 @@ export async function getTeacherConsoleData(
       bufferMinutes: s.buffer_minutes,
       maxCapacity: s.max_capacity,
       bookedSeatsCount: s.booked_seats_count,
+      checkedInCount: checkedInCountBySession.get(s.id) ?? 0,
       status: s.status,
       hallCode: hall?.code ?? "",
+      hallNameAr: hall?.name_ar ?? "",
       subjectCode: subject?.code ?? "",
+      subjectNameAr: subject?.name_ar ?? "",
     };
   });
 
@@ -247,6 +277,8 @@ export async function getTeacherConsoleData(
 export interface SessionRosterEntry {
   readonly bookingId: string;
   readonly studentLabel: string;
+  readonly fullName: string;
+  readonly phone: string | null;
   readonly seatNumber: string | null;
   readonly status: string;
   readonly checkedInAt: string | null;
@@ -289,22 +321,24 @@ export async function getTeacherSessionRoster(
     .from("bookings")
     .select(`
       id, status, seat_number, checked_in_at, booked_at,
-      profiles!bookings_student_id_fkey ( student_national_code )
+      profiles!bookings_student_id_fkey ( full_name, phone )
     `)
     .eq("session_id", sessionId)
     .eq("school_id", schoolId)
     .in("status", ["confirmed", "waitlisted", "checked_in", "no_show"])
-    .order("seat_number", { ascending: true, nullsFirst: false });
+    .order("booked_at", { ascending: true });
 
   const roster = (bookingsData ?? []).map((b) => {
     const studentProfile = b.profiles as unknown as {
-      student_national_code: string | null;
+      full_name: string | null;
+      phone: string | null;
     } | null;
+    const cleanName = studentProfile?.full_name?.trim() || `طالب مسجل (${b.id.slice(0, 6)})`;
     return {
       bookingId: b.id,
-      studentLabel: studentProfile?.student_national_code
-        ? `كود ${studentProfile.student_national_code}`
-        : `كود ${b.id.slice(0, 8).toUpperCase()}`,
+      studentLabel: cleanName,
+      fullName: cleanName,
+      phone: studentProfile?.phone ?? null,
       seatNumber: b.seat_number,
       status: b.status,
       checkedInAt: b.checked_in_at,

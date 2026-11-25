@@ -5,18 +5,20 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
   AlertCircle,
+  BookOpen,
+  Building2,
+  ClipboardCheck,
   Eye,
   EyeOff,
-  KeyRound,
+  GraduationCap,
   Lock,
   Mail,
-  ShieldCheck,
+  Shield,
 } from "lucide-react";
 import {
   signInDemoRoleAction,
   signInWithPasswordAction,
 } from "@/application/auth/actions";
-import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/Card";
 import { Input } from "@/components/ui/Input";
@@ -28,52 +30,44 @@ export type DemoRoleKey =
   | "student_202"
   | "teacher_101"
   | "school_admin"
-  | "gate_scanner"
   | "super_admin";
 
-interface DemoAccountOption {
+interface DemoAccountCard {
   readonly roleKey: DemoRoleKey;
   readonly labelAr: string;
-  readonly code: string;
   readonly hintAr: string;
+  readonly icon: React.ComponentType<{ className?: string }>;
+  readonly accentClass: string;
 }
 
-const DEMO_ROLES: readonly DemoAccountOption[] = [
+const PRIMARY_DEMO_ROLES: readonly DemoAccountCard[] = [
   {
     roleKey: "student_201",
     labelAr: "طالب الهندسة",
-    code: "S-201",
-    hintAr: "بوابة الطالب",
+    hintAr: "احجز حصصك بالاسم بضغطة واحدة",
+    icon: GraduationCap,
+    accentClass: "border-blue-200 bg-[#EEF5FF]/60 hover:border-[#0B63CE] dark:border-blue-500/30 dark:bg-blue-500/10",
   },
   {
     roleKey: "student_202",
     labelAr: "طالب الآداب",
-    code: "S-202",
-    hintAr: "اختياري إيطالي",
+    hintAr: "طالب مسار الآداب واللغة الإيطالية",
+    icon: BookOpen,
+    accentClass: "border-sky-200 bg-sky-50/70 hover:border-sky-600 dark:border-sky-500/30 dark:bg-sky-500/10",
   },
   {
     roleKey: "teacher_101",
-    labelAr: "معلم البرمجة",
-    code: "T-101",
-    hintAr: "إدارة الحصص",
+    labelAr: "معلم المادة",
+    hintAr: "افتح كشف الأسماء وسجّل الحضور ✓",
+    icon: ClipboardCheck,
+    accentClass: "border-emerald-200 bg-emerald-50/70 hover:border-[#16A34A] dark:border-emerald-500/30 dark:bg-emerald-500/10",
   },
   {
     roleKey: "school_admin",
-    labelAr: "منسق المدرسة",
-    code: "AD-101",
-    hintAr: "القاعات والمناهج",
-  },
-  {
-    roleKey: "gate_scanner",
-    labelAr: "مشرف البوابة",
-    code: "GS-101",
-    hintAr: "ماسح التذاكر",
-  },
-  {
-    roleKey: "super_admin",
-    labelAr: "مدير المنصة",
-    code: "SA-001",
-    hintAr: "المدارس والتدقيق",
+    labelAr: "إدارة المدرسة",
+    hintAr: "القاعات والمناهج والتقارير اليومية",
+    icon: Building2,
+    accentClass: "border-amber-200 bg-amber-50/70 hover:border-amber-600 dark:border-amber-500/30 dark:bg-amber-500/10",
   },
 ] as const;
 
@@ -92,6 +86,7 @@ export function LoginClient() {
     event.preventDefault();
     setErrorMsg(null);
     setSubmitting(true);
+
     try {
       const result = await signInWithPasswordAction({
         email: email.trim(),
@@ -109,23 +104,25 @@ export function LoginClient() {
       }
 
       toast({
-        title: "تم تسجيل الدخول",
+        title: "أهلاً بك في مُدَرَّج",
         variant: "success",
       });
       router.push(result.data.redirectTo);
       router.refresh();
     } catch {
-      setErrorMsg("حدث خطأ غير متوقع أثناء التحقق من الحساب.");
+      setErrorMsg("تعذر الاتصال الآن. يرجى المحاولة مرة أخرى.");
     } finally {
       setSubmitting(false);
     }
   };
 
-  const handleDemoSignIn = async (roleKey: DemoRoleKey) => {
+  const handleDemoSignIn = async (roleKey: DemoRoleKey, labelAr: string) => {
     setErrorMsg(null);
     setLoadingRole(roleKey);
+
     try {
       const result = await signInDemoRoleAction({ roleKey });
+
       if (!result.ok) {
         setErrorMsg(result.error.message);
         toast({
@@ -137,91 +134,95 @@ export function LoginClient() {
       }
 
       toast({
-        title: "تم تفعيل الجلسة التجريبية",
+        title: `مرحباً بك — ${labelAr}`,
         variant: "success",
       });
       router.push(result.data.redirectTo);
       router.refresh();
     } catch {
-      setErrorMsg("تعذر الاتصال بخادم المصادقة.");
+      setErrorMsg("تعذر تسجيل الدخول للحساب التجريبي.");
     } finally {
       setLoadingRole(null);
     }
   };
 
-  const isBusy = submitting || loadingRole !== null;
-
   return (
-    <div className="mx-auto flex w-full max-w-xl flex-col gap-5">
-      {/* 1-Click Demo Role Switcher Bar */}
+    <div className="mx-auto flex w-full max-w-2xl flex-col gap-6">
+      {/* 1-Tap Friendly Demo Section */}
       <Card>
         <CardHeader className="pb-3">
-          <div className="flex items-center justify-between gap-2">
-            <CardTitle className="flex items-center gap-2 text-sm sm:text-base">
-              <KeyRound className="h-4 w-4 text-[#1E3A8A] dark:text-blue-400" />
-              <span>دخول تجريبي سريع</span>
-            </CardTitle>
-            <Badge variant="success" dot>
-              حسابات معتمدة
-            </Badge>
-          </div>
+          <CardTitle className="text-xl">تجربة فورية بضغطة واحدة</CardTitle>
+          <p className="text-base text-[var(--text-secondary)]">
+            اختَر دورك لتدخل مباشرةً بدون كتابة كلمة مرور
+          </p>
         </CardHeader>
-        <CardContent>
-          <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
-            {DEMO_ROLES.map((item) => {
-              const activeLoading = loadingRole === item.roleKey;
+
+        <CardContent className="flex flex-col gap-4">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            {PRIMARY_DEMO_ROLES.map((item) => {
+              const Icon = item.icon;
+              const isBusy = loadingRole === item.roleKey;
               return (
                 <button
                   key={item.roleKey}
                   type="button"
-                  disabled={isBusy}
-                  onClick={() => handleDemoSignIn(item.roleKey)}
+                  disabled={loadingRole !== null || submitting}
+                  onClick={() => handleDemoSignIn(item.roleKey, item.labelAr)}
                   className={cn(
-                    "flex min-h-[56px] flex-col items-start justify-between rounded-lg border border-[var(--border-hairline)] bg-[var(--bg-sunken)] p-2.5 text-start transition-colors cursor-pointer",
-                    "hover:border-[#1E3A8A] hover:bg-[var(--bg-surface)] dark:hover:border-blue-500",
-                    "disabled:pointer-events-none disabled:opacity-60",
-                    activeLoading && "border-[#1E3A8A] bg-blue-50/70 dark:bg-blue-500/15"
+                    "flex min-h-[76px] items-center gap-3.5 rounded-2xl border p-4 text-start transition-[border-color,transform] cursor-pointer",
+                    "active:scale-[0.98] disabled:opacity-60",
+                    item.accentClass
                   )}
                 >
-                  <div className="flex w-full items-center justify-between gap-1">
-                    <span className="text-xs font-bold text-[var(--text-primary)]">
-                      {item.labelAr}
-                    </span>
-                    <span
-                      className="rounded border border-[var(--border-hairline)] bg-[var(--bg-surface)] px-1.5 py-0.5 font-mono text-[10px] font-semibold text-[var(--text-secondary)]"
-                      dir="ltr"
-                    >
-                      {activeLoading ? "..." : item.code}
-                    </span>
-                  </div>
-                  <span className="mt-1 text-[11px] text-[var(--text-muted)]">
-                    {item.hintAr}
+                  <span className="inline-flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-[var(--bg-surface)] text-[#0B63CE] shadow-xs dark:text-blue-300">
+                    <Icon className="h-6 w-6" />
                   </span>
+                  <div className="min-w-0 flex-1">
+                    <p className="text-base font-bold text-[var(--text-primary)]">
+                      {isBusy ? "جاري الدخول..." : item.labelAr}
+                    </p>
+                    <p className="mt-0.5 text-sm text-[var(--text-secondary)]">
+                      {item.hintAr}
+                    </p>
+                  </div>
                 </button>
               );
             })}
           </div>
+
+          <div className="flex items-center justify-between border-t border-[var(--border-hairline)] pt-3">
+            <span className="text-sm text-[var(--text-muted)]">
+              لإدارة المدارس على مستوى المحافظة:
+            </span>
+            <button
+              type="button"
+              disabled={loadingRole !== null || submitting}
+              onClick={() => handleDemoSignIn("super_admin", "مشرف المنصة العام")}
+              className="inline-flex min-h-[44px] items-center gap-1.5 rounded-xl border border-[var(--border-hairline)] bg-[var(--bg-sunken)] px-3.5 text-sm font-semibold text-[var(--text-primary)] hover:border-[var(--border-strong)] cursor-pointer disabled:opacity-60"
+            >
+              <Shield className="h-4 w-4 text-[#0B63CE] dark:text-blue-400" />
+              <span>
+                {loadingRole === "super_admin" ? "جاري الدخول..." : "مشرف المنصة"}
+              </span>
+            </button>
+          </div>
         </CardContent>
       </Card>
 
-      {/* Standard Password Login Card */}
+      {/* Standard Email / Password Sign-In */}
       <Card>
-        <CardHeader>
-          <div className="flex items-center justify-between">
-            <CardTitle className="text-lg">تسجيل الدخول</CardTitle>
-            <Badge variant="mono" dir="ltr">
-              AUTH
-            </Badge>
-          </div>
+        <CardHeader className="pb-3">
+          <CardTitle className="text-xl">أو ادخل بحسابك المسجل</CardTitle>
         </CardHeader>
+
         <CardContent>
           <form onSubmit={handlePasswordSubmit} className="flex flex-col gap-4">
             {errorMsg && (
               <div
                 role="alert"
-                className="flex items-start gap-2 rounded-lg border border-red-300 bg-red-50 px-3 py-2.5 text-xs font-medium text-red-800 dark:border-red-500/40 dark:bg-red-500/10 dark:text-red-300"
+                className="flex items-start gap-2.5 rounded-xl border border-red-300 bg-red-50 px-4 py-3 text-sm font-medium text-red-800 dark:border-red-500/40 dark:bg-red-500/10 dark:text-red-300"
               >
-                <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
+                <AlertCircle className="mt-0.5 h-5 w-5 shrink-0" />
                 <span>{errorMsg}</span>
               </div>
             )}
@@ -230,37 +231,38 @@ export function LoginClient() {
               label="البريد الإلكتروني"
               type="email"
               inputSize="lg"
-              dir="ltr"
               required
               autoComplete="email"
-              placeholder="student-s201@ali-bin-abi-talib.modarrag.app"
+              dir="ltr"
+              placeholder="name@example.com"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              startAdornment={<Mail className="h-4 w-4" />}
+              startAdornment={<Mail className="h-5 w-5" />}
             />
 
             <Input
               label="كلمة المرور"
               type={showPassword ? "text" : "password"}
               inputSize="lg"
-              dir="ltr"
               required
+              minLength={6}
               autoComplete="current-password"
+              dir="ltr"
               placeholder="••••••••"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              startAdornment={<Lock className="h-4 w-4" />}
+              startAdornment={<Lock className="h-5 w-5" />}
               endAdornment={
                 <button
                   type="button"
                   onClick={() => setShowPassword((prev) => !prev)}
-                  className="inline-flex h-7 w-7 items-center justify-center rounded text-[var(--text-muted)] hover:text-[var(--text-primary)] cursor-pointer"
+                  className="inline-flex h-11 w-11 items-center justify-center rounded-xl text-[var(--text-muted)] hover:text-[var(--text-primary)] cursor-pointer"
                   aria-label={showPassword ? "إخفاء كلمة المرور" : "إظهار كلمة المرور"}
                 >
                   {showPassword ? (
-                    <EyeOff className="h-4 w-4" />
+                    <EyeOff className="h-5 w-5" />
                   ) : (
-                    <Eye className="h-4 w-4" />
+                    <Eye className="h-5 w-5" />
                   )}
                 </button>
               }
@@ -268,25 +270,24 @@ export function LoginClient() {
 
             <Button
               type="submit"
-              variant="primary"
+              variant="emerald"
               size="lg"
               fullWidth
               loading={submitting}
-              disabled={isBusy}
-              leftIcon={<ShieldCheck className="h-4 w-4" />}
+              disabled={loadingRole !== null}
             >
-              دخول
+              تسجيل الدخول
             </Button>
 
-            <div className="flex items-center justify-between border-t border-[var(--border-hairline)] pt-3 text-xs text-[var(--text-muted)]">
-              <span>طالب جديد بالمنصة؟</span>
+            <p className="text-center text-base text-[var(--text-secondary)]">
+              طالب جديد وليس لديك حساب؟{" "}
               <Link
                 href="/register"
-                className="font-semibold text-[#1E3A8A] hover:underline dark:text-blue-400"
+                className="font-bold text-[#0B63CE] hover:underline dark:text-blue-400"
               >
-                إنشاء حساب
+                أنشئ حسابك هنا
               </Link>
-            </div>
+            </p>
           </form>
         </CardContent>
       </Card>

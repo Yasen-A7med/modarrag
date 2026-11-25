@@ -11,30 +11,30 @@ export const USER_ROLE_LABELS: Readonly<
   Record<UserRole, { readonly ar: string; readonly en: string }>
 > = {
   super_admin: { ar: "مشرف المنصة", en: "Platform Admin" },
-  school_admin: { ar: "منسق المدرسة", en: "School Coordinator" },
+  school_admin: { ar: "إدارة المدرسة", en: "School Coordinator" },
   teacher: { ar: "معلم المادة", en: "Subject Teacher" },
-  student: { ar: "طالب مقيد", en: "Enrolled Student" },
-  gate_scanner: { ar: "مشرف البوابة", en: "Gate Scanner" },
+  student: { ar: "طالب", en: "Student" },
+  gate_scanner: { ar: "مشرف الحضور", en: "Attendance Staff" },
 };
 
 export const BOOKING_STATUS_LABELS: Readonly<
   Record<BookingStatus, { readonly ar: string; readonly en: string }>
 > = {
-  confirmed: { ar: "مؤكد", en: "Confirmed" },
-  waitlisted: { ar: "قائمة انتظار", en: "Waitlisted" },
-  cancelled_by_student: { ar: "ملغي بواسطة الطالب", en: "Cancelled by Student" },
-  cancelled_by_system: { ar: "ملغي بواسطة النظام", en: "Cancelled by System" },
-  checked_in: { ar: "تم الحضور", en: "Checked In" },
-  no_show: { ar: "لم يحضر", en: "No Show" },
+  confirmed: { ar: "مسجل", en: "Registered" },
+  waitlisted: { ar: "قائمة الانتظار", en: "Waitlisted" },
+  cancelled_by_student: { ar: "ملغي", en: "Cancelled" },
+  cancelled_by_system: { ar: "ملغاة", en: "Cancelled by System" },
+  checked_in: { ar: "حضر", en: "Present" },
+  no_show: { ar: "لم يحضر", en: "Absent" },
 };
 
 export const SESSION_STATUS_LABELS: Readonly<
   Record<SessionStatus, { readonly ar: string; readonly en: string }>
 > = {
-  scheduled: { ar: "متاحة للحجز", en: "Scheduled" },
-  full: { ar: "مكتملة المقاعد", en: "Full" },
+  scheduled: { ar: "متاحة للحجز", en: "Available" },
+  full: { ar: "مكتملة", en: "Full" },
   ongoing: { ar: "جارية الآن", en: "Ongoing" },
-  completed: { ar: "منتهية", en: "Completed" },
+  completed: { ar: "انتهت", en: "Completed" },
   cancelled: { ar: "ملغاة", en: "Cancelled" },
 };
 
@@ -42,8 +42,8 @@ export const SUBJECT_TYPE_LABELS: Readonly<
   Record<SubjectType, { readonly ar: string; readonly en: string }>
 > = {
   common: { ar: "مادة مشتركة", en: "Common Subject" },
-  track_core: { ar: "مادة تخصصية", en: "Track Core" },
-  track_elective: { ar: "مادة اختيارية", en: "Track Elective" },
+  track_core: { ar: "مادة تخصص", en: "Track Core" },
+  track_elective: { ar: "لغة ثانية", en: "Elective" },
 };
 
 function toValidDate(input: Date | string): Date {
@@ -55,14 +55,14 @@ function toValidDate(input: Date | string): Date {
 }
 
 /**
- * Formats a numeric value using Egyptian Arabic tabular numerals (Eastern Arabic digits
- * by default, or Latin digits when `useEasternDigits: false`).
+ * Formats numbers using one consistent numeral system across the app (Western Latin digits
+ * in Arabic locale by default for effortless legibility for all ages, per RTL guidelines).
  */
 export function formatArabicNumber(
   value: number,
   options: { readonly useEasternDigits?: boolean; readonly maximumFractionDigits?: number } = {}
 ): string {
-  const locale = options.useEasternDigits === false ? "ar-EG-u-nu-latn" : "ar-EG";
+  const locale = options.useEasternDigits ? "ar-EG" : "ar-EG-u-nu-latn";
   return new Intl.NumberFormat(locale, {
     maximumFractionDigits: options.maximumFractionDigits ?? 0,
   }).format(value);
@@ -77,7 +77,7 @@ export function formatCairoDate(
   } = {}
 ): string {
   const date = toValidDate(input);
-  const locale = options.locale ?? "ar-EG";
+  const locale = options.locale ?? "ar-EG-u-nu-latn";
 
   return new Intl.DateTimeFormat(locale, {
     timeZone: CAIRO_TIME_ZONE,
@@ -97,7 +97,7 @@ export function formatCairoTime(
   } = {}
 ): string {
   const date = toValidDate(input);
-  const locale = options.locale ?? "ar-EG";
+  const locale = options.locale ?? "ar-EG-u-nu-latn";
 
   return new Intl.DateTimeFormat(locale, {
     timeZone: CAIRO_TIME_ZONE,
@@ -118,11 +118,11 @@ export function formatCairoDayKey(input: Date | string): string {
   }).format(date);
 }
 
-/** Formats a session time range on a single Cairo calendar day, e.g. `٠٤:٠٠ م – ٠٦:٠٠ م`. */
+/** Formats a session time range on a single Cairo calendar day. */
 export function formatCairoTimeRange(
   startsAt: Date | string,
   endsAt: Date | string,
-  locale: "ar-EG" | "ar-EG-u-nu-latn" | "en-GB" = "ar-EG"
+  locale: "ar-EG" | "ar-EG-u-nu-latn" | "en-GB" = "ar-EG-u-nu-latn"
 ): string {
   return `${formatCairoTime(startsAt, { locale })} – ${formatCairoTime(endsAt, { locale })}`;
 }
@@ -130,7 +130,7 @@ export function formatCairoTimeRange(
 /** Formats seat occupancy count cleanly for tabular display. */
 export function formatSeatOccupancyAr(bookedSeats: number, maxCapacity: number): string {
   const remaining = Math.max(0, maxCapacity - bookedSeats);
-  return `${formatArabicNumber(remaining)} / ${formatArabicNumber(maxCapacity)} مقعد متاح`;
+  return `متبقي ${formatArabicNumber(remaining)} مقعد من ${formatArabicNumber(maxCapacity)}`;
 }
 
 /** Formats duration in minutes as concise Arabic text. */

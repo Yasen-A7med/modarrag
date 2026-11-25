@@ -3,20 +3,20 @@ import { RegisterClient } from "@/components/auth/RegisterClient";
 import { TopNavbar } from "@/components/layout/TopNavbar";
 
 export const metadata: Metadata = {
-  title: "إنشاء حساب طالب",
+  title: "إنشاء حساب طالب جديد",
 };
 
 export default function RegisterPage() {
   return (
-    <div className="min-h-screen bg-[var(--bg-canvas)] text-[var(--text-primary)]">
+    <div className="min-h-dvh bg-[var(--bg-hero)] text-[var(--text-primary)]">
       <TopNavbar
         brandHref="/"
         links={[
           { href: "/", label: "الرئيسية" },
-          { href: "/login", label: "دخول" },
+          { href: "/login", label: "تسجيل الدخول" },
         ]}
       />
-      <main className="arch-grid-bg mx-auto flex min-h-[calc(100vh-4rem)] items-center justify-center px-4 py-8 sm:px-6">
+      <main className="mx-auto flex min-h-[calc(100dvh-5rem)] items-center justify-center px-4 py-8 sm:px-6">
         <RegisterClient />
       </main>
     </div>

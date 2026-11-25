@@ -4,35 +4,24 @@ import * as React from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
-  AlertCircle,
-  Bell,
   Calendar,
   CheckCircle2,
-  ChevronDown,
-  ChevronUp,
   Clock,
-  Filter,
-  Lock,
+  GraduationCap,
   MapPin,
-  QrCode,
-  ShieldCheck,
-  Ticket,
+  Trash2,
   UserCheck,
 } from "lucide-react";
 import {
   bookStudentSeatAction,
+  cancelStudentBookingAction,
+  type StudentPortalBooking,
   type StudentPortalData,
+  type StudentPortalSession,
 } from "@/application/bookings/actions";
-import { TrackIcon } from "@/components/brand/TrackIcon";
 import { Badge } from "@/components/ui/Badge";
 import { Button, buttonVariants } from "@/components/ui/Button";
-import {
-  Card,
-  CardContent,
-  CardFooter,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/Card";
+import { Card, CardContent } from "@/components/ui/Card";
 import {
   Dialog,
   DialogContent,
@@ -42,25 +31,16 @@ import {
   DialogTitle,
 } from "@/components/ui/Dialog";
 import { useToast } from "@/components/ui/Toast";
-import type {
-  SessionStatus,
-  UserRole,
-} from "@/infrastructure/supabase/database.types";
+import type { UserRole } from "@/infrastructure/supabase/database.types";
 import {
-  getTrackStyle,
-  SESSION_STATUS_TONES,
-} from "@/lib/design-tokens";
-import {
+  BOOKING_STATUS_LABELS,
   formatArabicNumber,
   formatCairoDate,
-  formatCairoTime,
   formatCairoTimeRange,
-  getUserRoleLabel,
-  SESSION_STATUS_LABELS,
+  formatSeatOccupancyAr,
 } from "@/lib/formatters";
+import { BOOKING_STATUS_TONES } from "@/lib/design-tokens";
 import { cn } from "@/lib/utils";
-import { SeatGauge } from "./SeatGauge";
-import { StudentSubNav } from "./StudentSubNav";
 
 export interface StudentPortalClientProps {
   readonly schoolSlug: string;
@@ -70,200 +50,139 @@ export interface StudentPortalClientProps {
   readonly trackCode?: string | null;
 }
 
-interface BookingModalState {
+interface BookingSuccessModal {
   readonly status: "confirmed" | "waitlisted";
-  readonly bookingId: string;
   readonly sessionTitleAr: string;
+  readonly subjectNameAr: string;
+  readonly hallNameAr: string;
+  readonly startsAt: string;
+  readonly endsAt: string;
   readonly seatNumber: string | null;
   readonly waitlistPosition: number | null;
-  readonly referenceCode: string;
-}
-
-function inferTrackCodeFromName(
-  trackNameAr?: string | null,
-  explicitCode?: string | null
-): string {
-  if (explicitCode) {
-    return explicitCode;
-  }
-  const name = trackNameAr ?? "";
-  if (name.includes("طب")) return "MED_TRACK";
-  if (name.includes("أعمال")) return "BUS_TRACK";
-  if (name.includes("آداب") || name.includes("فنون")) return "ART_TRACK";
-  return "ENG_TRACK";
-}
-
-function getSessionStatusMeta(status: string) {
-  if (status in SESSION_STATUS_LABELS) {
-    const key = status as SessionStatus;
-    return {
-      labelAr: SESSION_STATUS_LABELS[key].ar,
-      tone: SESSION_STATUS_TONES[key],
-    };
-  }
-  return { labelAr: status, tone: "neutral" as const };
-}
-
-function formatCountdownParts(diffMs: number): string {
-  if (diffMs <= 0) {
-    return "تبدأ الآن";
-  }
-  const totalSeconds = Math.floor(diffMs / 1000);
-  const days = Math.floor(totalSeconds / 86400);
-  const hours = Math.floor((totalSeconds % 86400) / 3600);
-  const minutes = Math.floor((totalSeconds % 3600) / 60);
-  const seconds = totalSeconds % 60;
-
-  const pad = (n: number) => String(n).padStart(2, "0");
-  const clock = `${pad(hours)}:${pad(minutes)}:${pad(seconds)}`;
-  if (days > 0) {
-    return `${formatArabicNumber(days)} يوم · ${clock}`;
-  }
-  return clock;
-}
-
-function buildLocalReferenceCode(bookingId: string): string {
-  return `MDRG-2026-${bookingId.replace(/-/g, "").slice(0, 8).toUpperCase()}`;
 }
 
 /**
- * Interactive Student Portal client workspace:
- * - Live countdown hero strip + track emblem + notifications drawer
- * - Horizontal subject pills & eligibility lock filter
- * - Real-time SeatGauge cards & 1-tap booking / waitlist flow
+ * Ultra-clear single-screen Student Portal:
+ * (1) Greeting + next booked session reassurance banner ("أنت مسجل بالاسم ✓"),
+ * (2) My Booked Sessions with 1-tap cancel dialog,
+ * (3) Subject pill filters + large colorful Session Cards with 1-tap name-based reservation.
  */
 export function StudentPortalClient({
   schoolSlug,
   schoolNameAr,
   initialData,
   userRole,
-  trackCode,
 }: StudentPortalClientProps) {
   const router = useRouter();
   const { toast } = useToast();
 
   const [optimisticBookings, setOptimisticBookings] = React.useState<
-    StudentPortalData["bookings"]
+    readonly StudentPortalBooking[]
   >([]);
+  const [cancelledIds, setCancelledIds] = React.useState<readonly string[]>([]);
+  const [selectedSubjectId, setSelectedSubjectId] = React.useState<string>("all");
+  const [bookingSessionId, setBookingSessionId] = React.useState<string | null>(null);
+  const [successModal, setSuccessModal] = React.useState<BookingSuccessModal | null>(null);
+  const [cancelTarget, setCancelTarget] = React.useState<StudentPortalBooking | null>(null);
+  const [cancelling, setCancelling] = React.useState(false);
+
   const bookings = React.useMemo(() => {
-    const seen = new Set(initialData.bookings.map((b) => b.id));
-    const pending = optimisticBookings.filter((b) => !seen.has(b.id));
-    return [...pending, ...initialData.bookings];
-  }, [initialData.bookings, optimisticBookings]);
+    const cancelledSet = new Set(cancelledIds);
+    const serverIds = new Set(initialData.bookings.map((b) => b.id));
+    const mergedExtra = optimisticBookings.filter(
+      (b) => !serverIds.has(b.id) && !cancelledSet.has(b.id)
+    );
+    const updatedServer = initialData.bookings.map((b) =>
+      cancelledSet.has(b.id)
+        ? { ...b, status: "cancelled_by_student" as const }
+        : b
+    );
+    return [...mergedExtra, ...updatedServer];
+  }, [cancelledIds, initialData.bookings, optimisticBookings]);
 
   const sessions = React.useMemo(() => {
-    const serverBookingIds = new Set(initialData.bookings.map((b) => b.id));
-    const newlyConfirmedSessionIds = new Set(
-      optimisticBookings
-        .filter((b) => !serverBookingIds.has(b.id) && b.status === "confirmed")
+    const serverBookedIds = new Set(
+      initialData.bookings
+        .filter((b) => b.status === "confirmed")
         .map((b) => b.sessionId)
     );
-    if (newlyConfirmedSessionIds.size === 0) {
-      return initialData.sessions;
-    }
-    return initialData.sessions.map((item) => {
-      if (!newlyConfirmedSessionIds.has(item.id)) {
-        return item;
+    const addedConfirmedSessionIds = new Set(
+      optimisticBookings
+        .filter((b) => b.status === "confirmed" && !cancelledIds.includes(b.id))
+        .map((b) => b.sessionId)
+    );
+    const cancelledConfirmedSessionIds = new Set(
+      initialData.bookings
+        .filter((b) => b.status === "confirmed" && cancelledIds.includes(b.id))
+        .map((b) => b.sessionId)
+    );
+
+    return initialData.sessions.map((s) => {
+      let delta = 0;
+      if (addedConfirmedSessionIds.has(s.id) && !serverBookedIds.has(s.id)) {
+        delta += 1;
       }
-      const nextCount = item.bookedSeatsCount + 1;
-      return {
-        ...item,
-        bookedSeatsCount: nextCount,
-        status: nextCount >= item.maxCapacity ? "full" : item.status,
-      };
+      if (cancelledConfirmedSessionIds.has(s.id)) {
+        delta -= 1;
+      }
+      return delta === 0
+        ? s
+        : { ...s, bookedSeatsCount: Math.max(0, s.bookedSeatsCount + delta) };
     });
-  }, [initialData.sessions, initialData.bookings, optimisticBookings]);
+  }, [cancelledIds, initialData.bookings, initialData.sessions, optimisticBookings]);
 
-  const [selectedSubjectId, setSelectedSubjectId] = React.useState<string>("all");
-  const [eligibleOnly, setEligibleOnly] = React.useState<boolean>(false);
-  const [notifOpen, setNotifOpen] = React.useState<boolean>(false);
-  const [pendingSessionId, setPendingSessionId] = React.useState<string | null>(null);
-  const [confirmModal, setConfirmModal] = React.useState<BookingModalState | null>(null);
-  const [nowMs, setNowMs] = React.useState<number | null>(null);
+  const isStudentAccount = userRole === "student";
+  const hasEnrollment = initialData.enrollment !== null;
 
-  React.useEffect(() => {
-    const immediateTimer = window.setTimeout(() => {
-      setNowMs(Date.now());
-    }, 0);
-    const interval = window.setInterval(() => {
-      setNowMs(Date.now());
-    }, 1000);
-    return () => {
-      window.clearTimeout(immediateTimer);
-      window.clearInterval(interval);
-    };
-  }, []);
-
-  const enrollment = initialData.enrollment;
-  const resolvedTrackCode = inferTrackCodeFromName(enrollment?.trackNameAr, trackCode);
-  const trackStyle = getTrackStyle(resolvedTrackCode);
-  const isStudentAccount = !userRole || userRole === "student";
-
-  const bookingBySessionId = React.useMemo(() => {
-    const map = new Map<string, (typeof bookings)[number]>();
-    for (const booking of bookings) {
-      if (
-        booking.status === "confirmed" ||
-        booking.status === "waitlisted" ||
-        booking.status === "checked_in"
-      ) {
-        map.set(booking.sessionId, booking);
-      }
-    }
-    return map;
-  }, [bookings]);
-
-  const activeBookingsCount = React.useMemo(
+  const activeBookings = React.useMemo(
     () =>
-      bookings.filter((b) => b.status === "confirmed" || b.status === "waitlisted")
-        .length,
+      bookings.filter(
+        (b) =>
+          b.status === "confirmed" ||
+          b.status === "waitlisted" ||
+          b.status === "checked_in"
+      ),
     [bookings]
   );
 
-  const nextConfirmedBooking = React.useMemo(() => {
-    const confirmed = bookings
-      .filter((b) => b.status === "confirmed" && b.sessionStartsAt)
-      .slice()
-      .sort(
-        (a, b) =>
-          new Date(a.sessionStartsAt).getTime() - new Date(b.sessionStartsAt).getTime()
-      );
+  const nextUpcomingBooking = React.useMemo(
+    () =>
+      activeBookings.find(
+        (b) => b.status === "confirmed" || b.status === "checked_in"
+      ) ?? null,
+    [activeBookings]
+  );
 
-    if (nowMs === null) {
-      return confirmed[0] ?? null;
+  const activeBookingBySessionId = React.useMemo(() => {
+    const map = new Map<string, StudentPortalBooking>();
+    for (const b of activeBookings) {
+      map.set(b.sessionId, b);
     }
+    return map;
+  }, [activeBookings]);
 
-    return (
-      confirmed.find((b) => new Date(b.sessionStartsAt).getTime() > nowMs) ??
-      confirmed[0] ??
-      null
-    );
-  }, [bookings, nowMs]);
-
-  const subjectOptions = React.useMemo(() => {
-    const map = new Map<string, { readonly id: string; readonly nameAr: string }>();
+  const subjectFilterOptions = React.useMemo(() => {
+    const seen = new Map<string, string>();
     for (const s of sessions) {
-      if (!map.has(s.subjectId)) {
-        map.set(s.subjectId, { id: s.subjectId, nameAr: s.subjectNameAr });
+      if (s.isEligible && s.subjectNameAr && !seen.has(s.subjectId)) {
+        seen.set(s.subjectId, s.subjectNameAr);
       }
     }
-    return Array.from(map.values());
+    return Array.from(seen.entries()).map(([id, nameAr]) => ({ id, nameAr }));
   }, [sessions]);
 
-  const filteredSessions = React.useMemo(() => {
-    return sessions.filter((s) => {
-      if (selectedSubjectId !== "all" && s.subjectId !== selectedSubjectId) {
-        return false;
-      }
-      if (eligibleOnly && enrollment !== null && !s.isEligible) {
-        return false;
-      }
-      return true;
-    });
-  }, [sessions, selectedSubjectId, eligibleOnly, enrollment]);
+  const visibleSessions = React.useMemo(() => {
+    const eligible = hasEnrollment ? sessions.filter((s) => s.isEligible) : sessions;
+    if (selectedSubjectId === "all") {
+      return eligible;
+    }
+    return eligible.filter((s) => s.subjectId === selectedSubjectId);
+  }, [hasEnrollment, selectedSubjectId, sessions]);
 
-  const handleBookSession = async (session: (typeof sessions)[number]) => {
-    setPendingSessionId(session.id);
+  const handleReserve = async (session: StudentPortalSession) => {
+    if (!isStudentAccount || !hasEnrollment) return;
+
+    setBookingSessionId(session.id);
     try {
       const result = await bookStudentSeatAction({
         sessionId: session.id,
@@ -279,635 +198,566 @@ export function StudentPortalClient({
         return;
       }
 
-      const data = result.data;
-      const referenceCode = buildLocalReferenceCode(data.bookingId);
-
-      setOptimisticBookings((prev) => [
-        {
-          id: data.bookingId,
-          sessionId: session.id,
-          status: data.status,
-          seatNumber: data.seatNumber,
-          waitlistPosition: data.waitlistPosition,
-          qrToken: data.qrToken,
-          referenceCode,
-          bookedAt: new Date().toISOString(),
-          sessionTitleAr: session.titleAr,
-          sessionStartsAt: session.startsAt,
-        },
-        ...prev,
-      ]);
-
-      toast({
-        title:
-          data.status === "confirmed"
-            ? `تم حجز المقعد ${data.seatNumber ?? ""}`
-            : `تمت إضافتك لقائمة الانتظار (#${data.waitlistPosition ?? 1})`,
-        description: session.titleAr,
-        variant: data.status === "confirmed" ? "success" : "info",
-      });
-
-      setConfirmModal({
-        status: data.status,
-        bookingId: data.bookingId,
+      const newBooking: StudentPortalBooking = {
+        id: result.data.bookingId,
+        sessionId: session.id,
+        status: result.data.status,
+        seatNumber: result.data.seatNumber,
+        waitlistPosition: result.data.waitlistPosition,
+        bookedAt: new Date().toISOString(),
         sessionTitleAr: session.titleAr,
-        seatNumber: data.seatNumber,
-        waitlistPosition: data.waitlistPosition,
-        referenceCode,
+        sessionStartsAt: session.startsAt,
+        sessionEndsAt: session.endsAt,
+        hallNameAr: session.hallNameAr,
+        subjectNameAr: session.subjectNameAr,
+        teacherSpecialtyAr: session.teacherSpecialtyAr,
+      };
+
+      setOptimisticBookings((prev) => [newBooking, ...prev]);
+
+      setSuccessModal({
+        status: result.data.status,
+        sessionTitleAr: session.titleAr,
+        subjectNameAr: session.subjectNameAr,
+        hallNameAr: session.hallNameAr,
+        startsAt: session.startsAt,
+        endsAt: session.endsAt,
+        seatNumber: result.data.seatNumber,
+        waitlistPosition: result.data.waitlistPosition,
       });
 
       router.refresh();
     } catch {
       toast({
-        title: "خطأ في الاتصال",
-        description: "يرجى المحاولة مرة أخرى بعد لحظات.",
+        title: "خطأ غير متوقع",
+        description: "تعذر الاتصال بالخادم الآن. يرجى المحاولة مرة أخرى.",
         variant: "error",
       });
     } finally {
-      setPendingSessionId(null);
+      setBookingSessionId(null);
     }
   };
 
-  const nextDiffMs =
-    nextConfirmedBooking && nowMs !== null
-      ? new Date(nextConfirmedBooking.sessionStartsAt).getTime() - nowMs
-      : null;
+  const handleConfirmCancel = async () => {
+    if (!cancelTarget) return;
+    setCancelling(true);
+
+    try {
+      const result = await cancelStudentBookingAction({
+        bookingId: cancelTarget.id,
+        schoolSlug,
+      });
+
+      if (!result.ok) {
+        toast({
+          title: "تعذر إلغاء الحجز",
+          description: result.error.message,
+          variant: "error",
+        });
+        return;
+      }
+
+      setCancelledIds((prev) => [...prev, cancelTarget.id]);
+
+      toast({
+        title: "تم إلغاء حجزك",
+        description: "تم فتح المقعد لطالب آخر في قائمة المدرسة.",
+        variant: "info",
+      });
+
+      setCancelTarget(null);
+      router.refresh();
+    } catch {
+      toast({
+        title: "خطأ أثناء الإلغاء",
+        description: "يرجى المحاولة مرة أخرى.",
+        variant: "error",
+      });
+    } finally {
+      setCancelling(false);
+    }
+  };
 
   return (
-    <div className="flex flex-col gap-5">
-      <StudentSubNav
-        schoolSlug={schoolSlug}
-        activeTab="sessions"
-        activeBookingsCount={activeBookingsCount}
-      />
-
-      {/* Role or Missing-Enrollment Guidance Banner */}
-      {!isStudentAccount && userRole ? (
-        <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-amber-300 bg-amber-50 p-4 text-amber-950 dark:border-amber-500/35 dark:bg-amber-500/10 dark:text-amber-100">
-          <div className="flex items-start gap-3 min-w-0">
-            <AlertCircle className="mt-0.5 h-5 w-5 shrink-0 text-amber-600 dark:text-amber-400" />
-            <div className="min-w-0">
-              <p className="text-sm font-bold">
-                وضع المعاينة — الحساب الحالي ({getUserRoleLabel(userRole, "ar")})
+    <div className="flex flex-col gap-6">
+      {/* Greeting Header Card */}
+      <div className="rounded-2xl border border-[var(--border-hairline)] bg-[var(--bg-surface)] p-5 sm:p-6 hairline-lift">
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <p className="text-sm font-semibold text-[#0B63CE] dark:text-blue-400">
+              {schoolNameAr}
+            </p>
+            <h1 className="mt-1 text-2xl font-bold text-[var(--text-primary)]">
+              أهلاً، {initialData.studentName}
+            </h1>
+            {initialData.enrollment && (
+              <p className="mt-1 text-base text-[var(--text-secondary)]">
+                مسارك المسجل:{" "}
+                <strong className="font-bold text-[var(--text-primary)]">
+                  {initialData.enrollment.trackNameAr}
+                </strong>
               </p>
-              <p className="mt-0.5 text-xs opacity-90">
-                يمكنك استعراض جدول الحصص بالمدرسة، بينما حجز المقاعد وإصدار تذاكر QR متاح لحسابات الطلاب فقط.
-              </p>
-            </div>
+            )}
           </div>
-          <div className="flex flex-wrap items-center gap-2">
+
+          {initialData.enrollment ? (
             <Link
-              href={`/s/${schoolSlug}`}
+              href="/onboarding"
               className={buttonVariants({ variant: "outline", size: "md" })}
             >
-              بوابة المدرسة
+              تغيير المسار أو البيانات
             </Link>
+          ) : isStudentAccount ? (
             <Link
-              href="/login"
-              className={buttonVariants({ variant: "primary", size: "md" })}
+              href="/onboarding"
+              className={buttonVariants({ variant: "emerald", size: "lg" })}
             >
-              تبديل الحساب
+              اختر مسارك الدراسي أولاً
             </Link>
+          ) : null}
+        </div>
+
+        {!isStudentAccount && (
+          <div className="mt-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-base text-amber-900 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-200">
+            أنت تتصفح الجدول للمعاينة فقط. الحجز الفعلي متاح لحسابات الطلاب.
           </div>
-        </div>
-      ) : enrollment === null ? (
-        <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-blue-200 bg-blue-50/75 p-4 text-slate-900 dark:border-blue-500/30 dark:bg-blue-500/10 dark:text-slate-100">
-          <div className="flex items-start gap-3 min-w-0">
-            <AlertCircle className="mt-0.5 h-5 w-5 shrink-0 text-[#1E3A8A] dark:text-blue-400" />
-            <div className="min-w-0">
-              <p className="text-sm font-bold">لم يتم استكمال تحديد المسار الدراسي بعد</p>
-              <p className="mt-0.5 text-xs text-[var(--text-secondary)]">
-                يمكنك معاينة الحصص المتاحة في {schoolNameAr} الآن، ثم تحديد الصف والمسار لتفعيل الحجز الفوري.
-              </p>
-            </div>
-          </div>
-          <Link
-            href="/onboarding"
-            className={buttonVariants({ variant: "primary", size: "md" })}
-          >
-            تحديد المسار الآن
-          </Link>
-        </div>
-      ) : null}
-
-      {/* Hero Strip: Next Confirmed Session Countdown / Track Overview + Notifications Drawer */}
-      <div className="grid grid-cols-1 gap-4 lg:grid-cols-12">
-        <Card className="lg:col-span-8">
-          <CardContent className="flex flex-col justify-between gap-4 p-4 sm:p-5">
-            {nextConfirmedBooking ? (
-              <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-                <div className="min-w-0 flex-1">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <Badge variant="success" dot>
-                      حجزك القادم المؤكد
-                    </Badge>
-                    {nextConfirmedBooking.seatNumber && (
-                      <Badge variant="mono" dir="ltr">
-                        {nextConfirmedBooking.seatNumber}
-                      </Badge>
-                    )}
-                    <Badge variant="mono" dir="ltr">
-                      {nextConfirmedBooking.referenceCode}
-                    </Badge>
-                  </div>
-                  <h2 className="mt-2.5 text-lg font-bold text-[var(--text-primary)]">
-                    {nextConfirmedBooking.sessionTitleAr}
-                  </h2>
-                  <p className="mt-1 flex flex-wrap items-center gap-2 text-xs text-[var(--text-secondary)]">
-                    <span className="inline-flex items-center gap-1">
-                      <Calendar className="h-3.5 w-3.5 text-[var(--text-muted)]" />
-                      {formatCairoDate(nextConfirmedBooking.sessionStartsAt, {
-                        includeWeekday: true,
-                      })}
-                    </span>
-                    <span className="inline-flex items-center gap-1 tabular-nums">
-                      <Clock className="h-3.5 w-3.5 text-[var(--text-muted)]" />
-                      {formatCairoTime(nextConfirmedBooking.sessionStartsAt)}
-                    </span>
-                  </p>
-                </div>
-
-                <div className="flex flex-col items-stretch gap-2.5 sm:items-end shrink-0">
-                  <div className="rounded-lg border border-[var(--border-hairline)] bg-[var(--bg-sunken)] px-3.5 py-2 text-center">
-                    <p className="text-[11px] text-[var(--text-muted)]">العد التنازلي للحصة</p>
-                    <p
-                      className="mt-0.5 font-mono text-base font-bold text-[#1E3A8A] tabular-nums dark:text-blue-400"
-                      dir="ltr"
-                    >
-                      {nextDiffMs !== null ? formatCountdownParts(nextDiffMs) : "--:--:--"}
-                    </p>
-                  </div>
-                  <Link
-                    href={`/s/${schoolSlug}/student/tickets/${nextConfirmedBooking.id}`}
-                    className={buttonVariants({ variant: "primary", size: "md" })}
-                  >
-                    <QrCode className="h-4 w-4 shrink-0" />
-                    <span>فتح تذكرة الدخول</span>
-                  </Link>
-                </div>
-              </div>
-            ) : (
-              <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-                <div className="flex items-start gap-3 min-w-0">
-                  <TrackIcon trackCode={resolvedTrackCode} size="lg" />
-                  <div className="min-w-0">
-                    <div className="flex flex-wrap items-center gap-2">
-                      {enrollment ? (
-                        <span
-                          className={cn(
-                            "rounded-md border px-2 py-0.5 text-[11px] font-medium",
-                            trackStyle.badgeClass
-                          )}
-                        >
-                          {enrollment.trackNameAr}
-                        </span>
-                      ) : (
-                        <Badge variant="neutral">معاينة عامة</Badge>
-                      )}
-                      <Badge variant="mono" dir="ltr">
-                        {schoolSlug}
-                      </Badge>
-                    </div>
-                    <h1 className="mt-2 text-lg font-bold text-[var(--text-primary)]">
-                      {enrollment ? enrollment.gradeNameAr : schoolNameAr}
-                    </h1>
-                    <p className="mt-0.5 text-xs text-[var(--text-muted)]">
-                      {enrollment
-                        ? "استعرض الحصص المتاحة لمسارك واحجز مقعدك بضغطة واحدة مع ضمان سعة القاعة."
-                        : "حدد مسارك الدراسي لتفعيل أهلية الحجز التلقائي في المدرجات."}
-                    </p>
-                  </div>
-                </div>
-
-                <Link
-                  href={`/s/${schoolSlug}/student/schedule`}
-                  className={buttonVariants({ variant: "outline", size: "md" })}
-                >
-                  <Ticket className="h-4 w-4 shrink-0" />
-                  <span>جدولي وتذاكري</span>
-                </Link>
-              </div>
-            )}
-          </CardContent>
-        </Card>
-
-        {/* Unread Notifications Drawer / Strip */}
-        <Card className="lg:col-span-4">
-          <CardHeader className="p-4 pb-2.5">
-            <div className="flex items-center justify-between gap-2">
-              <div className="flex items-center gap-2">
-                <Bell className="h-4 w-4 text-[#1E3A8A] dark:text-blue-400" />
-                <CardTitle className="text-sm">الإشعارات</CardTitle>
-                <Badge
-                  variant={initialData.notifications.length > 0 ? "warning" : "neutral"}
-                  size="sm"
-                >
-                  {formatArabicNumber(initialData.notifications.length)}
-                </Badge>
-              </div>
-              <button
-                type="button"
-                onClick={() => setNotifOpen((prev) => !prev)}
-                className="inline-flex min-h-[44px] items-center gap-1 rounded-md border border-[var(--border-hairline)] bg-[var(--bg-sunken)] px-3 text-xs font-medium text-[var(--text-secondary)] hover:text-[var(--text-primary)] cursor-pointer lg:hidden"
-                aria-expanded={notifOpen}
-              >
-                <span>{notifOpen ? "إخفاء" : "عرض"}</span>
-                {notifOpen ? (
-                  <ChevronUp className="h-3.5 w-3.5" />
-                ) : (
-                  <ChevronDown className="h-3.5 w-3.5" />
-                )}
-              </button>
-            </div>
-          </CardHeader>
-          <CardContent className={cn("px-4 pb-4", notifOpen ? "block" : "hidden lg:block")}>
-            {initialData.notifications.length === 0 ? (
-              <p className="rounded-lg border border-dashed border-[var(--border-hairline)] bg-[var(--bg-sunken)] p-3 text-xs text-[var(--text-muted)]">
-                لا توجد تنبيهات جديدة غير مقروءة حالياً.
-              </p>
-            ) : (
-              <div className="flex max-h-36 flex-col gap-2 overflow-y-auto pe-1">
-                {initialData.notifications.map((notif) => (
-                  <div
-                    key={notif.id}
-                    className="rounded-lg border border-[var(--border-hairline)] bg-[var(--bg-sunken)] p-2.5"
-                  >
-                    <div className="flex items-center justify-between gap-2">
-                      <p className="truncate text-xs font-semibold text-[var(--text-primary)]">
-                        {notif.titleAr}
-                      </p>
-                      <span className="shrink-0 text-[10px] text-[var(--text-muted)] tabular-nums">
-                        {formatCairoTime(notif.createdAt)}
-                      </span>
-                    </div>
-                    <p className="mt-1 text-[11px] leading-relaxed text-[var(--text-secondary)]">
-                      {notif.bodyAr}
-                    </p>
-                  </div>
-                ))}
-              </div>
-            )}
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* Subject Filter Horizontal Bar + Eligibility Filter Toggle */}
-      <div className="flex flex-col gap-3 rounded-xl border border-[var(--border-hairline)] bg-[var(--bg-surface)] p-3 hairline-lift sm:flex-row sm:items-center sm:justify-between">
-        <div
-          className="flex min-w-0 flex-1 items-center gap-2 overflow-x-auto pb-1 sm:pb-0"
-          role="tablist"
-          aria-label="تصفية حسب المادة"
-        >
-          <button
-            type="button"
-            role="tab"
-            aria-selected={selectedSubjectId === "all"}
-            onClick={() => setSelectedSubjectId("all")}
-            className={cn(
-              "inline-flex min-h-[44px] shrink-0 items-center gap-1.5 rounded-lg border px-3.5 text-xs sm:text-sm font-medium transition-colors cursor-pointer whitespace-nowrap",
-              selectedSubjectId === "all"
-                ? "border-[#1E3A8A] bg-[#1E3A8A] text-white dark:border-blue-500 dark:bg-blue-600"
-                : "border-[var(--border-hairline)] bg-[var(--bg-sunken)] text-[var(--text-secondary)] hover:border-[var(--border-strong)] hover:text-[var(--text-primary)]"
-            )}
-          >
-            <span>جميع المواد</span>
-            <Badge
-              variant={selectedSubjectId === "all" ? "mono" : "neutral"}
-              size="sm"
-              className={
-                selectedSubjectId === "all"
-                  ? "border-white/25 bg-white/15 text-white"
-                  : ""
-              }
-            >
-              {formatArabicNumber(sessions.length)}
-            </Badge>
-          </button>
-
-          {subjectOptions.map((subject) => {
-            const active = selectedSubjectId === subject.id;
-            return (
-              <button
-                key={subject.id}
-                type="button"
-                role="tab"
-                aria-selected={active}
-                onClick={() => setSelectedSubjectId(subject.id)}
-                className={cn(
-                  "inline-flex min-h-[44px] shrink-0 items-center rounded-lg border px-3.5 text-xs sm:text-sm font-medium transition-colors cursor-pointer whitespace-nowrap",
-                  active
-                    ? "border-[#1E3A8A] bg-[#1E3A8A] text-white dark:border-blue-500 dark:bg-blue-600"
-                    : "border-[var(--border-hairline)] bg-[var(--bg-sunken)] text-[var(--text-secondary)] hover:border-[var(--border-strong)] hover:text-[var(--text-primary)]"
-                )}
-              >
-                {subject.nameAr}
-              </button>
-            );
-          })}
-        </div>
-
-        {enrollment !== null && (
-          <button
-            type="button"
-            onClick={() => setEligibleOnly((prev) => !prev)}
-            aria-pressed={eligibleOnly}
-            className={cn(
-              "inline-flex min-h-[44px] shrink-0 items-center justify-center gap-2 rounded-lg border px-3.5 text-xs font-semibold transition-colors cursor-pointer whitespace-nowrap",
-              eligibleOnly
-                ? "border-emerald-600 bg-emerald-50 text-emerald-800 dark:border-emerald-500/40 dark:bg-emerald-500/15 dark:text-emerald-200"
-                : "border-[var(--border-hairline)] bg-[var(--bg-sunken)] text-[var(--text-secondary)] hover:border-[var(--border-strong)]"
-            )}
-          >
-            <Filter className="h-3.5 w-3.5 shrink-0" />
-            <span>{eligibleOnly ? "مواد مساري فقط" : "تصفية: مواد مساري"}</span>
-          </button>
         )}
       </div>
 
-      {/* Sessions Grid */}
-      {filteredSessions.length === 0 ? (
-        <Card variant="sunken" className="p-8 text-center">
-          <Calendar className="mx-auto h-8 w-8 text-[var(--text-muted)]" />
-          <p className="mt-3 text-sm font-bold text-[var(--text-primary)]">
-            لا توجد حصص مطابقة للتصفية الحالية
-          </p>
-          <p className="mt-1 text-xs text-[var(--text-muted)]">
-            جرب اختيار &quot;جميع المواد&quot; أو إلغاء تصفية المسار لمعاينة بقية الحصص المجدولة بالمدرسة.
-          </p>
-          {(selectedSubjectId !== "all" || eligibleOnly) && (
-            <div className="mt-4">
-              <Button
-                variant="outline"
-                size="md"
-                onClick={() => {
-                  setSelectedSubjectId("all");
-                  setEligibleOnly(false);
-                }}
-              >
-                عرض جميع الحصص
-              </Button>
+      {/* Prominent Next Booking Banner ("أنت مسجل بالاسم ✓") */}
+      {nextUpcomingBooking && (
+        <div className="rounded-2xl border-2 border-[#16A34A]/40 bg-emerald-50/75 p-5 sm:p-6 dark:border-emerald-500/40 dark:bg-emerald-500/10">
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex items-start gap-3.5">
+              <span className="inline-flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-[#16A34A] text-white">
+                <UserCheck className="h-6 w-6" />
+              </span>
+              <div>
+                <p className="text-base font-bold text-emerald-900 dark:text-emerald-200">
+                  أنت مسجل بالاسم ✓ — {nextUpcomingBooking.subjectNameAr}
+                </p>
+                <p className="mt-1 text-base text-emerald-900/90 dark:text-emerald-100">
+                  {nextUpcomingBooking.hallNameAr} ·{" "}
+                  {formatCairoDate(nextUpcomingBooking.sessionStartsAt, {
+                    includeWeekday: true,
+                  })}{" "}
+                  {" · "}
+                  <span className="whitespace-nowrap tabular-nums">
+                    {formatCairoTimeRange(
+                      nextUpcomingBooking.sessionStartsAt,
+                      nextUpcomingBooking.sessionEndsAt
+                    )}
+                  </span>
+                </p>
+                <p className="mt-1 text-sm font-medium text-emerald-800 dark:text-emerald-300">
+                  لا تحتاج تذكرة أو باركود — اذكر اسمك فقط للمعلم عند دخول القاعة.
+                </p>
+              </div>
             </div>
-          )}
-        </Card>
-      ) : (
-        <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-          {filteredSessions.map((session) => {
-            const existingBooking = bookingBySessionId.get(session.id);
-            const statusMeta = getSessionStatusMeta(session.status);
-            const isFull =
-              session.bookedSeatsCount >= session.maxCapacity || session.status === "full";
-            const isLockedOutOfTrack = enrollment !== null && !session.isEligible;
 
-            return (
-              <Card
-                key={session.id}
-                variant={isLockedOutOfTrack ? "sunken" : "default"}
-                className={cn(
-                  "flex flex-col justify-between",
-                  isLockedOutOfTrack && "opacity-90"
-                )}
-              >
-                <CardHeader className="pb-3">
-                  <div className="flex flex-wrap items-center justify-between gap-2">
-                    <div className="flex flex-wrap items-center gap-1.5">
-                      <Badge variant="primary" size="sm">
-                        {session.subjectNameAr}
-                      </Badge>
-                      <Badge variant={statusMeta.tone} size="sm" dot>
-                        {statusMeta.labelAr}
-                      </Badge>
-                    </div>
-
-                    {existingBooking ? (
-                      <Badge
-                        variant={
-                          existingBooking.status === "waitlisted" ? "warning" : "success"
-                        }
-                        size="sm"
-                      >
-                        {existingBooking.status === "waitlisted"
-                          ? `انتظار #${formatArabicNumber(existingBooking.waitlistPosition ?? 1)}`
-                          : `محجوز · ${existingBooking.seatNumber ?? ""}`}
-                      </Badge>
-                    ) : isLockedOutOfTrack ? (
-                      <Badge variant="neutral" size="sm" className="gap-1">
-                        <Lock className="h-3 w-3 shrink-0" />
-                        <span>خارج المسار</span>
-                      </Badge>
-                    ) : null}
-                  </div>
-
-                  <CardTitle className="mt-2 text-base">{session.titleAr}</CardTitle>
-                </CardHeader>
-
-                <CardContent className="flex flex-col gap-3">
-                  <div className="grid grid-cols-1 gap-2 text-xs text-[var(--text-secondary)] sm:grid-cols-2">
-                    <div className="flex items-center gap-2 min-w-0">
-                      <Calendar className="h-3.5 w-3.5 shrink-0 text-[var(--text-muted)]" />
-                      <span className="truncate">
-                        {formatCairoDate(session.startsAt, { includeWeekday: true })}
-                      </span>
-                    </div>
-                    <div className="flex items-center gap-2 min-w-0 tabular-nums">
-                      <Clock className="h-3.5 w-3.5 shrink-0 text-[var(--text-muted)]" />
-                      <span className="truncate">
-                        {formatCairoTimeRange(session.startsAt, session.endsAt)}
-                      </span>
-                    </div>
-                    <div className="flex items-center gap-2 min-w-0">
-                      <MapPin className="h-3.5 w-3.5 shrink-0 text-[var(--text-muted)]" />
-                      <span className="truncate">{session.hallNameAr}</span>
-                      <span
-                        className="rounded border border-[var(--border-hairline)] bg-[var(--bg-sunken)] px-1.5 py-0.5 font-mono text-[10px] text-[var(--text-muted)]"
-                        dir="ltr"
-                      >
-                        {session.hallCode}
-                      </span>
-                    </div>
-                    <div className="flex items-center gap-2 min-w-0">
-                      <UserCheck className="h-3.5 w-3.5 shrink-0 text-[var(--text-muted)]" />
-                      <span className="truncate">
-                        معلم المادة · كود{" "}
-                        <span className="font-mono" dir="ltr">
-                          {session.teacherCode}
-                        </span>
-                      </span>
-                    </div>
-                  </div>
-
-                  <SeatGauge
-                    bookedSeatsCount={session.bookedSeatsCount}
-                    maxCapacity={session.maxCapacity}
-                    bufferMinutes={session.bufferMinutes}
-                    status={session.status}
-                  />
-                </CardContent>
-
-                <CardFooter className="bg-[var(--bg-surface)]">
-                  {existingBooking ? (
-                    existingBooking.status === "waitlisted" ? (
-                      <Link
-                        href={`/s/${schoolSlug}/student/schedule`}
-                        className={buttonVariants({
-                          variant: "outline",
-                          size: "lg",
-                          fullWidth: true,
-                        })}
-                      >
-                        <Clock className="h-4 w-4 shrink-0" />
-                        <span>
-                          في قائمة الانتظار (رقم{" "}
-                          {formatArabicNumber(existingBooking.waitlistPosition ?? 1)}) — عرض الجدول
-                        </span>
-                      </Link>
-                    ) : (
-                      <Link
-                        href={`/s/${schoolSlug}/student/tickets/${existingBooking.id}`}
-                        className={buttonVariants({
-                          variant: "primary",
-                          size: "lg",
-                          fullWidth: true,
-                        })}
-                      >
-                        <QrCode className="h-4 w-4 shrink-0" />
-                        <span>عرض التذكرة</span>
-                      </Link>
-                    )
-                  ) : !isStudentAccount ? (
-                    <Button variant="secondary" size="lg" fullWidth disabled>
-                      الحجز متاح لحسابات الطلاب فقط
-                    </Button>
-                  ) : enrollment === null ? (
-                    <Link
-                      href="/onboarding"
-                      className={buttonVariants({
-                        variant: "outline",
-                        size: "lg",
-                        fullWidth: true,
-                      })}
-                    >
-                      أكمل تحديد المسار لتفعيل الحجز
-                    </Link>
-                  ) : isLockedOutOfTrack ? (
-                    <Button
-                      variant="secondary"
-                      size="lg"
-                      fullWidth
-                      disabled
-                      leftIcon={<Lock className="h-4 w-4" />}
-                    >
-                      مادة غير مدرجة ضمن مسارك الدراسي
-                    </Button>
-                  ) : isFull ? (
-                    <Button
-                      variant="secondary"
-                      size="lg"
-                      fullWidth
-                      loading={pendingSessionId === session.id}
-                      onClick={() => handleBookSession(session)}
-                      leftIcon={<Clock className="h-4 w-4" />}
-                    >
-                      انضمام لقائمة الانتظار
-                    </Button>
-                  ) : (
-                    <Button
-                      variant="primary"
-                      size="lg"
-                      fullWidth
-                      loading={pendingSessionId === session.id}
-                      onClick={() => handleBookSession(session)}
-                      leftIcon={<ShieldCheck className="h-4 w-4" />}
-                    >
-                      حجز مقعد
-                    </Button>
-                  )}
-                </CardFooter>
-              </Card>
-            );
-          })}
+            {nextUpcomingBooking.seatNumber && (
+              <div className="shrink-0 rounded-xl border border-emerald-300 bg-white px-4 py-2 text-center dark:border-emerald-500/40 dark:bg-emerald-950/60">
+                <p className="text-xs font-semibold text-emerald-700 dark:text-emerald-300">
+                  رقم المقعد
+                </p>
+                <p className="font-mono text-lg font-bold text-emerald-900 dark:text-white tabular-nums" dir="ltr">
+                  {nextUpcomingBooking.seatNumber}
+                </p>
+              </div>
+            )}
+          </div>
         </div>
       )}
 
-      {/* Instant Booking Confirmation Modal */}
+      {/* Section 1: Student's Active Bookings */}
+      {activeBookings.length > 0 && (
+        <section aria-labelledby="my-bookings-heading" className="flex flex-col gap-3">
+          <h2 id="my-bookings-heading" className="text-xl font-bold text-[var(--text-primary)]">
+            حصصي المحجوزة ({formatArabicNumber(activeBookings.length)})
+          </h2>
+
+          <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+            {activeBookings.map((booking) => {
+              const statusInfo = BOOKING_STATUS_LABELS[booking.status];
+              const tone = BOOKING_STATUS_TONES[booking.status];
+              return (
+                <Card key={booking.id}>
+                  <CardContent className="flex flex-col gap-3 pt-5">
+                    <div className="flex items-start justify-between gap-3">
+                      <div>
+                        <p className="text-sm font-bold text-[#0B63CE] dark:text-blue-400">
+                          {booking.subjectNameAr}
+                        </p>
+                        <h3 className="mt-0.5 text-lg font-bold text-[var(--text-primary)]">
+                          {booking.sessionTitleAr}
+                        </h3>
+                      </div>
+                      <Badge variant={tone} size="md">
+                        {booking.status === "confirmed"
+                          ? "مسجل بالاسم ✓"
+                          : booking.status === "waitlisted"
+                            ? `انتظار (${formatArabicNumber(booking.waitlistPosition ?? 1)})`
+                            : statusInfo.ar}
+                      </Badge>
+                    </div>
+
+                    <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 text-sm text-[var(--text-secondary)]">
+                      <span className="inline-flex items-center gap-1.5">
+                        <MapPin className="h-4 w-4 text-[var(--text-muted)]" />
+                        {booking.hallNameAr}
+                      </span>
+                      <span className="inline-flex items-center gap-1.5">
+                        <Calendar className="h-4 w-4 text-[var(--text-muted)]" />
+                        {formatCairoDate(booking.sessionStartsAt, {
+                          includeWeekday: true,
+                        })}
+                      </span>
+                      <span className="inline-flex items-center gap-1.5 tabular-nums">
+                        <Clock className="h-4 w-4 text-[var(--text-muted)]" />
+                        {formatCairoTimeRange(
+                          booking.sessionStartsAt,
+                          booking.sessionEndsAt
+                        )}
+                      </span>
+                    </div>
+
+                    {(booking.status === "confirmed" ||
+                      booking.status === "waitlisted") && (
+                      <div className="flex justify-end border-t border-[var(--border-hairline)] pt-3">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => setCancelTarget(booking)}
+                          leftIcon={<Trash2 className="h-4 w-4 text-red-600" />}
+                        >
+                          إلغاء الحجز
+                        </Button>
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+              );
+            })}
+          </div>
+        </section>
+      )}
+
+      {/* Section 2: Available Sessions */}
+      <section aria-labelledby="available-sessions-heading" className="flex flex-col gap-4">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <h2 id="available-sessions-heading" className="text-xl font-bold text-[var(--text-primary)]">
+            الحصص المتاحة للحجز
+          </h2>
+          <span className="text-sm font-medium text-[var(--text-muted)]">
+            اضغط «احجز مكانك الآن» فيسجل اسمك فوراً عند المعلم
+          </span>
+        </div>
+
+        {/* Big Subject Filter Pills */}
+        {subjectFilterOptions.length > 1 && (
+          <div
+            className="flex items-center gap-2 overflow-x-auto pb-1"
+            role="group"
+            aria-label="تصفية حسب المادة"
+          >
+            <button
+              type="button"
+              onClick={() => setSelectedSubjectId("all")}
+              className={cn(
+                "min-h-[44px] shrink-0 rounded-xl border px-4 text-sm font-bold transition-colors cursor-pointer",
+                selectedSubjectId === "all"
+                  ? "border-[#0B63CE] bg-[#0B63CE] text-white dark:border-blue-500 dark:bg-blue-600"
+                  : "border-[var(--border-hairline)] bg-[var(--bg-surface)] text-[var(--text-secondary)] hover:border-[var(--border-strong)]"
+              )}
+            >
+              كل المواد
+            </button>
+            {subjectFilterOptions.map((subj) => {
+              const active = selectedSubjectId === subj.id;
+              return (
+                <button
+                  key={subj.id}
+                  type="button"
+                  onClick={() => setSelectedSubjectId(subj.id)}
+                  className={cn(
+                    "min-h-[44px] shrink-0 rounded-xl border px-4 text-sm font-bold transition-colors cursor-pointer",
+                    active
+                      ? "border-[#0B63CE] bg-[#0B63CE] text-white dark:border-blue-500 dark:bg-blue-600"
+                      : "border-[var(--border-hairline)] bg-[var(--bg-surface)] text-[var(--text-secondary)] hover:border-[var(--border-strong)]"
+                  )}
+                >
+                  {subj.nameAr}
+                </button>
+              );
+            })}
+          </div>
+        )}
+
+        {visibleSessions.length === 0 ? (
+          <Card>
+            <CardContent className="flex flex-col items-center gap-3 py-12 text-center">
+              <GraduationCap className="h-10 w-10 text-[var(--text-muted)]" />
+              <p className="text-lg font-bold text-[var(--text-primary)]">
+                لا توجد حصص متاحة في هذه المادة حالياً
+              </p>
+              <p className="text-base text-[var(--text-secondary)]">
+                جرّب اختيار «كل المواد» أو راجع الصفحة لاحقاً عند إضافة مواعيد جديدة.
+              </p>
+            </CardContent>
+          </Card>
+        ) : (
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+            {visibleSessions.map((session) => {
+              const existingBooking = activeBookingBySessionId.get(session.id);
+              const sessionStartMs = Date.parse(session.startsAt);
+              const sessionEndMs = Date.parse(session.endsAt);
+              const conflictingBooking = !existingBooking
+                ? activeBookings.find(
+                    (b) =>
+                      b.sessionId !== session.id &&
+                      (b.status === "confirmed" || b.status === "checked_in") &&
+                      Date.parse(b.sessionStartsAt) < sessionEndMs &&
+                      Date.parse(b.sessionEndsAt) > sessionStartMs
+                  )
+                : undefined;
+              const isFull =
+                session.bookedSeatsCount >= session.maxCapacity ||
+                session.status === "full";
+              const remainingSeats = Math.max(
+                0,
+                session.maxCapacity - session.bookedSeatsCount
+              );
+              const fillPct =
+                session.maxCapacity > 0
+                  ? Math.min(
+                      100,
+                      Math.round((session.bookedSeatsCount / session.maxCapacity) * 100)
+                    )
+                  : 0;
+              const isBusy = bookingSessionId === session.id;
+
+              return (
+                <div
+                  key={session.id}
+                  className={cn(
+                    "flex flex-col justify-between rounded-2xl border border-[var(--border-hairline)] bg-[var(--bg-surface)] p-5 hairline-lift",
+                    existingBooking
+                      ? "border-t-4 border-t-[#16A34A]"
+                      : conflictingBooking
+                        ? "border-t-4 border-t-slate-400"
+                        : isFull
+                          ? "border-t-4 border-t-[#D97706]"
+                          : "border-t-4 border-t-[#0B63CE]"
+                  )}
+                >
+                  <div>
+                    <div className="flex items-start justify-between gap-3">
+                      <div>
+                        <span className="inline-block rounded-lg bg-[#EEF5FF] px-3 py-1 text-sm font-bold text-[#0B63CE] dark:bg-blue-500/15 dark:text-blue-300">
+                          {session.subjectNameAr}
+                        </span>
+                        <h3 className="mt-2.5 text-lg font-bold text-[var(--text-primary)]">
+                          {session.titleAr}
+                        </h3>
+                        <p className="mt-0.5 text-sm text-[var(--text-muted)]">
+                          {session.teacherSpecialtyAr}
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="mt-4 flex flex-col gap-2 text-base text-[var(--text-secondary)]">
+                      <div className="flex items-center gap-2">
+                        <MapPin className="h-4 w-4 shrink-0 text-[var(--text-muted)]" />
+                        <span className="font-semibold text-[var(--text-primary)]">
+                          {session.hallNameAr}
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <Calendar className="h-4 w-4 shrink-0 text-[var(--text-muted)]" />
+                        <span>
+                          {formatCairoDate(session.startsAt, { includeWeekday: true })}
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-2 whitespace-nowrap tabular-nums">
+                        <Clock className="h-4 w-4 shrink-0 text-[var(--text-muted)]" />
+                        <span>
+                          {formatCairoTimeRange(session.startsAt, session.endsAt)}
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* Clear Remaining Seats Bar */}
+                    <div className="mt-4 rounded-xl bg-[var(--bg-sunken)] p-3">
+                      <div className="flex items-center justify-between text-sm font-semibold">
+                        <span
+                          className={
+                            remainingSeats === 0
+                              ? "text-amber-700 dark:text-amber-300"
+                              : "text-[var(--text-primary)]"
+                          }
+                        >
+                          {formatSeatOccupancyAr(
+                            session.bookedSeatsCount,
+                            session.maxCapacity
+                          )}
+                        </span>
+                        <span className="text-[var(--text-muted)] tabular-nums">
+                          {formatArabicNumber(fillPct)}%
+                        </span>
+                      </div>
+                      <div className="mt-2 h-2 w-full overflow-hidden rounded-full bg-slate-200 dark:bg-slate-800">
+                        <div
+                          className={cn(
+                            "h-full rounded-full transition-[width] duration-150",
+                            remainingSeats === 0
+                              ? "bg-amber-500"
+                              : fillPct >= 80
+                                ? "bg-amber-500"
+                                : "bg-[#16A34A]"
+                          )}
+                          style={{ width: `${fillPct}%` }}
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Single Unambiguous Primary Action */}
+                  <div className="mt-5">
+                    {existingBooking ? (
+                      <div className="flex min-h-[50px] items-center justify-center gap-2 rounded-xl border border-emerald-200 bg-emerald-50 px-4 text-base font-bold text-emerald-800 dark:border-emerald-500/30 dark:bg-emerald-500/15 dark:text-emerald-200">
+                        <CheckCircle2 className="h-5 w-5" />
+                        <span>
+                          {existingBooking.status === "waitlisted"
+                            ? `أنت في قائمة الانتظار (رقم ${formatArabicNumber(
+                                existingBooking.waitlistPosition ?? 1
+                              )})`
+                            : "أنت مسجل بالاسم في هذه الحصة ✓"}
+                        </span>
+                      </div>
+                    ) : conflictingBooking ? (
+                      <div className="flex min-h-[50px] items-center justify-center rounded-xl border border-[var(--border-hairline)] bg-[var(--bg-sunken)] px-4 text-center text-sm font-semibold text-[var(--text-secondary)]">
+                        نفس موعد حجزك في «{conflictingBooking.subjectNameAr}»
+                      </div>
+                    ) : (
+                      <Button
+                        variant={isFull ? "secondary" : "emerald"}
+                        size="lg"
+                        fullWidth
+                        loading={isBusy}
+                        disabled={!isStudentAccount || !hasEnrollment || bookingSessionId !== null}
+                        onClick={() => handleReserve(session)}
+                      >
+                        {!isStudentAccount
+                          ? "متاح لحسابات الطلاب"
+                          : !hasEnrollment
+                            ? "اختر مسارك أولاً للحجز"
+                            : isFull
+                              ? "انضم لقائمة الانتظار"
+                              : "احجز مكانك الآن"}
+                      </Button>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </section>
+
+      {/* Booking Success Confirmation Modal (Native <dialog closedby="any">) */}
       <Dialog
-        open={confirmModal !== null}
+        open={successModal !== null}
         onOpenChange={(open) => {
-          if (!open) setConfirmModal(null);
+          if (!open) setSuccessModal(null);
         }}
       >
         <DialogContent>
-          {confirmModal && (
+          {successModal && (
             <>
               <DialogHeader>
-                <div className="flex items-center gap-2.5">
-                  <span
-                    className={cn(
-                      "inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border",
-                      confirmModal.status === "confirmed"
-                        ? "border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-500/30 dark:bg-emerald-500/15 dark:text-emerald-300"
-                        : "border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-500/30 dark:bg-amber-500/15 dark:text-amber-300"
-                    )}
-                  >
-                    {confirmModal.status === "confirmed" ? (
-                      <CheckCircle2 className="h-5 w-5" />
-                    ) : (
-                      <Clock className="h-5 w-5" />
-                    )}
-                  </span>
-                  <div>
-                    <DialogTitle>
-                      {confirmModal.status === "confirmed"
-                        ? "تم تأكيد حجز مقعدك"
-                        : "تم تسجيلك في قائمة الانتظار"}
-                    </DialogTitle>
-                    <DialogDescription>{confirmModal.sessionTitleAr}</DialogDescription>
-                  </div>
+                <div className="mb-2 inline-flex h-12 w-12 items-center justify-center rounded-2xl bg-emerald-100 text-[#16A34A] dark:bg-emerald-500/15 dark:text-emerald-300">
+                  <CheckCircle2 className="h-7 w-7" />
                 </div>
+                <DialogTitle>
+                  {successModal.status === "confirmed"
+                    ? "تم تسجيل اسمك في الحصة بنجاح!"
+                    : "تم تسجيلك في قائمة الانتظار"}
+                </DialogTitle>
+                <DialogDescription>
+                  {successModal.status === "confirmed"
+                    ? `اسمك مسجل الآن باسم «${initialData.studentName}» لدى المعلم. لا تحتاج لأي تذكرة أو باركود.`
+                    : `ترتيبك في قائمة الانتظار هو رقم ${formatArabicNumber(
+                        successModal.waitlistPosition ?? 1
+                      )} وسيتم تثبيت مقعدك تلقائياً فور توفر مكان.`}
+                </DialogDescription>
               </DialogHeader>
 
-              <div className="mt-4 grid grid-cols-2 gap-2.5 rounded-xl border border-[var(--border-hairline)] bg-[var(--bg-sunken)] p-3.5">
-                <div>
-                  <p className="text-[11px] text-[var(--text-muted)]">
-                    {confirmModal.status === "confirmed" ? "رقم المقعد" : "الترتيب في الانتظار"}
+              <div className="mt-4 flex flex-col gap-2 rounded-xl border border-[var(--border-hairline)] bg-[var(--bg-sunken)] p-4 text-base">
+                <p className="font-bold text-[var(--text-primary)]">
+                  {successModal.subjectNameAr} — {successModal.sessionTitleAr}
+                </p>
+                <p className="text-[var(--text-secondary)]">{successModal.hallNameAr}</p>
+                <p className="text-[var(--text-secondary)] tabular-nums">
+                  {formatCairoDate(successModal.startsAt, { includeWeekday: true })} ·{" "}
+                  {formatCairoTimeRange(successModal.startsAt, successModal.endsAt)}
+                </p>
+                {successModal.seatNumber && (
+                  <p className="font-semibold text-[#16A34A] dark:text-emerald-400">
+                    رقم المقعد: {successModal.seatNumber}
                   </p>
-                  <p className="mt-0.5 font-mono text-base font-bold text-[var(--text-primary)] tabular-nums">
-                    {confirmModal.status === "confirmed"
-                      ? confirmModal.seatNumber ?? "S-001"
-                      : `#${formatArabicNumber(confirmModal.waitlistPosition ?? 1)}`}
-                  </p>
-                </div>
-                <div>
-                  <p className="text-[11px] text-[var(--text-muted)]">رقم المرجع</p>
-                  <p
-                    className="mt-0.5 font-mono text-xs font-bold text-[var(--text-primary)] tabular-nums"
-                    dir="ltr"
-                  >
-                    {confirmModal.referenceCode}
-                  </p>
-                </div>
+                )}
               </div>
 
               <DialogFooter>
-                <Button variant="outline" onClick={() => setConfirmModal(null)}>
-                  إغلاق
+                <Button
+                  variant="emerald"
+                  size="lg"
+                  fullWidth
+                  onClick={() => setSuccessModal(null)}
+                >
+                  حسناً، فهمت
                 </Button>
-                {confirmModal.status === "confirmed" ? (
-                  <Link
-                    href={`/s/${schoolSlug}/student/tickets/${confirmModal.bookingId}`}
-                    className={buttonVariants({ variant: "primary", size: "md" })}
-                  >
-                    <QrCode className="h-4 w-4 shrink-0" />
-                    <span>عرض تذكرة QR</span>
-                  </Link>
-                ) : (
-                  <Link
-                    href={`/s/${schoolSlug}/student/schedule`}
-                    className={buttonVariants({ variant: "primary", size: "md" })}
-                  >
-                    <Ticket className="h-4 w-4 shrink-0" />
-                    <span>متابعة جدولي</span>
-                  </Link>
-                )}
+              </DialogFooter>
+            </>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Cancel Booking Confirmation Modal */}
+      <Dialog
+        open={cancelTarget !== null}
+        onOpenChange={(open) => {
+          if (!open && !cancelling) setCancelTarget(null);
+        }}
+      >
+        <DialogContent>
+          {cancelTarget && (
+            <>
+              <DialogHeader>
+                <DialogTitle>هل تريد إلغاء حجزك؟</DialogTitle>
+                <DialogDescription>
+                  سيتم إلغاء حجزك في «{cancelTarget.subjectNameAr} —{" "}
+                  {cancelTarget.sessionTitleAr}» وإتاحة المقعد لزميل آخر بالمدرسة.
+                </DialogDescription>
+              </DialogHeader>
+
+              <DialogFooter>
+                <Button
+                  variant="outline"
+                  size="md"
+                  disabled={cancelling}
+                  onClick={() => setCancelTarget(null)}
+                >
+                  تراجع، سأحضر
+                </Button>
+                <Button
+                  variant="danger"
+                  size="md"
+                  loading={cancelling}
+                  onClick={handleConfirmCancel}
+                >
+                  تأكيد إلغاء الحجز
+                </Button>
               </DialogFooter>
             </>
           )}

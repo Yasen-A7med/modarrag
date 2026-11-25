@@ -35,7 +35,6 @@ DECLARE
 
   v_uid_super_admin uuid := '66666666-6666-4666-8666-666666666600';
   v_uid_school_admin uuid := '66666666-6666-4666-8666-666666666601';
-  v_uid_scanner uuid := '66666666-6666-4666-8666-666666666602';
   v_uid_teacher_101 uuid := '66666666-6666-4666-8666-666666666611';
   v_uid_teacher_102 uuid := '66666666-6666-4666-8666-666666666612';
   v_uid_teacher_103 uuid := '66666666-6666-4666-8666-666666666613';
@@ -191,7 +190,6 @@ BEGIN
       VALUES
         (v_uid_super_admin,  'super-admin-sa001@modarrag.app',                  pg_catalog.jsonb_build_object('app_role', 'super_admin')),
         (v_uid_school_admin, 'admin-ad101@ali-bin-abi-talib.modarrag.app',      pg_catalog.jsonb_build_object('app_role', 'school_admin', 'school_id', v_school_id::text)),
-        (v_uid_scanner,      'scanner-gs101@ali-bin-abi-talib.modarrag.app',    pg_catalog.jsonb_build_object('app_role', 'gate_scanner', 'school_id', v_school_id::text)),
         (v_uid_teacher_101,  'teacher-t101@ali-bin-abi-talib.modarrag.app',     pg_catalog.jsonb_build_object('app_role', 'teacher',      'school_id', v_school_id::text)),
         (v_uid_teacher_102,  'teacher-t102@ali-bin-abi-talib.modarrag.app',     pg_catalog.jsonb_build_object('app_role', 'teacher',      'school_id', v_school_id::text)),
         (v_uid_teacher_103,  'teacher-t103@ali-bin-abi-talib.modarrag.app',     pg_catalog.jsonb_build_object('app_role', 'teacher',      'school_id', v_school_id::text)),
@@ -249,18 +247,18 @@ BEGIN
       identity_data = EXCLUDED.identity_data;
   END LOOP;
 
-  INSERT INTO public.profiles (id, school_id, role, full_name, student_national_code, is_active) VALUES
-    (v_uid_super_admin,  NULL,        'super_admin',  'مدير المنصة العام · كود SA-001',       NULL,    true),
-    (v_uid_school_admin, v_school_id, 'school_admin', 'منسق المدرسة · كود AD-101',           NULL,    true),
-    (v_uid_scanner,      v_school_id, 'gate_scanner', 'مسؤول البوابة · كود GS-101',          NULL,    true),
-    (v_uid_teacher_101,  v_school_id, 'teacher',      'معلم البرمجة · كود T-101',            NULL,    true),
-    (v_uid_teacher_102,  v_school_id, 'teacher',      'معلم الفيزياء والرياضيات · كود T-102', NULL,    true),
-    (v_uid_teacher_103,  v_school_id, 'teacher',      'معلم اللغة العربية · كود T-103',      NULL,    true),
-    (v_uid_teacher_104,  v_school_id, 'teacher',      'معلم الكيمياء · كود T-104',           NULL,    true),
-    (v_uid_student_201,  v_school_id, 'student',      'طالب مسار الهندسة · كود S-201',       'S-201', true),
-    (v_uid_student_202,  v_school_id, 'student',      'طالب مسار الآداب · كود S-202',        'S-202', true)
+  INSERT INTO public.profiles (id, school_id, role, full_name, phone, student_national_code, is_active) VALUES
+    (v_uid_super_admin,  NULL,        'super_admin',  'مشرف المنصة العام',                     '01000000100', NULL,    true),
+    (v_uid_school_admin, v_school_id, 'school_admin', 'إدارة المدرسة التجريبية',               '01000000101', NULL,    true),
+    (v_uid_teacher_101,  v_school_id, 'teacher',      'معلم البرمجة التجريبي',                 '01000000111', NULL,    true),
+    (v_uid_teacher_102,  v_school_id, 'teacher',      'معلم الفيزياء والرياضيات التجريبي',     '01000000112', NULL,    true),
+    (v_uid_teacher_103,  v_school_id, 'teacher',      'معلم اللغة العربية التجريبي',           '01000000113', NULL,    true),
+    (v_uid_teacher_104,  v_school_id, 'teacher',      'معلم الكيمياء التجريبي',                '01000000114', NULL,    true),
+    (v_uid_student_201,  v_school_id, 'student',      'طالب الهندسة التجريبي',                 '01000000201', 'S-201', true),
+    (v_uid_student_202,  v_school_id, 'student',      'طالب الآداب التجريبي',                  '01000000202', 'S-202', true)
   ON CONFLICT (id) DO UPDATE SET
     full_name = EXCLUDED.full_name,
+    phone = EXCLUDED.phone,
     role = EXCLUDED.role;
 
   -- 8. Teacher Profiles & Subject Authorizations

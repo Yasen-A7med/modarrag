@@ -14,7 +14,6 @@ import {
   UserCheck,
 } from "lucide-react";
 import { signUpStudentAction } from "@/application/auth/actions";
-import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/Card";
 import { Input } from "@/components/ui/Input";
@@ -56,14 +55,14 @@ export function RegisterClient() {
       }
 
       toast({
-        title: "تم إنشاء الحساب",
-        description: "جاري الانتقال لاستكمال بيانات المدرسة والمسار.",
+        title: "تم إنشاء حسابك بنجاح",
+        description: "اختر مدرستك ومسارك الدراسي الآن.",
         variant: "success",
       });
       router.push("/onboarding");
       router.refresh();
     } catch {
-      setErrorMsg("حدث خطأ أثناء تسجيل الحساب. يرجى المحاولة مجدداً.");
+      setErrorMsg("حدث خطأ أثناء تسجيل الحساب. يرجى المحاولة مرة أخرى.");
     } finally {
       setSubmitting(false);
     }
@@ -72,10 +71,10 @@ export function RegisterClient() {
   return (
     <Card className="mx-auto w-full max-w-md">
       <CardHeader>
-        <div className="flex items-center justify-between gap-2">
-          <CardTitle className="text-lg">حساب طالب جديد</CardTitle>
-          <Badge variant="primary">البكالوريا</Badge>
-        </div>
+        <CardTitle className="text-2xl">سجّل حسابك في دقيقة</CardTitle>
+        <p className="text-base text-[var(--text-secondary)]">
+          اكتب اسمك كما تحب أن يظهر للمعلم في كشف الحضور
+        </p>
       </CardHeader>
 
       <CardContent>
@@ -83,76 +82,72 @@ export function RegisterClient() {
           {errorMsg && (
             <div
               role="alert"
-              className="flex items-start gap-2 rounded-lg border border-red-300 bg-red-50 px-3 py-2.5 text-xs font-medium text-red-800 dark:border-red-500/40 dark:bg-red-500/10 dark:text-red-300"
+              className="flex items-start gap-2.5 rounded-xl border border-red-300 bg-red-50 px-4 py-3 text-sm font-medium text-red-800 dark:border-red-500/40 dark:bg-red-500/10 dark:text-red-300"
             >
-              <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
+              <AlertCircle className="mt-0.5 h-5 w-5 shrink-0" />
               <span>{errorMsg}</span>
             </div>
           )}
 
           <Input
-            label="الاسم أو الرمز التعريفي للطالب"
+            label="الاسم الكامل للطالب"
             inputSize="lg"
             required
             minLength={3}
-            placeholder="مثال: طالب ٢ بكالوريا — كود S-205"
-            hint="اكتب البيان التعريفي المطابق لسجل المدرسة"
+            placeholder="اكتب اسمك الثلاثي كما في المدرسة"
+            hint="سيظهر هذا الاسم في كشف حضور الحصة"
             value={fullName}
             onChange={(e) => setFullName(e.target.value)}
-            startAdornment={<UserCheck className="h-4 w-4" />}
+            startAdornment={<UserCheck className="h-5 w-5" />}
           />
 
           <Input
-            label="رقم الهاتف المحمول"
+            label="رقم الموبايل"
             type="tel"
-            inputMode="tel"
             inputSize="lg"
             dir="ltr"
-            required
-            placeholder="01012345678"
-            hint="رقم الطالب للتنبيهات وتأكيد الحجز"
+            placeholder="01000000000"
             value={phone}
             onChange={(e) => setPhone(e.target.value)}
-            startAdornment={<Phone className="h-4 w-4" />}
+            startAdornment={<Phone className="h-5 w-5" />}
           />
 
           <Input
             label="البريد الإلكتروني"
             type="email"
             inputSize="lg"
-            dir="ltr"
             required
             autoComplete="email"
-            placeholder="student-s205@modarrag.app"
+            dir="ltr"
+            placeholder="student@example.com"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
-            startAdornment={<Mail className="h-4 w-4" />}
+            startAdornment={<Mail className="h-5 w-5" />}
           />
 
           <Input
             label="كلمة المرور"
             type={showPassword ? "text" : "password"}
             inputSize="lg"
-            dir="ltr"
             required
             minLength={8}
             autoComplete="new-password"
-            placeholder="••••••••"
-            hint="٨ أحرف على الأقل"
+            dir="ltr"
+            placeholder="٨ أحرف أو أرقام على الأقل"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
-            startAdornment={<Lock className="h-4 w-4" />}
+            startAdornment={<Lock className="h-5 w-5" />}
             endAdornment={
               <button
                 type="button"
                 onClick={() => setShowPassword((prev) => !prev)}
-                className="inline-flex h-7 w-7 items-center justify-center rounded text-[var(--text-muted)] hover:text-[var(--text-primary)] cursor-pointer"
+                className="inline-flex h-11 w-11 items-center justify-center rounded-xl text-[var(--text-muted)] hover:text-[var(--text-primary)] cursor-pointer"
                 aria-label={showPassword ? "إخفاء كلمة المرور" : "إظهار كلمة المرور"}
               >
                 {showPassword ? (
-                  <EyeOff className="h-4 w-4" />
+                  <EyeOff className="h-5 w-5" />
                 ) : (
-                  <Eye className="h-4 w-4" />
+                  <Eye className="h-5 w-5" />
                 )}
               </button>
             }
@@ -160,25 +155,24 @@ export function RegisterClient() {
 
           <Button
             type="submit"
-            variant="primary"
+            variant="emerald"
             size="lg"
             fullWidth
             loading={submitting}
-            rightIcon={<ArrowLeft className="h-4 w-4" />}
-            className="mt-1 h-[52px]"
+            rightIcon={<ArrowLeft className="h-5 w-5" />}
           >
-            متابعة التسجيل
+            إنشاء الحساب والمتابعة
           </Button>
 
-          <div className="flex items-center justify-between border-t border-[var(--border-hairline)] pt-3 text-xs text-[var(--text-muted)]">
-            <span>لديك حساب مسجل؟</span>
+          <p className="text-center text-base text-[var(--text-secondary)]">
+            لديك حساب بالفعل؟{" "}
             <Link
               href="/login"
-              className="font-semibold text-[#1E3A8A] hover:underline dark:text-blue-400"
+              className="font-bold text-[#0B63CE] hover:underline dark:text-blue-400"
             >
               تسجيل الدخول
             </Link>
-          </div>
+          </p>
         </form>
       </CardContent>
     </Card>

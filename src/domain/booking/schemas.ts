@@ -29,12 +29,6 @@ export const CancelBookingInputSchema = z.object({
 });
 export type CancelBookingInput = z.infer<typeof CancelBookingInputSchema>;
 
-export const VerifyQrCheckInInputSchema = z.object({
-  qrToken: z.string().trim().min(1, "QR token is required"),
-  sessionId: z.string().uuid("Invalid session ID"),
-});
-export type VerifyQrCheckInInput = z.infer<typeof VerifyQrCheckInInputSchema>;
-
 export const CreateSessionInputSchema = z
   .object({
     schoolId: z.string().uuid(),

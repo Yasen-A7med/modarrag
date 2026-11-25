@@ -130,26 +130,21 @@ export function AdminAccessNotice({
   return (
     <Card className="mx-auto max-w-xl">
       <CardHeader>
-        <div className="flex items-center gap-2.5">
-          <span className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-500/30 dark:bg-amber-500/15 dark:text-amber-300">
-            <ShieldAlert className="h-5 w-5" />
+        <div className="flex items-center gap-3">
+          <span className="inline-flex h-12 w-12 shrink-0 items-center justify-center rounded-xl border border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-500/30 dark:bg-amber-500/15 dark:text-amber-300">
+            <ShieldAlert className="h-6 w-6" />
           </span>
-          <div>
-            <CardTitle className="text-base">
-              {isUnauth
-                ? "تسجيل الدخول مطلوب لإدارة المدرسة"
-                : "صلاحية منسق المدرسة مطلوبة"}
-            </CardTitle>
-            <p className="mt-0.5 font-mono text-[11px] text-[var(--text-muted)]" dir="ltr">
-              {errorCode}
-            </p>
-          </div>
+          <CardTitle className="text-xl">
+            {isUnauth
+              ? "سجّل دخولك لفتح إدارة المدرسة"
+              : "هذه الصفحة مخصصة لإدارة المدرسة"}
+          </CardTitle>
         </div>
       </CardHeader>
       <CardContent className="flex flex-col gap-4">
-        <p className="text-sm text-[var(--text-secondary)] leading-relaxed">
+        <p className="text-base text-[var(--text-secondary)] leading-relaxed">
           {isUnauth
-            ? "سجّل الدخول بحساب منسق المدرسة (أو استخدم الحساب التجريبي AD-101) لاستعراض لوحة القاعات والمناهج."
+            ? "ادخل بحساب إدارة المدرسة لمتابعة سعة القاعات واعتماد المعلمين وتصدير التقارير."
             : errorMessage}
         </p>
         <div className="flex flex-wrap items-center gap-2.5">
@@ -269,18 +264,13 @@ export function AdminOverviewClient({
       <Card>
         <div className="flex flex-col gap-4 p-4 sm:flex-row sm:items-center sm:justify-between sm:p-5">
           <div>
-            <div className="flex flex-wrap items-center gap-2">
-              <Badge variant={school.isActive ? "success" : "neutral"} dot>
-                {school.isActive ? "مدرسة مفعلة" : "غير نشطة"}
-              </Badge>
-              <Badge variant="mono" dir="ltr">
-                {school.slug}
-              </Badge>
-            </div>
-            <h1 className="mt-2 text-xl font-bold text-[var(--text-primary)] sm:text-2xl">
+            <Badge variant={school.isActive ? "success" : "neutral"} dot size="md">
+              {school.isActive ? "مدرسة مفعلة" : "غير نشطة"}
+            </Badge>
+            <h1 className="mt-2.5 text-xl font-bold text-[var(--text-primary)] sm:text-2xl">
               لوحة إدارة {school.nameAr}
             </h1>
-            <p className="mt-0.5 text-xs sm:text-sm text-[var(--text-muted)]">
+            <p className="mt-1 text-sm text-[var(--text-secondary)]">
               التحكم المركزي في المناهج الدراسية، القاعات، اعتماد المعلمين، وتقارير الوزارة
             </p>
           </div>

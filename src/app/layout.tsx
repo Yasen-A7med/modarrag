@@ -1,10 +1,10 @@
 import type { Metadata, Viewport } from "next";
-import { IBM_Plex_Mono, IBM_Plex_Sans_Arabic } from "next/font/google";
+import { IBM_Plex_Mono, Readex_Pro } from "next/font/google";
 import { MotionConfig } from "framer-motion";
 import { ToastProvider } from "@/components/ui/Toast";
 import "./globals.css";
 
-const ibmPlexArabic = IBM_Plex_Sans_Arabic({
+const readexPro = Readex_Pro({
   subsets: ["arabic", "latin"],
   weight: ["400", "500", "600", "700"],
   variable: "--font-arabic",
@@ -20,11 +20,11 @@ const ibmPlexMono = IBM_Plex_Mono({
 
 export const metadata: Metadata = {
   title: {
-    default: "مُدَرَّج — منظومة حجز مدرجات البكالوريا المصرية",
+    default: "مُدَرَّج — احجز مقعدك في مدرج مدرستك بسهولة",
     template: "%s | مُدَرَّج",
   },
   description:
-    "منصة ذكية لتنظيم وحجز مدرجات المحاضرات المدرسية ومسارات البكالوريا المصرية مع توثيق الحضور برمز التحقق.",
+    "منصة مدرسية بسيطة لتنظيم وحجز مدرجات المحاضرات بالاسم لطلاب البكالوريا المصرية — بدون تكدس أو تعقيد.",
   applicationName: "مُدَرَّج",
 };
 
@@ -32,8 +32,8 @@ export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
   themeColor: [
-    { media: "(prefers-color-scheme: light)", color: "#F8FAFC" },
-    { media: "(prefers-color-scheme: dark)", color: "#090D16" },
+    { media: "(prefers-color-scheme: light)", color: "#F4F8FF" },
+    { media: "(prefers-color-scheme: dark)", color: "#0B0E14" },
   ],
 };
 
@@ -49,13 +49,13 @@ export default function RootLayout({
       lang="ar"
       dir="rtl"
       suppressHydrationWarning
-      className={`${ibmPlexArabic.variable} ${ibmPlexMono.variable}`}
+      className={`${readexPro.variable} ${ibmPlexMono.variable}`}
     >
       <head>
         <meta name="color-scheme" content="light dark" />
         <script dangerouslySetInnerHTML={{ __html: THEME_INIT_SCRIPT }} />
       </head>
-      <body className="min-h-screen bg-[var(--bg-canvas)] text-[var(--text-primary)] antialiased">
+      <body className="min-h-dvh bg-[var(--bg-canvas)] text-[var(--text-primary)] antialiased">
         <MotionConfig reducedMotion="user">
           <ToastProvider>{children}</ToastProvider>
         </MotionConfig>

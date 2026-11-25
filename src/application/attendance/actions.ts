@@ -1,36 +1,26 @@
 "use server";
 
+import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { createSupabaseServerClient, getAuthenticatedUser } from "@/infrastructure/supabase/server";
-import { verifyQrToken, hashQrToken } from "@/infrastructure/security/hmac-signer";
 import { ok, err, type ActionResult } from "@/domain/common/result";
-import type { Database, VerifyAndCheckinQrRpcResult } from "@/infrastructure/supabase/database.types";
+import type {
+  BookingStatus,
+  Database,
+  MarkStudentAttendanceRpcResult,
+} from "@/infrastructure/supabase/database.types";
 
-// ---------------------------------------------------------------------------
-// Input schemas
-// ---------------------------------------------------------------------------
-
-const checkinSchema = z.object({
+const sessionQuerySchema = z.object({
   schoolSlug: z.string().min(1),
   sessionId: z.string().uuid("Invalid session ID"),
-  rawToken: z.string().trim().min(1, "QR token is required"),
 });
 
-const offlineScanSchema = z.object({
-  bookingId: z.string().uuid(),
-  rawToken: z.string().trim().min(1),
-  scannedAt: z.string().datetime({ offset: true }),
-});
-
-const syncOfflineSchema = z.object({
+const markAttendanceSchema = z.object({
   schoolSlug: z.string().min(1),
-  sessionId: z.string().uuid(),
-  scans: z.array(offlineScanSchema).min(1).max(200),
+  sessionId: z.string().uuid("Invalid session ID"),
+  bookingId: z.string().uuid("Invalid booking ID"),
+  present: z.boolean(),
 });
-
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
 
 async function resolveSchoolIdFromSlug(
   supabase: Awaited<ReturnType<typeof createSupabaseServerClient>>,
@@ -45,7 +35,7 @@ async function resolveSchoolIdFromSlug(
   return data?.id ?? null;
 }
 
-async function requireScannerOrAdmin(
+async function requireTeacherOrAdmin(
   supabase: Awaited<ReturnType<typeof createSupabaseServerClient>>,
   userId: string,
   schoolId: string
@@ -57,27 +47,37 @@ async function requireScannerOrAdmin(
     .maybeSingle();
 
   if (!profile) {
-    return err("FORBIDDEN", "Profile not found");
+    return err("FORBIDDEN", "الملف الشخصي غير موجود.");
   }
 
   if (profile.role === "super_admin") {
     return ok({ role: profile.role });
   }
 
-  const allowedRoles = ["gate_scanner", "school_admin", "teacher"];
-  if (!allowedRoles.includes(profile.role) || profile.school_id !== schoolId) {
-    return err("FORBIDDEN", "Scanner, teacher, or admin access required for this school");
+  if (
+    (profile.role !== "teacher" && profile.role !== "school_admin") ||
+    profile.school_id !== schoolId
+  ) {
+    return err("FORBIDDEN", "صلاحية التحضير متاحة للمعلم أو إدارة المدرسة فقط.");
   }
 
   return ok({ role: profile.role });
 }
 
-// ---------------------------------------------------------------------------
-// getScannerSessions
-// ---------------------------------------------------------------------------
+export interface AttendanceStudentEntry {
+  readonly bookingId: string;
+  readonly studentId: string;
+  readonly fullName: string;
+  readonly phone: string | null;
+  readonly seatNumber: string | null;
+  readonly waitlistPosition: number | null;
+  readonly status: BookingStatus;
+  readonly checkedInAt: string | null;
+  readonly bookedAt: string;
+}
 
-export interface ScannerSessionData {
-  readonly sessions: readonly {
+export interface SessionAttendanceData {
+  readonly session: {
     readonly id: string;
     readonly titleAr: string;
     readonly startsAt: string;
@@ -85,184 +85,163 @@ export interface ScannerSessionData {
     readonly maxCapacity: number;
     readonly bookedSeatsCount: number;
     readonly status: string;
-    readonly hallCode: string;
-    readonly subjectCode: string;
-    readonly teacherCode: string;
-  }[];
-  readonly recentCheckins: readonly {
-    readonly bookingId: string;
-    readonly studentLabel: string;
-    readonly seatNumber: string | null;
-    readonly checkedInAt: string;
-    readonly sessionId: string;
-  }[];
+    readonly hallNameAr: string;
+    readonly subjectNameAr: string;
+    readonly teacherSpecialtyAr: string;
+  };
+  readonly students: readonly AttendanceStudentEntry[];
 }
 
-export async function getScannerSessions(
-  schoolSlug: string
-): Promise<ActionResult<ScannerSessionData>> {
-  const user = await getAuthenticatedUser();
-  if (!user) {
-    return err("UNAUTHORIZED", "Authentication required");
-  }
-
-  const supabase = await createSupabaseServerClient();
-  const schoolId = await resolveSchoolIdFromSlug(supabase, schoolSlug);
-  if (!schoolId) {
-    return err("NOT_FOUND", "School not found");
-  }
-
-  const accessResult = await requireScannerOrAdmin(supabase, user.id, schoolId);
-  if (!accessResult.ok) {
-    return accessResult;
-  }
-
-  // Fetch today's and upcoming scheduled sessions (+14 days) so gate scanner works for live & demo sessions
-  const todayStart = new Date(Date.now() - 24 * 60 * 60 * 1000);
-  const windowEnd = new Date(Date.now() + 14 * 24 * 60 * 60 * 1000);
-
-  let sessionsQuery = supabase
-    .from("sessions")
-    .select(`
-      id, title_ar, starts_at, ends_at, max_capacity, booked_seats_count, status,
-      halls!sessions_hall_id_fkey ( code ),
-      subjects!sessions_subject_id_fkey ( code ),
-      teacher_profiles!sessions_teacher_id_fkey ( teacher_code )
-    `)
-    .eq("school_id", schoolId)
-    .neq("status", "cancelled")
-    .gte("ends_at", todayStart.toISOString())
-    .lte("starts_at", windowEnd.toISOString())
-    .order("starts_at", { ascending: true });
-
-  if (accessResult.data.role === "teacher") {
-    sessionsQuery = sessionsQuery.eq("teacher_id", user.id);
-  }
-
-  const { data: sessionsData } = await sessionsQuery;
-
-  const sessions = (sessionsData ?? []).map((s) => {
-    const hall = s.halls as unknown as { code: string } | null;
-    const subject = s.subjects as unknown as { code: string } | null;
-    const teacher = s.teacher_profiles as unknown as { teacher_code: string } | null;
-    return {
-      id: s.id,
-      titleAr: s.title_ar,
-      startsAt: s.starts_at,
-      endsAt: s.ends_at,
-      maxCapacity: s.max_capacity,
-      bookedSeatsCount: s.booked_seats_count,
-      status: s.status,
-      hallCode: hall?.code ?? "",
-      subjectCode: subject?.code ?? "",
-      teacherCode: teacher?.teacher_code ?? "",
-    };
-  });
-
-  // Fetch recent check-ins for today
-  const { data: checkinsData } = await supabase
-    .from("bookings")
-    .select(`
-      id, session_id, seat_number, checked_in_at,
-      profiles!bookings_student_id_fkey ( student_national_code )
-    `)
-    .eq("school_id", schoolId)
-    .eq("status", "checked_in")
-    .gte("checked_in_at", todayStart.toISOString())
-    .order("checked_in_at", { ascending: false })
-    .limit(50);
-
-  const recentCheckins = (checkinsData ?? []).map((c) => {
-    const studentProfile = c.profiles as unknown as {
-      student_national_code: string | null;
-    } | null;
-    return {
-      bookingId: c.id,
-      studentLabel: studentProfile?.student_national_code
-        ? `كود ${studentProfile.student_national_code}`
-        : `كود ${c.id.slice(0, 8).toUpperCase()}`,
-      seatNumber: c.seat_number,
-      checkedInAt: c.checked_in_at ?? "",
-      sessionId: c.session_id,
-    };
-  });
-
-  return ok({ sessions, recentCheckins });
-}
-
-// ---------------------------------------------------------------------------
-// verifyAndCheckinQrAction
-// ---------------------------------------------------------------------------
-
-export async function verifyAndCheckinQrAction(
-  input: { schoolSlug: string; sessionId: string; rawToken: string }
-): Promise<
-  ActionResult<{
-    result:
-      | "checked_in"
-      | "already_checked_in"
-      | "wrong_session"
-      | "invalid_token"
-      | "cancelled";
-    messageAr: string;
-    bookingId?: string;
-    seatNumber?: string | null;
-    studentLabel?: string;
-    checkedInAt?: string | null;
-  }>
-> {
-  const parsed = checkinSchema.safeParse(input);
+/**
+ * Loads registered students for a session so teachers can search by full name
+ * and check students in with one tap.
+ */
+export async function getSessionAttendanceData(
+  schoolSlug: string,
+  sessionId: string
+): Promise<ActionResult<SessionAttendanceData>> {
+  const parsed = sessionQuerySchema.safeParse({ schoolSlug, sessionId });
   if (!parsed.success) {
-    return err("VALIDATION_ERROR", "Invalid check-in input");
+    return err("VALIDATION_ERROR", "بيانات الحصة غير صحيحة.");
   }
 
   const user = await getAuthenticatedUser();
   if (!user) {
-    return err("UNAUTHORIZED", "Authentication required");
+    return err("UNAUTHORIZED", "يرجى تسجيل الدخول أولاً.");
   }
 
   const supabase = await createSupabaseServerClient();
   const schoolId = await resolveSchoolIdFromSlug(supabase, parsed.data.schoolSlug);
   if (!schoolId) {
-    return err("NOT_FOUND", "School not found");
+    return err("NOT_FOUND", "المدرسة غير موجودة.");
   }
 
-  const accessResult = await requireScannerOrAdmin(supabase, user.id, schoolId);
-  if (!accessResult.ok) {
-    return accessResult;
+  const access = await requireTeacherOrAdmin(supabase, user.id, schoolId);
+  if (!access.ok) {
+    return access;
   }
 
-  // Verify QR token HMAC signature locally first without constraining sessionId so wrong_session is distinguished
-  const verifyResult = verifyQrToken(parsed.data.rawToken);
+  const { data: sessionRow } = await supabase
+    .from("sessions")
+    .select(`
+      id, teacher_id, title_ar, starts_at, ends_at, max_capacity, booked_seats_count, status,
+      halls!sessions_hall_id_fkey ( name_ar ),
+      subjects!sessions_subject_id_fkey ( name_ar ),
+      teacher_profiles!sessions_teacher_id_fkey ( specialty_ar )
+    `)
+    .eq("id", parsed.data.sessionId)
+    .eq("school_id", schoolId)
+    .single();
 
-  if (!verifyResult.ok) {
-    return ok({
-      result: "invalid_token",
-      messageAr: "رمز QR غير صالح أو منتهي الصلاحية",
+  if (!sessionRow) {
+    return err("NOT_FOUND", "الحصة غير موجودة.");
+  }
+
+  if (access.data.role === "teacher" && sessionRow.teacher_id !== user.id) {
+    return err("FORBIDDEN", "يمكنك فتح كشف التحضير لحصصك فقط.");
+  }
+
+  const { data: bookingsData, error: bookingsError } = await supabase
+    .from("bookings")
+    .select(`
+      id, student_id, status, seat_number, waitlist_position, checked_in_at, booked_at,
+      profiles!bookings_student_id_fkey ( full_name, phone )
+    `)
+    .eq("session_id", parsed.data.sessionId)
+    .eq("school_id", schoolId)
+    .in("status", ["confirmed", "checked_in", "waitlisted", "no_show"])
+    .limit(500);
+
+  if (bookingsError) {
+    return err("INTERNAL_ERROR", bookingsError.message);
+  }
+
+  const hall = sessionRow.halls as unknown as { name_ar: string } | null;
+  const subject = sessionRow.subjects as unknown as { name_ar: string } | null;
+  const teacher = sessionRow.teacher_profiles as unknown as { specialty_ar: string } | null;
+
+  const students: AttendanceStudentEntry[] = (bookingsData ?? [])
+    .map((b) => {
+      const profile = b.profiles as unknown as {
+        full_name: string | null;
+        phone: string | null;
+      } | null;
+
+      return {
+        bookingId: b.id,
+        studentId: b.student_id,
+        fullName: profile?.full_name?.trim() || `طالب (${b.id.slice(0, 6)})`,
+        phone: profile?.phone ?? null,
+        seatNumber: b.seat_number,
+        waitlistPosition: b.waitlist_position,
+        status: b.status,
+        checkedInAt: b.checked_in_at,
+        bookedAt: b.booked_at,
+      };
+    })
+    .sort((a, b) => {
+      const aWait = a.status === "waitlisted" ? 1 : 0;
+      const bWait = b.status === "waitlisted" ? 1 : 0;
+      if (aWait !== bWait) return aWait - bWait;
+      return a.fullName.localeCompare(b.fullName, "ar");
     });
+
+  return ok({
+    session: {
+      id: sessionRow.id,
+      titleAr: sessionRow.title_ar,
+      startsAt: sessionRow.starts_at,
+      endsAt: sessionRow.ends_at,
+      maxCapacity: sessionRow.max_capacity,
+      bookedSeatsCount: sessionRow.booked_seats_count,
+      status: sessionRow.status,
+      hallNameAr: hall?.name_ar ?? "",
+      subjectNameAr: subject?.name_ar ?? "",
+      teacherSpecialtyAr: teacher?.specialty_ar ?? "معلم المادة",
+    },
+    students,
+  });
+}
+
+/**
+ * Marks a registered student present (checked_in) or reverts to confirmed via RPC.
+ */
+export async function markStudentAttendanceAction(input: {
+  schoolSlug: string;
+  sessionId: string;
+  bookingId: string;
+  present: boolean;
+}): Promise<
+  ActionResult<{
+    bookingId: string;
+    status: "confirmed" | "checked_in";
+    checkedInAt: string | null;
+  }>
+> {
+  const parsed = markAttendanceSchema.safeParse(input);
+  if (!parsed.success) {
+    return err("VALIDATION_ERROR", "بيانات التحضير غير صحيحة.");
   }
 
-  const parsedToken = verifyResult.data;
-  if (parsedToken.sessionId !== parsed.data.sessionId) {
-    return ok({
-      result: "wrong_session",
-      messageAr: "هذه التذكرة تخص قاعة أو حصة أخرى.",
-      bookingId: parsedToken.bookingId,
-    });
+  const user = await getAuthenticatedUser();
+  if (!user) {
+    return err("UNAUTHORIZED", "يرجى تسجيل الدخول أولاً.");
   }
 
-  const tokenHash = hashQrToken(parsed.data.rawToken.trim());
+  const supabase = await createSupabaseServerClient();
+  const schoolId = await resolveSchoolIdFromSlug(supabase, parsed.data.schoolSlug);
+  if (!schoolId) {
+    return err("NOT_FOUND", "المدرسة غير موجودة.");
+  }
 
-  // Call RPC for atomic check-in
-  type CheckinRpc = Database["public"]["Functions"]["verify_and_checkin_qr"];
-  const rpcArgs: CheckinRpc["Args"] = {
-    p_booking_id: parsedToken.bookingId,
-    p_session_id: parsed.data.sessionId,
-    p_qr_token_hash: tokenHash,
+  type MarkRpc = Database["public"]["Functions"]["mark_student_attendance"];
+  const rpcArgs: MarkRpc["Args"] = {
+    p_booking_id: parsed.data.bookingId,
+    p_present: parsed.data.present,
   };
 
   const { data: rpcResult, error: rpcError } = await supabase.rpc(
-    "verify_and_checkin_qr",
+    "mark_student_attendance",
     rpcArgs
   );
 
@@ -270,203 +249,29 @@ export async function verifyAndCheckinQrAction(
     return err("INTERNAL_ERROR", rpcError.message);
   }
 
-  const result = rpcResult as unknown as VerifyAndCheckinQrRpcResult;
-
-  if (result.ok) {
-    const successResult = result as Extract<VerifyAndCheckinQrRpcResult, { ok: true }>;
-
-    // Fetch student label
-    const { data: studentProfile } = await supabase
-      .from("profiles")
-      .select("student_national_code")
-      .eq("id", successResult.student_id)
-      .single();
-
-    const studentLabel = studentProfile?.student_national_code
-      ? `كود ${studentProfile.student_national_code}`
-      : `كود ${successResult.student_id.slice(0, 8).toUpperCase()}`;
-
-    return ok({
-      result: "checked_in",
-      messageAr: "تم تسجيل الحضور بنجاح",
-      bookingId: successResult.booking_id,
-      seatNumber: successResult.seat_number,
-      studentLabel,
-      checkedInAt: successResult.checked_in_at,
-    });
+  const result = rpcResult as unknown as MarkStudentAttendanceRpcResult;
+  if (!result || !result.ok) {
+    const failResult = result as Extract<MarkStudentAttendanceRpcResult, { ok: false }>;
+    const codeMap: Record<string, Parameters<typeof err>[0]> = {
+      unauthenticated: "UNAUTHORIZED",
+      forbidden: "FORBIDDEN",
+      booking_not_found: "NOT_FOUND",
+      invalid_status: "CONFLICT",
+    };
+    return err(
+      codeMap[failResult.code] ?? "INTERNAL_ERROR",
+      failResult.message_ar
+    );
   }
 
-  const failResult = result as Extract<VerifyAndCheckinQrRpcResult, { ok: false }>;
-
-  const resultMapping: Record<
-    string,
-    "already_checked_in" | "wrong_session" | "invalid_token" | "cancelled"
-  > = {
-    already_checked_in: "already_checked_in",
-    wrong_session: "wrong_session",
-    invalid_token: "invalid_token",
-    cancelled: "cancelled",
-    unauthenticated: "invalid_token",
-    forbidden: "invalid_token",
-  };
+  const successResult = result as Extract<MarkStudentAttendanceRpcResult, { ok: true }>;
+  revalidatePath(`/s/${parsed.data.schoolSlug}/teacher/sessions/${parsed.data.sessionId}`);
+  revalidatePath(`/s/${parsed.data.schoolSlug}/teacher`);
+  revalidatePath(`/s/${parsed.data.schoolSlug}/student`);
 
   return ok({
-    result: resultMapping[failResult.result] ?? "invalid_token",
-    messageAr: failResult.message_ar,
-    checkedInAt: failResult.checked_in_at ?? null,
+    bookingId: successResult.booking_id,
+    status: successResult.status,
+    checkedInAt: successResult.checked_in_at,
   });
-}
-
-// ---------------------------------------------------------------------------
-// getOfflineManifestAction
-// ---------------------------------------------------------------------------
-
-export interface OfflineManifestEntry {
-  readonly bookingId: string;
-  readonly studentLabel: string;
-  readonly seatNumber: string | null;
-  readonly qrTokenHash: string | null;
-  readonly status: string;
-}
-
-export async function getOfflineManifestAction(
-  schoolSlug: string,
-  sessionId: string
-): Promise<ActionResult<readonly OfflineManifestEntry[]>> {
-  const user = await getAuthenticatedUser();
-  if (!user) {
-    return err("UNAUTHORIZED", "Authentication required");
-  }
-
-  const supabase = await createSupabaseServerClient();
-  const schoolId = await resolveSchoolIdFromSlug(supabase, schoolSlug);
-  if (!schoolId) {
-    return err("NOT_FOUND", "School not found");
-  }
-
-  const accessResult = await requireScannerOrAdmin(supabase, user.id, schoolId);
-  if (!accessResult.ok) {
-    return accessResult;
-  }
-
-  const { data: bookingsData } = await supabase
-    .from("bookings")
-    .select(`
-      id, status, seat_number, qr_token_hash,
-      profiles!bookings_student_id_fkey ( student_national_code )
-    `)
-    .eq("session_id", sessionId)
-    .eq("school_id", schoolId)
-    .in("status", ["confirmed", "waitlisted"])
-    .order("seat_number", { ascending: true, nullsFirst: false });
-
-  const manifest = (bookingsData ?? []).map((b) => {
-    const studentProfile = b.profiles as unknown as {
-      student_national_code: string | null;
-    } | null;
-    return {
-      bookingId: b.id,
-      studentLabel: studentProfile?.student_national_code
-        ? `كود ${studentProfile.student_national_code}`
-        : `كود ${b.id.slice(0, 8).toUpperCase()}`,
-      seatNumber: b.seat_number,
-      qrTokenHash: b.qr_token_hash,
-      status: b.status,
-    };
-  });
-
-  return ok(manifest);
-}
-
-// ---------------------------------------------------------------------------
-// syncOfflineCheckinsAction
-// ---------------------------------------------------------------------------
-
-export interface OfflineSyncResult {
-  readonly successCount: number;
-  readonly failedCount: number;
-  readonly results: readonly {
-    readonly bookingId: string;
-    readonly success: boolean;
-    readonly error?: string;
-  }[];
-}
-
-export async function syncOfflineCheckinsAction(
-  input: {
-    schoolSlug: string;
-    sessionId: string;
-    scans: readonly { bookingId: string; rawToken: string; scannedAt: string }[];
-  }
-): Promise<ActionResult<OfflineSyncResult>> {
-  const parsed = syncOfflineSchema.safeParse(input);
-  if (!parsed.success) {
-    return err("VALIDATION_ERROR", "Invalid offline sync input");
-  }
-
-  const user = await getAuthenticatedUser();
-  if (!user) {
-    return err("UNAUTHORIZED", "Authentication required");
-  }
-
-  const supabase = await createSupabaseServerClient();
-  const schoolId = await resolveSchoolIdFromSlug(supabase, parsed.data.schoolSlug);
-  if (!schoolId) {
-    return err("NOT_FOUND", "School not found");
-  }
-
-  const accessResult = await requireScannerOrAdmin(supabase, user.id, schoolId);
-  if (!accessResult.ok) {
-    return accessResult;
-  }
-
-  let successCount = 0;
-  let failedCount = 0;
-  const results: { bookingId: string; success: boolean; error?: string }[] = [];
-
-  for (const scan of parsed.data.scans) {
-    // Verify token
-    const verifyResult = verifyQrToken(scan.rawToken, {
-      expectedSessionId: parsed.data.sessionId,
-      expectedBookingId: scan.bookingId,
-    });
-
-    if (!verifyResult.ok) {
-      failedCount++;
-      results.push({ bookingId: scan.bookingId, success: false, error: "Invalid QR token" });
-      continue;
-    }
-
-    const tokenHash = hashQrToken(scan.rawToken.trim());
-
-    type CheckinRpc = Database["public"]["Functions"]["verify_and_checkin_qr"];
-    const rpcArgs: CheckinRpc["Args"] = {
-      p_booking_id: scan.bookingId,
-      p_session_id: parsed.data.sessionId,
-      p_qr_token_hash: tokenHash,
-    };
-
-    const { data: rpcResult, error: rpcError } = await supabase.rpc(
-      "verify_and_checkin_qr",
-      rpcArgs
-    );
-
-    if (rpcError) {
-      failedCount++;
-      results.push({ bookingId: scan.bookingId, success: false, error: rpcError.message });
-      continue;
-    }
-
-    const checkinResult = rpcResult as unknown as VerifyAndCheckinQrRpcResult;
-    if (checkinResult.ok || (checkinResult as { result?: string }).result === "already_checked_in") {
-      successCount++;
-      results.push({ bookingId: scan.bookingId, success: true });
-    } else {
-      failedCount++;
-      const failData = checkinResult as Extract<VerifyAndCheckinQrRpcResult, { ok: false }>;
-      results.push({ bookingId: scan.bookingId, success: false, error: failData.message_ar });
-    }
-  }
-
-  return ok({ successCount, failedCount, results });
 }

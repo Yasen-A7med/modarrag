@@ -1,11 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createSupabaseServerClient, getAuthenticatedUser } from "@/infrastructure/supabase/server";
 
-// ---------------------------------------------------------------------------
-// GET /api/reports/export?schoolSlug=...&format=csv
-// Ministry reporting endpoint — requires school_admin or super_admin
-// ---------------------------------------------------------------------------
-
 function escapeCsvCell(value: string | number | null | undefined): string {
   if (value === null || value === undefined) {
     return "";
@@ -34,7 +29,6 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
     return NextResponse.json({ error: "schoolSlug query parameter is required" }, { status: 400 });
   }
 
-  // Auth check
   const user = await getAuthenticatedUser();
   if (!user) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -42,10 +36,9 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
 
   const supabase = await createSupabaseServerClient();
 
-  // Resolve school
   const { data: school } = await supabase
     .from("schools")
-    .select("id, name_ar, slug, governorate, directorate")
+    .select("id, name_ar, slug")
     .eq("slug", schoolSlug)
     .single();
 
@@ -53,7 +46,6 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
     return NextResponse.json({ error: "School not found" }, { status: 404 });
   }
 
-  // Authorize: school_admin of this school OR super_admin
   const { data: profile } = await supabase
     .from("profiles")
     .select("role, school_id")
@@ -67,18 +59,17 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
-  // Fetch all bookings for the school with related data
   const { data: bookingsData, error: bookingsError } = await supabase
     .from("bookings")
     .select(`
       id, status, seat_number, waitlist_position, booked_at, checked_in_at,
       sessions!bookings_session_id_fkey (
         title_ar, starts_at, ends_at,
-        halls!sessions_hall_id_fkey ( code, name_ar ),
-        subjects!sessions_subject_id_fkey ( code, name_ar ),
-        teacher_profiles!sessions_teacher_id_fkey ( teacher_code )
+        halls!sessions_hall_id_fkey ( name_ar ),
+        subjects!sessions_subject_id_fkey ( name_ar ),
+        teacher_profiles!sessions_teacher_id_fkey ( specialty_ar )
       ),
-      profiles!bookings_student_id_fkey ( student_national_code, role )
+      profiles!bookings_student_id_fkey ( full_name, phone )
     `)
     .eq("school_id", school.id)
     .order("booked_at", { ascending: false })
@@ -88,23 +79,19 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
     return NextResponse.json({ error: bookingsError.message }, { status: 500 });
   }
 
-  // Build CSV with UTF-8 BOM for proper Arabic display in Excel/Ministry tools
   const BOM = "\uFEFF";
 
   const headers = [
-    "Reference Code",
-    "Booking Status",
-    "Student Code",
+    "Student Name",
+    "Phone",
+    "Attendance Status",
     "Seat Number",
     "Waitlist Position",
-    "Subject Code",
-    "Subject Name (AR)",
+    "Subject (AR)",
     "Session Title (AR)",
     "Session Starts At",
-    "Session Ends At",
-    "Hall Code",
     "Hall Name (AR)",
-    "Teacher Code",
+    "Teacher Specialty (AR)",
     "Booked At",
     "Checked In At",
   ];
@@ -116,34 +103,28 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
       title_ar: string;
       starts_at: string;
       ends_at: string;
-      halls: { code: string; name_ar: string } | null;
-      subjects: { code: string; name_ar: string } | null;
-      teacher_profiles: { teacher_code: string } | null;
+      halls: { name_ar: string } | null;
+      subjects: { name_ar: string } | null;
+      teacher_profiles: { specialty_ar: string } | null;
     } | null;
 
     const studentProfile = b.profiles as unknown as {
-      student_national_code: string | null;
+      full_name: string | null;
+      phone: string | null;
     } | null;
-
-    const shortId = b.id.replace(/-/g, "").slice(0, 8).toUpperCase();
-    const referenceCode = `MDRG-2026-${shortId}`;
-    const studentCode = studentProfile?.student_national_code ?? b.id.slice(0, 8).toUpperCase();
 
     rows.push(
       buildCsvRow([
-        referenceCode,
+        studentProfile?.full_name ?? "",
+        studentProfile?.phone ?? "",
         b.status,
-        studentCode,
         b.seat_number,
         b.waitlist_position,
-        session?.subjects?.code ?? "",
         session?.subjects?.name_ar ?? "",
         session?.title_ar ?? "",
         session?.starts_at ?? "",
-        session?.ends_at ?? "",
-        session?.halls?.code ?? "",
         session?.halls?.name_ar ?? "",
-        session?.teacher_profiles?.teacher_code ?? "",
+        session?.teacher_profiles?.specialty_ar ?? "",
         b.booked_at,
         b.checked_in_at ?? "",
       ])
@@ -151,7 +132,7 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
   }
 
   const csv = BOM + rows.join("\r\n");
-  const filename = `modarrag-report-${school.slug}-${new Date().toISOString().slice(0, 10)}.csv`;
+  const filename = `modarrag-attendance-${school.slug}-${new Date().toISOString().slice(0, 10)}.csv`;
 
   return new NextResponse(csv, {
     status: 200,

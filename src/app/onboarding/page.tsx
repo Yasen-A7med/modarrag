@@ -36,12 +36,12 @@ export default async function OnboardingPage() {
   );
 
   return (
-    <div className="min-h-screen bg-[var(--bg-canvas)] text-[var(--text-primary)]">
+    <div className="min-h-dvh bg-[var(--bg-hero)] text-[var(--text-primary)]">
       <TopNavbar
         brandHref="/"
         links={[
           { href: "/", label: "الرئيسية" },
-          { href: "/onboarding", label: "المسار الدراسي", active: true },
+          { href: "/onboarding", label: "تحديد المسار", active: true },
         ]}
         user={
           userCtx
@@ -54,7 +54,7 @@ export default async function OnboardingPage() {
         }
       />
 
-      <main className="arch-grid-bg mx-auto max-w-4xl px-4 py-8 sm:px-6 sm:py-10">
+      <main className="mx-auto max-w-3xl px-4 py-8 sm:px-6 sm:py-10">
         <OnboardingWizard
           catalogs={catalogs}
           initialFullName={userCtx?.fullName ?? ""}

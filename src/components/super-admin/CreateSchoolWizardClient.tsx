@@ -186,7 +186,7 @@ export function CreateSchoolWizardClient({
                 <span className="font-mono font-semibold" dir="ltr">
                   /s/{createdResult.slug}
                 </span>
-                {withBaccalaureateTemplate && " · تم تفعيل قالب البكالوريا (SEC_2_BACC)"}
+                {withBaccalaureateTemplate && " · تم تفعيل قالب البكالوريا المصرية تلقائياً"}
               </p>
             </div>
           </div>
@@ -379,7 +379,7 @@ export function CreateSchoolWizardClient({
                         <Sparkles className="h-5 w-5 text-[#1E3A8A] dark:text-blue-400" />
                         <div>
                           <p className="text-sm font-bold text-[var(--text-primary)]">
-                            تفعيل قالب البكالوريا المصرية تلقائياً (SEC_2_BACC)
+                            تفعيل قالب البكالوريا المصرية تلقائياً
                           </p>
                           <p className="text-xs text-[var(--text-secondary)]">
                             إنشاء الصف الثاني الثانوي بكالوريا مع ٤ مسارات و ٤ مواد مشتركة فورياً

@@ -14,8 +14,8 @@ export interface InputProps extends React.InputHTMLAttributes<HTMLInputElement> 
 }
 
 /**
- * Accessible hairline input primitive supporting standard (40-44px)
- * and mobile thumb-friendly onboarding (52px) heights.
+ * Accessible input primitive enforcing >= 16px text on interactive fields,
+ * post-interaction validation feedback, and clear `aria-describedby` linking.
  */
 export const Input = React.forwardRef<HTMLInputElement, InputProps>(
   (
@@ -29,19 +29,25 @@ export const Input = React.forwardRef<HTMLInputElement, InputProps>(
       containerClassName,
       className,
       id,
+      "aria-describedby": ariaDescribedBy,
       ...rest
     },
     ref
   ) => {
     const generatedId = React.useId();
     const inputId = id ?? generatedId;
+    const msgId = `${inputId}-msg`;
+    const hasMessage = Boolean(error || hint);
+    const describedBy = [ariaDescribedBy, hasMessage ? msgId : undefined]
+      .filter(Boolean)
+      .join(" ") || undefined;
 
     return (
       <div className={cn("flex flex-col gap-1.5", containerClassName)}>
         {label && (
           <label
             htmlFor={inputId}
-            className="text-xs sm:text-sm font-medium text-[var(--text-primary)]"
+            className="text-sm font-semibold text-[var(--text-primary)]"
           >
             {label}
           </label>
@@ -49,7 +55,7 @@ export const Input = React.forwardRef<HTMLInputElement, InputProps>(
 
         <div className="relative flex items-center">
           {startAdornment && (
-            <span className="pointer-events-none absolute inset-y-0 start-3 flex items-center text-[var(--text-muted)]">
+            <span className="pointer-events-none absolute inset-y-0 start-3.5 flex items-center text-[var(--text-muted)]">
               {startAdornment}
             </span>
           )}
@@ -58,35 +64,39 @@ export const Input = React.forwardRef<HTMLInputElement, InputProps>(
             ref={ref}
             id={inputId}
             aria-invalid={Boolean(error)}
+            aria-describedby={describedBy}
+            data-error={error ? "true" : undefined}
             className={cn(
-              "w-full border bg-[var(--bg-surface)] text-[var(--text-primary)] placeholder:text-[var(--text-muted)] transition-colors duration-150",
-              "focus:outline-none focus:ring-2 focus:ring-blue-600/20",
+              "w-full border bg-[var(--bg-surface)] text-base text-[var(--text-primary)] placeholder:text-[var(--text-muted)] transition-colors duration-150",
+              "focus:outline-none focus:ring-2 focus:ring-[#0B63CE]/25",
               error
-                ? "border-red-500 focus:border-red-600"
-                : "border-[var(--border-hairline)] focus:border-[#1E3A8A] dark:focus:border-blue-500",
+                ? "border-red-600 focus:border-red-600"
+                : "border-[var(--border-hairline)] focus:border-[#0B63CE] dark:focus:border-blue-400",
               inputSize === "lg"
-                ? "h-[52px] rounded-lg px-3.5 text-base"
-                : "h-10 rounded-md px-3 text-sm",
-              startAdornment && "ps-10",
-              endAdornment && "pe-10",
+                ? "h-[54px] rounded-xl px-4 text-base"
+                : "min-h-[46px] rounded-xl px-3.5 text-base",
+              startAdornment && "ps-11",
+              endAdornment && "pe-11",
               className
             )}
             {...rest}
           />
 
           {endAdornment && (
-            <span className="absolute inset-y-0 end-3 flex items-center text-[var(--text-muted)]">
+            <span className="absolute inset-y-0 end-3.5 flex items-center text-[var(--text-muted)]">
               {endAdornment}
             </span>
           )}
         </div>
 
         {error ? (
-          <p className="text-xs font-medium text-red-600 dark:text-red-400" role="alert">
+          <p id={msgId} className="text-sm font-medium text-red-600 dark:text-red-400" role="alert">
             {error}
           </p>
         ) : hint ? (
-          <p className="text-xs text-[var(--text-muted)]">{hint}</p>
+          <p id={msgId} className="text-sm text-[var(--text-muted)]">
+            {hint}
+          </p>
         ) : null}
       </div>
     );
@@ -104,7 +114,7 @@ export interface SelectInputProps extends React.SelectHTMLAttributes<HTMLSelectE
 }
 
 /**
- * Native RTL-safe select field styled identically to Input.
+ * Native RTL-safe select field matching Input sizing and accessible validation.
  */
 export const SelectInput = React.forwardRef<HTMLSelectElement, SelectInputProps>(
   (
@@ -116,6 +126,7 @@ export const SelectInput = React.forwardRef<HTMLSelectElement, SelectInputProps>
       containerClassName,
       className,
       id,
+      "aria-describedby": ariaDescribedBy,
       children,
       ...rest
     },
@@ -123,13 +134,18 @@ export const SelectInput = React.forwardRef<HTMLSelectElement, SelectInputProps>
   ) => {
     const generatedId = React.useId();
     const selectId = id ?? generatedId;
+    const msgId = `${selectId}-msg`;
+    const hasMessage = Boolean(error || hint);
+    const describedBy = [ariaDescribedBy, hasMessage ? msgId : undefined]
+      .filter(Boolean)
+      .join(" ") || undefined;
 
     return (
       <div className={cn("flex flex-col gap-1.5", containerClassName)}>
         {label && (
           <label
             htmlFor={selectId}
-            className="text-xs sm:text-sm font-medium text-[var(--text-primary)]"
+            className="text-sm font-semibold text-[var(--text-primary)]"
           >
             {label}
           </label>
@@ -139,15 +155,17 @@ export const SelectInput = React.forwardRef<HTMLSelectElement, SelectInputProps>
           ref={ref}
           id={selectId}
           aria-invalid={Boolean(error)}
+          aria-describedby={describedBy}
+          data-error={error ? "true" : undefined}
           className={cn(
-            "w-full border bg-[var(--bg-surface)] text-[var(--text-primary)] transition-colors duration-150",
-            "focus:outline-none focus:ring-2 focus:ring-blue-600/20",
+            "w-full border bg-[var(--bg-surface)] text-base text-[var(--text-primary)] transition-colors duration-150",
+            "focus:outline-none focus:ring-2 focus:ring-[#0B63CE]/25",
             error
-              ? "border-red-500 focus:border-red-600"
-              : "border-[var(--border-hairline)] focus:border-[#1E3A8A] dark:focus:border-blue-500",
+              ? "border-red-600 focus:border-red-600"
+              : "border-[var(--border-hairline)] focus:border-[#0B63CE] dark:focus:border-blue-400",
             inputSize === "lg"
-              ? "h-[52px] rounded-lg px-3.5 text-base"
-              : "h-10 rounded-md px-3 text-sm",
+              ? "h-[54px] rounded-xl px-4 text-base"
+              : "min-h-[46px] rounded-xl px-3.5 text-base",
             className
           )}
           {...rest}
@@ -156,11 +174,13 @@ export const SelectInput = React.forwardRef<HTMLSelectElement, SelectInputProps>
         </select>
 
         {error ? (
-          <p className="text-xs font-medium text-red-600 dark:text-red-400" role="alert">
+          <p id={msgId} className="text-sm font-medium text-red-600 dark:text-red-400" role="alert">
             {error}
           </p>
         ) : hint ? (
-          <p className="text-xs text-[var(--text-muted)]">{hint}</p>
+          <p id={msgId} className="text-sm text-[var(--text-muted)]">
+            {hint}
+          </p>
         ) : null}
       </div>
     );

@@ -1,53 +1,48 @@
 import type { BookingStatus, HallStatus, SessionStatus, SubjectType } from "@/infrastructure/supabase/database.types";
 
 /**
- * Strict 4-step geometric border-radius ladder for Modarrag.
- * Exceeding 16px (or using 24px/32px pill toys) is disallowed across the UI.
+ * Clean 4-step geometric border-radius ladder for Modarrag.
  */
 export const MODARRAG_RADII = {
-  /** Inputs, badges, compact tags, filter chips (6px) */
-  sm: "6px",
-  /** Buttons, list rows, segmented toggles, nav links (8px) */
-  md: "8px",
-  /** Cards, panels, dialogs, booking columns (12px) */
-  lg: "12px",
-  /** Outer hero/device showcase frames only (16px max ceiling) */
+  sm: "8px",
+  md: "12px",
+  lg: "16px",
   frame: "16px",
 } as const;
 
 export const MODARRAG_BRAND = {
-  primary: "#1E3A8A",
-  primaryHover: "#1D4ED8",
-  primarySoftLight: "#EFF6FF",
+  primary: "#0B63CE",
+  primaryHover: "#0950A8",
+  primarySoftLight: "#EEF5FF",
   primarySoftDark: "rgba(37, 99, 235, 0.16)",
+  emerald: "#16A34A",
+  emeraldHover: "#15803D",
   accent: "#D97706",
-  accentSoftLight: "#FFFBEB",
-  accentSoftDark: "rgba(217, 119, 6, 0.16)",
-  emerald: "#059669",
-  emeraldLiveDot: "#22C55E",
   danger: "#DC2626",
   info: "#0284C7",
 } as const;
 
 export const MODARRAG_SURFACES = {
   light: {
-    canvas: "#F8FAFC",
+    hero: "#F4F8FF",
+    canvas: "#F9FBFD",
     surface: "#FFFFFF",
-    sunken: "#F5F7FA",
+    sunken: "#F1F5FA",
     elevated: "#FFFFFF",
-    hairline: "#E2E8F0",
-    hairlineStrong: "#CBD5E1",
-    textPrimary: "#0F172A",
-    textSecondary: "#475569",
-    textMuted: "#64748B",
+    hairline: "rgba(15, 23, 42, 0.10)",
+    hairlineStrong: "rgba(15, 23, 42, 0.18)",
+    textPrimary: "#111827",
+    textSecondary: "#4B5563",
+    textMuted: "#6B7280",
   },
   dark: {
-    canvas: "#090D16",
-    surface: "#0F1623",
-    sunken: "#060911",
-    elevated: "#141D2E",
-    hairline: "rgba(255, 255, 255, 0.09)",
-    hairlineStrong: "rgba(255, 255, 255, 0.16)",
+    hero: "#111724",
+    canvas: "#0B0E14",
+    surface: "#121722",
+    sunken: "#080B10",
+    elevated: "#1A2130",
+    hairline: "rgba(255, 255, 255, 0.10)",
+    hairlineStrong: "rgba(255, 255, 255, 0.20)",
     textPrimary: "#F8FAFC",
     textSecondary: "#CBD5E1",
     textMuted: "#94A3B8",
@@ -77,25 +72,26 @@ export interface TrackStyleConfig {
 const ENG_STYLE: TrackStyleConfig = {
   code: "ENG_TRACK",
   iconKey: "cpu",
-  hex: "#2563EB",
+  hex: "#0B63CE",
   badgeClass:
     "border-blue-200 bg-blue-50 text-blue-800 dark:border-blue-500/30 dark:bg-blue-500/15 dark:text-blue-200",
   iconBoxClass:
     "border-blue-200 bg-blue-50 text-blue-700 dark:border-blue-500/30 dark:bg-blue-500/15 dark:text-blue-300",
-  activeBorderClass: "border-blue-600 ring-1 ring-blue-600/20 dark:border-blue-400 dark:ring-blue-400/25",
+  activeBorderClass:
+    "border-[#0B63CE] ring-2 ring-[#0B63CE]/15 dark:border-blue-400 dark:ring-blue-400/25",
   shortLabelAr: "الهندسة",
 };
 
 const MED_STYLE: TrackStyleConfig = {
   code: "MED_TRACK",
   iconKey: "microscope",
-  hex: "#059669",
+  hex: "#16A34A",
   badgeClass:
     "border-emerald-200 bg-emerald-50 text-emerald-800 dark:border-emerald-500/30 dark:bg-emerald-500/15 dark:text-emerald-200",
   iconBoxClass:
     "border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-500/30 dark:bg-emerald-500/15 dark:text-emerald-300",
   activeBorderClass:
-    "border-emerald-600 ring-1 ring-emerald-600/20 dark:border-emerald-400 dark:ring-emerald-400/25",
+    "border-emerald-600 ring-2 ring-emerald-600/15 dark:border-emerald-400 dark:ring-emerald-400/25",
   shortLabelAr: "طب وعلوم الحياة",
 };
 
@@ -108,20 +104,20 @@ const BUS_STYLE: TrackStyleConfig = {
   iconBoxClass:
     "border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-500/30 dark:bg-amber-500/15 dark:text-amber-300",
   activeBorderClass:
-    "border-amber-600 ring-1 ring-amber-600/20 dark:border-amber-400 dark:ring-amber-400/25",
+    "border-amber-600 ring-2 ring-amber-600/15 dark:border-amber-400 dark:ring-amber-400/25",
   shortLabelAr: "الأعمال",
 };
 
 const ART_STYLE: TrackStyleConfig = {
   code: "ART_TRACK",
   iconKey: "book-open",
-  hex: "#7C3AED",
+  hex: "#0284C7",
   badgeClass:
-    "border-violet-200 bg-violet-50 text-violet-800 dark:border-violet-500/30 dark:bg-violet-500/15 dark:text-violet-200",
+    "border-sky-200 bg-sky-50 text-sky-800 dark:border-sky-500/30 dark:bg-sky-500/15 dark:text-sky-200",
   iconBoxClass:
-    "border-violet-200 bg-violet-50 text-violet-700 dark:border-violet-500/30 dark:bg-violet-500/15 dark:text-violet-300",
+    "border-sky-200 bg-sky-50 text-sky-700 dark:border-sky-500/30 dark:bg-sky-500/15 dark:text-sky-300",
   activeBorderClass:
-    "border-violet-600 ring-1 ring-violet-600/20 dark:border-violet-400 dark:ring-violet-400/25",
+    "border-sky-600 ring-2 ring-sky-600/15 dark:border-sky-400 dark:ring-sky-400/25",
   shortLabelAr: "الآداب والفنون",
 };
 
@@ -159,9 +155,9 @@ export function getTrackStyle(codeOrIcon?: string | null): TrackStyleConfig {
 export type BadgeTone = "neutral" | "primary" | "success" | "warning" | "danger" | "info" | "mono";
 
 export const BOOKING_STATUS_TONES: Readonly<Record<BookingStatus, BadgeTone>> = {
-  confirmed: "success",
+  confirmed: "primary",
   waitlisted: "warning",
-  checked_in: "info",
+  checked_in: "success",
   cancelled_by_student: "neutral",
   cancelled_by_system: "danger",
   no_show: "danger",

@@ -65,7 +65,6 @@ export type BookStudentSeatRpcResult =
       readonly ok: false;
       readonly code:
         | "unauthenticated"
-        | "invalid_qr_payload"
         | "profile_inactive"
         | "student_role_required"
         | "onboarding_incomplete"
@@ -96,30 +95,23 @@ export type CancelStudentBookingRpcResult =
       readonly message_ar: string;
     };
 
-export type VerifyAndCheckinQrRpcResult =
+export type MarkStudentAttendanceRpcResult =
   | {
       readonly ok: true;
-      readonly result: "checked_in";
+      readonly status: "confirmed" | "checked_in";
       readonly booking_id: string;
       readonly session_id: string;
       readonly student_id: string;
-      readonly seat_number: string | null;
-      readonly checked_in_at: string;
+      readonly checked_in_at: string | null;
     }
   | {
       readonly ok: false;
-      readonly result:
+      readonly code:
         | "unauthenticated"
         | "forbidden"
-        | "invalid_token"
-        | "wrong_session"
-        | "already_checked_in"
-        | "cancelled";
-      readonly code: string;
+        | "booking_not_found"
+        | "invalid_status";
       readonly message_ar: string;
-      readonly actual_session_id?: string;
-      readonly checked_in_at?: string;
-      readonly status?: BookingStatus;
     };
 
 export type CompleteStudentOnboardingRpcResult =
@@ -1063,11 +1055,9 @@ export interface Database {
     };
     Views: Record<string, never>;
     Functions: {
-      book_student_seat: {
+      reserve_student_seat: {
         Args: {
           p_session_id: string;
-          p_qr_token_hash: string;
-          p_qr_nonce: string;
           p_booking_id?: string | null;
         };
         Returns: BookStudentSeatRpcResult;
@@ -1078,13 +1068,12 @@ export interface Database {
         };
         Returns: CancelStudentBookingRpcResult;
       };
-      verify_and_checkin_qr: {
+      mark_student_attendance: {
         Args: {
           p_booking_id: string;
-          p_session_id: string;
-          p_qr_token_hash: string;
+          p_present?: boolean;
         };
-        Returns: VerifyAndCheckinQrRpcResult;
+        Returns: MarkStudentAttendanceRpcResult;
       };
       complete_student_onboarding: {
         Args: {

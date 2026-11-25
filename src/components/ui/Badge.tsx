@@ -11,7 +11,7 @@ export interface BadgeProps extends React.HTMLAttributes<HTMLSpanElement> {
 
 const BADGE_VARIANTS: Readonly<Record<BadgeTone, string>> = {
   neutral:
-    "border-slate-200 bg-slate-100 text-slate-700 dark:border-white/10 dark:bg-white/5 dark:text-slate-300",
+    "border-slate-200 bg-slate-100 text-slate-700 dark:border-white/10 dark:bg-white/5 dark:text-slate-200",
   primary:
     "border-blue-200 bg-blue-50 text-blue-800 dark:border-blue-500/30 dark:bg-blue-500/15 dark:text-blue-200",
   success:
@@ -27,12 +27,12 @@ const BADGE_VARIANTS: Readonly<Record<BadgeTone, string>> = {
 };
 
 const BADGE_SIZES = {
-  sm: "px-2 py-0.5 text-[11px]",
-  md: "px-2.5 py-1 text-xs",
+  sm: "px-2.5 py-1 text-xs",
+  md: "px-3 py-1.5 text-sm",
 } as const;
 
 /**
- * Compact 6px-radius architectural status/metadata chip.
+ * Clean, readable status/metadata chip with comfortable padding and tabular figures.
  */
 export function Badge({
   variant = "neutral",
@@ -46,7 +46,7 @@ export function Badge({
   return (
     <span
       className={cn(
-        "inline-flex items-center gap-1.5 rounded-md border font-medium tabular-nums leading-none whitespace-nowrap",
+        "inline-flex items-center gap-1.5 rounded-lg border font-semibold tabular-nums leading-none whitespace-nowrap",
         BADGE_VARIANTS[variant],
         BADGE_SIZES[size],
         className
@@ -56,7 +56,7 @@ export function Badge({
       {dot && (
         <span
           className={cn(
-            "h-1.5 w-1.5 rounded-full shrink-0",
+            "h-2 w-2 rounded-full shrink-0",
             dotColorClass ??
               (variant === "success"
                 ? "bg-emerald-500"

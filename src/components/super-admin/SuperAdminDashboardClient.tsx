@@ -6,11 +6,11 @@ import {
   ArrowUpLeft,
   Building2,
   CalendarCheck2,
+  ClipboardCheck,
   Download,
   GraduationCap,
   Plus,
   Presentation,
-  QrCode,
   ScrollText,
   Search,
   ShieldAlert,
@@ -48,18 +48,15 @@ export function SuperAdminAccessNotice({
             <CardTitle className="text-base">
               {isUnauth
                 ? "تسجيل الدخول مطلوب لمنصة الإدارة الوطنية"
-                : "صلاحية مدير المنصة (Super Admin) مطلوبة"}
+                : "صلاحية مشرف المنصة مطلوبة"}
             </CardTitle>
-            <p className="mt-0.5 font-mono text-[11px] text-[var(--text-muted)]" dir="ltr">
-              {errorCode}
-            </p>
           </div>
         </div>
       </CardHeader>
       <CardContent className="flex flex-col gap-4">
         <p className="text-sm text-[var(--text-secondary)] leading-relaxed">
           {isUnauth
-            ? "سجّل الدخول بحساب مدير المنصة أو استخدم الحساب التجريبي SA-001 لاستعراض المدارس وسجلات الأمان."
+            ? "سجّل الدخول بحساب مشرف المنصة لاستعراض المدارس وسجلات المتابعة."
             : errorMessage}
         </p>
         <div className="flex flex-wrap items-center gap-2.5">
@@ -129,7 +126,7 @@ export function SuperAdminDashboardClient({
     {
       label: "تسجيلات الحضور اليوم",
       value: data.kpis.totalCheckinsToday,
-      icon: QrCode,
+      icon: ClipboardCheck,
       color: "text-emerald-600 dark:text-emerald-400",
     },
   ] as const;
@@ -152,12 +149,7 @@ export function SuperAdminDashboardClient({
       <Card>
         <div className="flex flex-col gap-4 p-4 sm:flex-row sm:items-center sm:justify-between sm:p-5">
           <div>
-            <div className="flex flex-wrap items-center gap-2">
-              <Badge variant="primary">المركز الوطني لإدارة المنصة</Badge>
-              <Badge variant="mono" dir="ltr">
-                MULTI-TENANT RLS
-              </Badge>
-            </div>
+            <Badge variant="primary">المركز الوطني لإدارة المنصة</Badge>
             <h1 className="mt-2 text-xl font-bold text-[var(--text-primary)] sm:text-2xl">
               لوحة التحكم الوطنية — مُدَرَّج
             </h1>

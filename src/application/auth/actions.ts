@@ -41,7 +41,6 @@ const completeOnboardingSchema = z.object({
 type DemoRoleKey =
   | "super_admin"
   | "school_admin"
-  | "gate_scanner"
   | "teacher_101"
   | "student_201"
   | "student_202";
@@ -53,10 +52,6 @@ const DEMO_CREDENTIALS: Record<DemoRoleKey, { email: string; password: string }>
   },
   school_admin: {
     email: "admin-ad101@ali-bin-abi-talib.modarrag.app",
-    password: "Modarrag@2026!",
-  },
-  gate_scanner: {
-    email: "scanner-gs101@ali-bin-abi-talib.modarrag.app",
     password: "Modarrag@2026!",
   },
   teacher_101: {
@@ -77,7 +72,6 @@ const demoRoleKeySchema = z.object({
   roleKey: z.enum([
     "super_admin",
     "school_admin",
-    "gate_scanner",
     "teacher_101",
     "student_201",
     "student_202",
@@ -95,9 +89,8 @@ function resolveRedirectPath(role: UserRole, schoolSlug: string | null): string 
     case "school_admin":
       return schoolSlug ? `/s/${schoolSlug}/admin` : "/";
     case "teacher":
-      return schoolSlug ? `/s/${schoolSlug}/teacher` : "/";
     case "gate_scanner":
-      return schoolSlug ? `/s/${schoolSlug}/scanner` : "/";
+      return schoolSlug ? `/s/${schoolSlug}/teacher` : "/";
     case "student":
       return schoolSlug ? `/s/${schoolSlug}/student` : "/onboarding";
   }

@@ -1,67 +1,66 @@
+import Image from "next/image";
 import Link from "next/link";
 import {
-  ArrowUpLeft,
+  ArrowLeft,
   Building2,
+  CalendarCheck,
   CheckCircle2,
-  Clock,
-  Layers,
-  QrCode,
+  ClipboardCheck,
   ShieldCheck,
+  UserCheck,
 } from "lucide-react";
 import { ModarragLogo } from "@/components/brand/ModarragLogo";
 import { TrackIcon } from "@/components/brand/TrackIcon";
-import { LiveBookingPreview } from "@/components/landing/LiveBookingPreview";
 import { TopNavbar } from "@/components/layout/TopNavbar";
-import { Badge } from "@/components/ui/Badge";
 import { buttonVariants } from "@/components/ui/Button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/Card";
-import { getTrackStyle } from "@/lib/design-tokens";
-import { cn } from "@/lib/utils";
 import {
   getActiveSchools,
   getSchoolCatalogBySlug,
   type SchoolCatalogBundle,
   type SchoolRow,
 } from "@/infrastructure/supabase/catalog";
+import { getTrackStyle } from "@/lib/design-tokens";
+import { formatArabicNumber } from "@/lib/formatters";
+import { cn } from "@/lib/utils";
 
 export const revalidate = 120;
 
-interface FallbackTrackCard {
+interface DisplayTrack {
   readonly code: string;
   readonly nameAr: string;
   readonly iconKey: string;
-  readonly coreSubjects: readonly string[];
-  readonly hasSecondLangElective: boolean;
+  readonly subjects: readonly string[];
+  readonly hasSecondLang: boolean;
 }
 
-const FALLBACK_TRACKS: readonly FallbackTrackCard[] = [
+const FALLBACK_TRACKS: readonly DisplayTrack[] = [
   {
     code: "ENG_TRACK",
     nameAr: "مسار الهندسة",
     iconKey: "cpu",
-    coreSubjects: ["برمجة", "كيمياء"],
-    hasSecondLangElective: false,
+    subjects: ["برمجة", "كيمياء"],
+    hasSecondLang: false,
   },
   {
     code: "MED_TRACK",
     nameAr: "مسار طب وعلوم الحياة",
     iconKey: "microscope",
-    coreSubjects: ["رياضيات", "فيزياء"],
-    hasSecondLangElective: false,
+    subjects: ["رياضيات", "فيزياء"],
+    hasSecondLang: false,
   },
   {
     code: "BUS_TRACK",
     nameAr: "مسار الأعمال",
     iconKey: "briefcase",
-    coreSubjects: ["إدارة أعمال", "محاسبة"],
-    hasSecondLangElective: false,
+    subjects: ["إدارة أعمال", "محاسبة"],
+    hasSecondLang: false,
   },
   {
     code: "ART_TRACK",
     nameAr: "مسار الآداب والفنون",
     iconKey: "book-open",
-    coreSubjects: ["علم نفس"],
-    hasSecondLangElective: true,
+    subjects: ["علم نفس"],
+    hasSecondLang: true,
   },
 ];
 
@@ -72,348 +71,357 @@ const FALLBACK_COMMON_SUBJECTS = [
   "الثقافة المالية",
 ] as const;
 
-const TELEMETRY_TILES = [
+const HOW_IT_WORKS_STEPS = [
   {
-    label: "فاصل المدرجات",
-    value: "١٥ دقيقة",
-    code: "GiST EXCLUSION",
-    icon: Clock,
+    num: "١",
+    title: "سجّل اسمك ومسارك",
+    description: "اختَر مدرستك ومسارك في البكالوريا مرة واحدة فقط برقم هاتفك واسمك.",
+    accentClass: "border-t-4 border-t-[#0B63CE] dark:border-t-blue-500",
+    numBgClass: "bg-[#EEF5FF] text-[#0B63CE] dark:bg-blue-500/15 dark:text-blue-300",
+    icon: UserCheck,
   },
   {
-    label: "مسارات البكالوريا",
-    value: "٤ مسارات",
-    code: "SEC_2_BACC",
-    icon: Layers,
+    num: "٢",
+    title: "احجز مقعدك بلمسة",
+    description: "تصفّح مواعيد حصص موادك داخل المدرسة واحجز مكانك قبل اكتمال القاعة.",
+    accentClass: "border-t-4 border-t-[#16A34A] dark:border-t-emerald-500",
+    numBgClass: "bg-emerald-50 text-[#16A34A] dark:bg-emerald-500/15 dark:text-emerald-300",
+    icon: CalendarCheck,
   },
   {
-    label: "سعة المدرجات",
-    value: "١٧٥ مقعداً",
-    code: "4 HALLS ACTIVE",
-    icon: Building2,
-  },
-  {
-    label: "توثيق البوابة",
-    value: "٠٫٢ ثانية",
-    code: "HMAC-SHA256",
-    icon: QrCode,
+    num: "٣",
+    title: "احضر باسمك فقط",
+    description: "بدون تذاكر أو باركود — معلمك يبحث عن اسمك في كشف الحضور ويسجلك بضغطة.",
+    accentClass: "border-t-4 border-t-[#D97706] dark:border-t-amber-500",
+    numBgClass: "bg-amber-50 text-[#B45309] dark:bg-amber-500/15 dark:text-amber-300",
+    icon: ClipboardCheck,
   },
 ] as const;
 
-async function loadLandingData(): Promise<{
-  readonly schools: readonly SchoolRow[];
-  readonly catalog: SchoolCatalogBundle | null;
-}> {
-  try {
-    const [schools, catalog] = await Promise.all([
-      getActiveSchools(),
-      getSchoolCatalogBySlug("ali-bin-abi-talib"),
-    ]);
-    return { schools, catalog };
-  } catch {
-    return { schools: [], catalog: null };
-  }
-}
+export default async function HomePage() {
+  const [schools, primaryCatalog]: readonly [
+    readonly SchoolRow[],
+    SchoolCatalogBundle | null,
+  ] = await Promise.all([
+    getActiveSchools().catch((): readonly SchoolRow[] => []),
+    getSchoolCatalogBySlug("ali-bin-abi-talib").catch(
+      (): SchoolCatalogBundle | null => null
+    ),
+  ]);
 
-export default async function NationalLandingPage() {
-  const { schools, catalog } = await loadLandingData();
+  const featuredSchool = schools[0] ?? primaryCatalog?.school ?? null;
+  const schoolSlug = featuredSchool?.slug ?? "ali-bin-abi-talib";
+  const schoolNameAr = featuredSchool?.name_ar ?? "مدرسة علي بن أبي طالب الثانوية بنين";
+  const schoolLocation = featuredSchool
+    ? `${featuredSchool.governorate} — ${featuredSchool.directorate}`
+    : "القاهرة — إدارة المرج التعليمية";
 
-  const tracksToRender: readonly FallbackTrackCard[] = catalog
-    ? catalog.tracks.map((track) => {
-        const mapped = catalog.trackSubjects
+  const commonSubjects = primaryCatalog
+    ? primaryCatalog.subjects
+        .filter((s) => s.subject_type === "common")
+        .map((s) => s.name_ar)
+    : [...FALLBACK_COMMON_SUBJECTS];
+
+  const tracksToRender: readonly DisplayTrack[] = primaryCatalog
+    ? primaryCatalog.tracks.map((track) => {
+        const mapped = primaryCatalog.trackSubjects
           .filter((ts) => ts.track_id === track.id)
-          .map((ts) => catalog.subjects.find((s) => s.id === ts.subject_id))
+          .map((ts) => primaryCatalog.subjects.find((s) => s.id === ts.subject_id))
           .filter((s): s is NonNullable<typeof s> => Boolean(s));
-
-        const coreSubjects = mapped
-          .filter((s) => s.subject_type === "track_core")
-          .map((s) => s.name_ar);
-        const hasSecondLangElective = mapped.some(
-          (s) => s.subject_type === "track_elective"
-        );
 
         return {
           code: track.code,
           nameAr: track.name_ar,
           iconKey: track.icon_key,
-          coreSubjects,
-          hasSecondLangElective,
+          subjects: mapped
+            .filter((s) => s.subject_type === "track_core")
+            .map((s) => s.name_ar),
+          hasSecondLang: mapped.some((s) => s.subject_type === "track_elective"),
         };
       })
     : FALLBACK_TRACKS;
 
-  const commonSubjects = catalog
-    ? catalog.subjects
-        .filter((s) => s.subject_type === "common")
-        .map((s) => s.name_ar)
-    : FALLBACK_COMMON_SUBJECTS;
-
-  const primarySchool =
-    schools.find((s) => s.slug === "ali-bin-abi-talib") ??
-    catalog?.school ?? {
-      id: "11111111-1111-4111-8111-111111111101",
-      slug: "ali-bin-abi-talib",
-      name_ar: "مدرسة علي بن أبي طالب الثانوية بنين",
-      name_en: "Ali Ibn Abi Talib Boys Secondary School",
-      governorate: "القاهرة",
-      directorate: "إدارة المرج التعليمية",
-      logo_url: "/tenants/ali-bin-abi-talib/logo.svg",
-      brand_color_hex: "#1E3A8A",
-      default_buffer_minutes: 15,
-      is_active: true,
-    };
-
-  const displaySchools = schools.length > 0 ? schools : [primarySchool];
-
   return (
-    <div className="min-h-screen bg-[var(--bg-canvas)] text-[var(--text-primary)]">
-      <TopNavbar
-        brandHref="/"
-        links={[
-          { href: "#preview", label: "المعاينة" },
-          { href: "#tracks", label: "المسارات" },
-          { href: "#schools", label: "المدارس" },
-        ]}
-      />
+    <div className="min-h-dvh bg-[var(--bg-canvas)] text-[var(--text-primary)]">
+      {/* Warm Sky Hero Wrapper */}
+      <div className="bg-[var(--bg-hero)] pb-12 sm:pb-16">
+        <TopNavbar
+          brandHref="/"
+          links={[
+            { href: "#steps", label: "كيف تبدأ" },
+            { href: "#tracks", label: "المسارات" },
+            { href: `/s/${schoolSlug}`, label: "بوابة المدرسة" },
+          ]}
+        />
 
-      {/* Hero Section: Architectural Grid + Strict Minimal-Text Budget */}
-      <section className="arch-grid-bg border-b border-[var(--border-hairline)]">
-        <div className="mx-auto max-w-7xl px-4 py-10 sm:px-6 sm:py-14">
-          <div className="mx-auto flex max-w-3xl flex-col items-center text-center">
-            <Badge variant="primary" size="md" dot dotColorClass="bg-emerald-500">
-              منظومة البكالوريا المصرية · ٢٠٢٦
-            </Badge>
+        {/* Hero Section */}
+        <section className="mx-auto max-w-6xl px-4 pt-8 sm:px-6 sm:pt-12">
+          <div className="grid grid-cols-1 items-center gap-8 lg:grid-cols-12 lg:gap-10">
+            {/* Hero Copy (Start / Right in RTL) */}
+            <div className="flex flex-col items-start lg:col-span-6">
+              <div className="inline-flex items-center gap-2 rounded-full border border-blue-200 bg-[var(--bg-surface)] px-4 py-1.5 text-sm font-semibold text-[#0B63CE] dark:border-blue-500/30 dark:text-blue-300">
+                <ShieldCheck className="h-4 w-4 shrink-0" />
+                <span>السنتر المدرسي الرسمي الآمن</span>
+              </div>
 
-            <h1 className="mt-4 text-3xl font-bold leading-tight text-[var(--text-primary)] sm:text-5xl">
-              إدارة مدرجات الثانوية بدقة
-            </h1>
+              <h1 className="mt-5 text-3xl font-bold text-[var(--text-primary)] sm:text-4xl lg:text-5xl">
+                احجز مكانك في مدرج مدرستك{" "}
+                <span className="text-[#0B63CE] dark:text-blue-400">
+                  باسمك وفي ثانية واحدة
+                </span>
+              </h1>
 
-            <p className="mt-3 text-sm text-[var(--text-secondary)] sm:text-base">
-              حجز مقاعد، تنظيم مسارات، وتوثيق حضور بالرمز.
-            </p>
+              <p className="mt-4 max-w-xl text-base leading-relaxed text-[var(--text-secondary)] sm:text-lg">
+                تنظيم رسمي لحصص المراجعة داخل قاعات المدرسة بسعة آمنة ومعلمين معتمدين — بدون تكدس السناتر، وبدون تذاكر معقدة.
+              </p>
 
-            <div className="mt-6 flex flex-wrap items-center justify-center gap-3">
-              <Link
-                href="/register"
-                className={buttonVariants({ variant: "primary", size: "lg" })}
+              <div className="mt-7 flex w-full flex-col gap-3 sm:w-auto sm:flex-row sm:items-center">
+                <Link
+                  href={`/s/${schoolSlug}`}
+                  className={buttonVariants({
+                    variant: "emerald",
+                    size: "lg",
+                    className: "w-full sm:w-auto shadow-sm",
+                  })}
+                >
+                  <span>ابدأ الحجز الآن</span>
+                  <ArrowLeft className="h-5 w-5" />
+                </Link>
+
+                <Link
+                  href="/login"
+                  className={buttonVariants({
+                    variant: "outline",
+                    size: "lg",
+                    className: "w-full sm:w-auto bg-[var(--bg-surface)]",
+                  })}
+                >
+                  <span>جرّب الحسابات الجاهزة</span>
+                </Link>
+              </div>
+
+              <div className="mt-6 flex flex-wrap items-center gap-x-6 gap-y-2 text-sm font-medium text-[var(--text-secondary)]">
+                <span className="inline-flex items-center gap-2">
+                  <CheckCircle2 className="h-4 w-4 text-[#16A34A] dark:text-emerald-400" />
+                  تسجيل حضور بالاسم مباشرة
+                </span>
+                <span className="inline-flex items-center gap-2">
+                  <CheckCircle2 className="h-4 w-4 text-[#16A34A] dark:text-emerald-400" />
+                  مقاعد آمنة ومحددة السعة
+                </span>
+              </div>
+            </div>
+
+            {/* Hero Illustration */}
+            <div className="lg:col-span-6">
+              <div className="relative overflow-hidden rounded-2xl border border-transparent bg-[#F4F8FF] dark:border-white/10 dark:bg-[#EBF2FF]">
+                <Image
+                  src="/images/hero-lecture-hall.webp"
+                  alt="قاعة مدرج مدرسي منظم ومجهز للطلاب"
+                  width={1280}
+                  height={714}
+                  priority
+                  className="h-auto w-full object-cover"
+                />
+              </div>
+            </div>
+          </div>
+        </section>
+      </div>
+
+      {/* 3 Simple Numbered Steps (Bassthalk Style) */}
+      <section id="steps" className="mx-auto max-w-6xl px-4 py-14 sm:px-6 sm:py-16">
+        <div className="mb-8 text-center sm:mb-10">
+          <h2 className="text-2xl font-bold text-[var(--text-primary)] sm:text-3xl">
+            الموضوع بسيط جداً.. ٣ خطوات فقط
+          </h2>
+          <p className="mt-2 text-base text-[var(--text-secondary)]">
+            مصمم ليكون واضحاً وسهلاً لكل طالب وولي أمر ومعلم من أول مرة
+          </p>
+        </div>
+
+        <div className="grid grid-cols-1 gap-5 md:grid-cols-3">
+          {HOW_IT_WORKS_STEPS.map((step) => {
+            const Icon = step.icon;
+            return (
+              <div
+                key={step.num}
+                className={cn(
+                  "flex flex-col justify-between rounded-2xl border border-[var(--border-hairline)] bg-[var(--bg-surface)] p-6 hairline-lift",
+                  step.accentClass
+                )}
               >
-                ابدأ الحجز
+                <div>
+                  <div className="flex items-center justify-between gap-3">
+                    <span
+                      className={cn(
+                        "inline-flex h-12 w-12 items-center justify-center rounded-xl text-2xl font-bold tabular-nums",
+                        step.numBgClass
+                      )}
+                    >
+                      {step.num}
+                    </span>
+                    <Icon className="h-6 w-6 text-[var(--text-muted)]" />
+                  </div>
+                  <h3 className="mt-5 text-xl font-bold text-[var(--text-primary)]">
+                    {step.title}
+                  </h3>
+                  <p className="mt-2 text-base leading-relaxed text-[var(--text-secondary)]">
+                    {step.description}
+                  </p>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </section>
+
+      {/* Baccalaureate Tracks */}
+      <section id="tracks" className="bg-[var(--bg-sunken)] py-14 sm:py-16">
+        <div className="mx-auto max-w-6xl px-4 sm:px-6">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+            <div>
+              <h2 className="text-2xl font-bold text-[var(--text-primary)] sm:text-3xl">
+                مسارات نظام البكالوريا المصرية
+              </h2>
+              <p className="mt-2 text-base text-[var(--text-secondary)]">
+                تظهر لك حصص مواد مسارك تلقائياً بعد التسجيل
+              </p>
+            </div>
+            <Link
+              href="/onboarding"
+              className={buttonVariants({ variant: "outline", size: "md" })}
+            >
+              <span>تحديد المسار الدراسي</span>
+            </Link>
+          </div>
+
+          <div className="mt-7 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+            {tracksToRender.map((track) => {
+              const style = getTrackStyle(track.code || track.iconKey);
+              return (
+                <div
+                  key={track.code}
+                  className="flex flex-col justify-between rounded-2xl border border-[var(--border-hairline)] bg-[var(--bg-surface)] p-5 hairline-lift"
+                  style={{ borderTopWidth: "4px", borderTopColor: style.hex }}
+                >
+                  <div>
+                    <TrackIcon trackCode={track.code} iconKey={track.iconKey} size="lg" />
+                    <h3 className="mt-4 text-lg font-bold text-[var(--text-primary)]">
+                      {track.nameAr}
+                    </h3>
+                    <div className="mt-3 flex flex-wrap gap-1.5">
+                      {track.subjects.map((subj) => (
+                        <span
+                          key={subj}
+                          className="rounded-lg border border-[var(--border-hairline)] bg-[var(--bg-sunken)] px-2.5 py-1 text-sm font-medium text-[var(--text-primary)]"
+                        >
+                          {subj}
+                        </span>
+                      ))}
+                      {track.hasSecondLang && (
+                        <span className="rounded-lg border border-amber-200 bg-amber-50 px-2.5 py-1 text-sm font-medium text-amber-800 dark:border-amber-500/30 dark:bg-amber-500/15 dark:text-amber-200">
+                          + لغة أجنبية ثانية
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+
+          {/* Common Subjects */}
+          <div className="mt-5 rounded-2xl border border-[var(--border-hairline)] bg-[var(--bg-surface)] p-5">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <span className="text-base font-bold text-[var(--text-primary)]">
+                المواد المشتركة لجميع الطلاب:
+              </span>
+              <div className="flex flex-wrap gap-2">
+                {commonSubjects.map((name) => (
+                  <span
+                    key={name}
+                    className="rounded-xl border border-blue-200 bg-[#EEF5FF] px-3.5 py-1.5 text-sm font-semibold text-[#0B63CE] dark:border-blue-500/30 dark:bg-blue-500/15 dark:text-blue-300"
+                  >
+                    {name}
+                  </span>
+                ))}
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* Active School Callout */}
+      <section className="mx-auto max-w-6xl px-4 py-14 sm:px-6 sm:py-16">
+        <div className="rounded-2xl border border-[var(--border-hairline)] bg-[var(--bg-surface)] p-6 sm:p-8 hairline-lift">
+          <div className="flex flex-col gap-6 lg:flex-row lg:items-center lg:justify-between">
+            <div className="flex items-start gap-4 sm:items-center">
+              <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-2xl border border-[var(--border-hairline)] bg-[var(--bg-sunken)] p-2">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src={featuredSchool?.logo_url || "/tenants/ali-bin-abi-talib/logo.svg"}
+                  alt={schoolNameAr}
+                  className="h-full w-full object-contain"
+                />
+              </div>
+              <div>
+                <span className="inline-flex items-center gap-1.5 text-sm font-semibold text-[#16A34A] dark:text-emerald-400">
+                  <Building2 className="h-4 w-4" />
+                  المدرسة المفعّلة حالياً ({formatArabicNumber(schools.length || 1)})
+                </span>
+                <h2 className="mt-1 text-2xl font-bold text-[var(--text-primary)]">
+                  {schoolNameAr}
+                </h2>
+                <p className="mt-1 text-base text-[var(--text-secondary)]">
+                  {schoolLocation}
+                </p>
+              </div>
+            </div>
+
+            <div className="flex flex-col gap-3 sm:flex-row">
+              <Link
+                href={`/s/${schoolSlug}/student`}
+                className={buttonVariants({ variant: "emerald", size: "lg" })}
+              >
+                <span>بوابة الطالب والحجز</span>
+                <ArrowLeft className="h-5 w-5" />
               </Link>
               <Link
-                href="/login"
+                href={`/s/${schoolSlug}`}
                 className={buttonVariants({ variant: "outline", size: "lg" })}
               >
-                دخول تجريبي
+                <span>صفحة المدرسة</span>
               </Link>
             </div>
           </div>
-
-          {/* Interactive Cal.com-style Live Booking Preview */}
-          <div id="preview" className="mt-10 scroll-mt-20">
-            <LiveBookingPreview />
-          </div>
         </div>
       </section>
 
-      {/* 4 Telemetry Bento Tiles */}
-      <section className="mx-auto max-w-7xl px-4 py-10 sm:px-6">
-        <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
-          {TELEMETRY_TILES.map((tile) => {
-            const Icon = tile.icon;
-            return (
-              <Card key={tile.code} className="p-4">
-                <div className="flex items-center justify-between gap-2">
-                  <span className="text-xs font-medium text-[var(--text-muted)]">
-                    {tile.label}
-                  </span>
-                  <span className="inline-flex h-7 w-7 items-center justify-center rounded-md border border-[var(--border-hairline)] bg-[var(--bg-sunken)] text-[var(--text-secondary)]">
-                    <Icon className="h-3.5 w-3.5" />
-                  </span>
-                </div>
-                <p className="mt-2.5 text-xl font-bold text-[var(--text-primary)] tabular-nums sm:text-2xl">
-                  {tile.value}
-                </p>
-                <p
-                  className="mt-1 font-mono text-[11px] text-[var(--text-muted)]"
-                  dir="ltr"
-                >
-                  {tile.code}
-                </p>
-              </Card>
-            );
-          })}
-        </div>
-      </section>
-
-      {/* 4 Baccalaureate Tracks Showcase */}
-      <section
-        id="tracks"
-        className="mx-auto max-w-7xl scroll-mt-20 px-4 py-8 sm:px-6"
-      >
-        <div className="mb-5 flex flex-wrap items-end justify-between gap-3">
-          <div>
-            <h2 className="text-xl font-bold text-[var(--text-primary)] sm:text-2xl">
-              مسارات البكالوريا الأربعة
-            </h2>
-            <p className="mt-1 text-xs text-[var(--text-muted)]">
-              الصف الثاني الثانوي — قيد إلكتروني موحد
+      {/* Clean Footer */}
+      <footer className="border-t border-[var(--border-hairline)] bg-[var(--bg-surface)] py-10">
+        <div className="mx-auto flex max-w-6xl flex-col gap-6 px-4 sm:flex-row sm:items-center sm:justify-between sm:px-6">
+          <div className="flex flex-col gap-2">
+            <ModarragLogo size="sm" showWordmark showSubtitle />
+            <p className="max-w-sm text-sm text-[var(--text-muted)]">
+              مبادرة مدرسية رسمية لتنظيم الحصص الآمنة وحجز المقاعد بالاسم داخل المدارس الحكومية.
             </p>
           </div>
-          <Link
-            href="/onboarding"
-            className="inline-flex items-center gap-1 text-xs font-semibold text-[#1E3A8A] hover:underline dark:text-blue-400"
-          >
-            <span>اختيار المسار</span>
-            <ArrowUpLeft className="h-3.5 w-3.5" />
-          </Link>
-        </div>
 
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-          {tracksToRender.map((track) => {
-            const style = getTrackStyle(track.code);
-            return (
-              <Card key={track.code} variant="interactive">
-                <CardHeader className="pb-3">
-                  <div className="flex items-center justify-between gap-2">
-                    <TrackIcon trackCode={track.code} iconKey={track.iconKey} size="md" />
-                    <Badge variant="mono" dir="ltr">
-                      {track.code}
-                    </Badge>
-                  </div>
-                  <CardTitle className="mt-3 text-base">{track.nameAr}</CardTitle>
-                </CardHeader>
-                <CardContent className="flex flex-col gap-2">
-                  <div className="flex flex-wrap gap-1.5">
-                    {track.coreSubjects.map((subj) => (
-                      <span
-                        key={subj}
-                        className={cn(
-                          "rounded-md border px-2 py-1 text-xs font-medium",
-                          style.badgeClass
-                        )}
-                      >
-                        {subj}
-                      </span>
-                    ))}
-                  </div>
-                  {track.hasSecondLangElective && (
-                    <div className="mt-1 rounded-md border border-dashed border-[var(--border-strong)] bg-[var(--bg-sunken)] px-2.5 py-1.5 text-[11px] text-[var(--text-secondary)]">
-                      اختياري: إيطالي · فرنسي · ألماني
-                    </div>
-                  )}
-                </CardContent>
-              </Card>
-            );
-          })}
-        </div>
-
-        {/* 4 Common Core Subjects Strip */}
-        <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-[var(--border-hairline)] bg-[var(--bg-surface)] px-4 py-3 hairline-lift">
-          <div className="flex items-center gap-2 text-xs font-semibold text-[var(--text-secondary)]">
-            <CheckCircle2 className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
-            <span>المواد المشتركة لجميع المسارات</span>
-          </div>
-          <div className="flex flex-wrap gap-1.5">
-            {commonSubjects.map((subject) => (
-              <Badge key={subject} variant="neutral" size="md">
-                {subject}
-              </Badge>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      {/* Tenant #1 & Active Schools Showcase */}
-      <section
-        id="schools"
-        className="mx-auto max-w-7xl scroll-mt-20 px-4 py-8 pb-14 sm:px-6"
-      >
-        <div className="mb-5 flex flex-wrap items-end justify-between gap-3">
-          <div>
-            <h2 className="text-xl font-bold text-[var(--text-primary)] sm:text-2xl">
-              المدارس المعتمدة بالمنصة
-            </h2>
-            <p className="mt-1 text-xs text-[var(--text-muted)]">
-              بوابات مستقلة ومعزولة لكل مدرسة
-            </p>
-          </div>
-          <Badge variant="success" dot>
-            {displaySchools.length} مدرسة مفعلة
-          </Badge>
-        </div>
-
-        <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-          {displaySchools.map((school) => (
-            <Card key={school.slug} variant="interactive" className="overflow-hidden">
-              <div className="flex flex-col gap-4 p-5 sm:flex-row sm:items-center sm:justify-between">
-                <div className="flex items-center gap-4 min-w-0">
-                  <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-xl border border-[var(--border-hairline)] bg-[var(--bg-sunken)] p-1.5">
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img
-                      src={school.logo_url || "/tenants/ali-bin-abi-talib/logo.svg"}
-                      alt={school.name_ar}
-                      className="h-full w-full object-contain"
-                    />
-                  </div>
-                  <div className="min-w-0">
-                    <div className="flex items-center gap-2">
-                      <Badge variant="primary" size="sm">
-                        نموذج رائد
-                      </Badge>
-                      <Badge variant="mono" size="sm" dir="ltr">
-                        {school.slug}
-                      </Badge>
-                    </div>
-                    <h3 className="mt-1.5 truncate text-base font-bold text-[var(--text-primary)]">
-                      {school.name_ar}
-                    </h3>
-                    <p className="mt-0.5 text-xs text-[var(--text-muted)]">
-                      {school.governorate} · {school.directorate}
-                    </p>
-                  </div>
-                </div>
-
-                <div className="flex shrink-0 items-center gap-2">
-                  <Link
-                    href={`/s/${school.slug}`}
-                    className={buttonVariants({ variant: "primary", size: "md" })}
-                  >
-                    دخول المدرسة
-                  </Link>
-                  <Link
-                    href="/login"
-                    className={buttonVariants({ variant: "outline", size: "md" })}
-                  >
-                    تجربة
-                  </Link>
-                </div>
-              </div>
-
-              <div className="flex flex-wrap items-center justify-between gap-2 border-t border-[var(--border-hairline)] bg-[var(--bg-sunken)] px-5 py-2.5 text-xs text-[var(--text-secondary)]">
-                <span className="inline-flex items-center gap-1.5">
-                  <ShieldCheck className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400" />
-                  <span>نظام البكالوريا المصرية</span>
-                </span>
-                <span className="tabular-nums">
-                  فاصل المدرجات: {school.default_buffer_minutes} دقيقة
-                </span>
-              </div>
-            </Card>
-          ))}
-        </div>
-      </section>
-
-      {/* Architectural Footer */}
-      <footer className="border-t border-[var(--border-hairline)] bg-[var(--bg-surface)]">
-        <div className="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-3 px-4 py-5 text-xs text-[var(--text-muted)] sm:px-6">
-          <div className="flex items-center gap-2.5">
-            <ModarragLogo size="sm" showWordmark />
-            <span>· منظومة حجز المدرجات المدرسية</span>
-          </div>
-          <div className="flex items-center gap-3 font-mono" dir="ltr">
-            <span>Africa/Cairo</span>
-            <span>·</span>
-            <span>modarrag.app</span>
-          </div>
+          <nav className="flex flex-wrap gap-5 text-sm font-semibold text-[var(--text-secondary)]">
+            <Link href={`/s/${schoolSlug}`} className="hover:text-[var(--text-primary)]">
+              بوابة المدرسة
+            </Link>
+            <Link href="/login" className="hover:text-[var(--text-primary)]">
+              تسجيل الدخول
+            </Link>
+            <Link href="/register" className="hover:text-[var(--text-primary)]">
+              حساب طالب جديد
+            </Link>
+            <Link href={`/s/${schoolSlug}/admin/presentation`} className="hover:text-[var(--text-primary)]">
+              العرض التقديمي
+            </Link>
+          </nav>
         </div>
       </footer>
     </div>

@@ -48,8 +48,6 @@ export interface ServerEnv {
   readonly UPSTASH_REDIS_REST_URL: string | undefined;
   readonly UPSTASH_REDIS_REST_TOKEN: string | undefined;
   readonly TURNSTILE_SECRET_KEY: string | undefined;
-  readonly QR_SIGNING_SECRET: string;
-  readonly isUsingDevQrFallback: boolean;
   readonly isUpstashConfigured: boolean;
   readonly isTurnstileConfigured: boolean;
 }
@@ -73,32 +71,6 @@ export function parseServerEnv(
   options: { readonly suppressWarnings?: boolean } = {}
 ): ServerEnv {
   const parsed = serverEnvSchema.parse(raw);
-  const isProd = parsed.NODE_ENV === "production";
-
-  let qrSecret = parsed.QR_SIGNING_SECRET;
-  let isUsingDevQrFallback = false;
-
-  if (isProd) {
-    if (!qrSecret || qrSecret.length < 32) {
-      throw new Error(
-        "QR_SIGNING_SECRET must be set and at least 32 characters in production"
-      );
-    }
-    if (qrSecret === DEV_QR_SIGNING_SECRET_FALLBACK) {
-      throw new Error(
-        "QR_SIGNING_SECRET must not use the development fallback in production"
-      );
-    }
-  } else if (!qrSecret) {
-    qrSecret = DEV_QR_SIGNING_SECRET_FALLBACK;
-    isUsingDevQrFallback = true;
-    if (!options.suppressWarnings) {
-      warnOnce(
-        "qr-fallback",
-        "QR_SIGNING_SECRET is unset; using non-production development fallback."
-      );
-    }
-  }
 
   const hasUpstashUrl = Boolean(parsed.UPSTASH_REDIS_REST_URL);
   const hasUpstashToken = Boolean(parsed.UPSTASH_REDIS_REST_TOKEN);
@@ -137,8 +109,6 @@ export function parseServerEnv(
     UPSTASH_REDIS_REST_URL: isUpstashConfigured ? parsed.UPSTASH_REDIS_REST_URL : undefined,
     UPSTASH_REDIS_REST_TOKEN: isUpstashConfigured ? parsed.UPSTASH_REDIS_REST_TOKEN : undefined,
     TURNSTILE_SECRET_KEY: parsed.TURNSTILE_SECRET_KEY,
-    QR_SIGNING_SECRET: qrSecret,
-    isUsingDevQrFallback,
     isUpstashConfigured,
     isTurnstileConfigured,
   };

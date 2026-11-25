@@ -1,7 +1,6 @@
 import * as React from "react";
 import Link from "next/link";
-import { ArrowRightLeft, Clock } from "lucide-react";
-import { Badge } from "@/components/ui/Badge";
+import { ArrowRightLeft } from "lucide-react";
 import type { UserRole } from "@/infrastructure/supabase/database.types";
 import { getUserRoleLabel } from "@/lib/formatters";
 import { cn } from "@/lib/utils";
@@ -46,46 +45,40 @@ export function buildDefaultSchoolNavItems(
     case "student":
       return [
         { href: base, label: "المدرسة", icon: "home" },
-        { href: `${base}/student`, label: "الحصص والتذاكر", icon: "calendar" },
+        { href: `${base}/student`, label: "حصصي", icon: "calendar" },
         { href: "/onboarding", label: "المسار الدراسي", icon: "book" },
       ];
     case "teacher":
-      return [
-        { href: base, label: "المدرسة", icon: "home" },
-        { href: `${base}/teacher`, label: "لوحة المعلم", icon: "layout" },
-        { href: `${base}/scanner`, label: "التحضير", icon: "scan" },
-      ];
     case "gate_scanner":
       return [
         { href: base, label: "المدرسة", icon: "home" },
-        { href: `${base}/scanner`, label: "ماسح البوابة", icon: "scan" },
+        { href: `${base}/teacher`, label: "كشوف الحضور", icon: "check" },
+        { href: `${base}/teacher/book-hall`, label: "حجز قاعة", icon: "plus" },
       ];
     case "school_admin":
       return [
         { href: base, label: "المدرسة", icon: "home" },
         { href: `${base}/admin`, label: "إدارة المدرسة", icon: "building" },
-        { href: `${base}/teacher`, label: "جدول الحصص", icon: "calendar" },
-        { href: `${base}/scanner`, label: "البوابة", icon: "scan" },
+        { href: `${base}/teacher`, label: "الحصص", icon: "calendar" },
       ];
     case "super_admin":
       return [
         { href: base, label: "المدرسة", icon: "home" },
-        { href: "/super-admin", label: "المنصة الوطنية", icon: "shield" },
+        { href: "/super-admin", label: "لوحة المنصة", icon: "shield" },
         { href: `${base}/admin`, label: "إدارة المدرسة", icon: "building" },
-        { href: `${base}/scanner`, label: "البوابة", icon: "scan" },
       ];
     default:
       return [
-        { href: base, label: "الرئيسية", icon: "home" },
-        { href: `${base}/student`, label: "بوابة الطالب", icon: "calendar" },
-        { href: "/login", label: "دخول", icon: "shield" },
+        { href: base, label: "المدرسة", icon: "home" },
+        { href: `${base}/student`, label: "الحصص المتاحة", icon: "calendar" },
+        { href: "/login", label: "تسجيل الدخول", icon: "shield" },
       ];
   }
 }
 
 /**
- * Multi-tenant workspace shell for `/s/[schoolSlug]/*` portals.
- * Combines sticky TopNavbar, slim desktop RTL sidebar, and mobile safe-area bottom dock.
+ * Warm, spacious, uncluttered school workspace shell designed for effortless
+ * comprehension across all ages — zero technical noise or dense widget clutter.
  */
 export function SchoolShell({
   school,
@@ -102,7 +95,7 @@ export function SchoolShell({
     (userContext?.role ? getUserRoleLabel(userContext.role, "ar") : "");
 
   return (
-    <div className="min-h-screen bg-[var(--bg-canvas)] text-[var(--text-primary)]">
+    <div className="min-h-dvh bg-[var(--bg-canvas)] text-[var(--text-primary)]">
       <TopNavbar
         brandHref="/"
         school={school}
@@ -122,49 +115,35 @@ export function SchoolShell({
         }
       />
 
-      <div className="mx-auto flex max-w-7xl gap-6 px-4 pt-5 pb-24 sm:px-6 md:pb-10">
-        {/* Desktop RTL Sidebar */}
+      <div className="mx-auto flex max-w-6xl gap-6 px-4 pt-6 pb-28 sm:px-6 md:pb-12">
+        {/* Clean Slim Sidebar (Desktop Only) */}
         <aside className="hidden w-60 shrink-0 md:block">
-          <div className="sticky top-21 flex flex-col gap-3">
-            {/* School Identity Panel */}
-            <div className="rounded-xl border border-[var(--border-hairline)] bg-[var(--bg-surface)] p-3.5 hairline-lift">
+          <div className="sticky top-24 flex flex-col gap-3">
+            <div className="rounded-2xl border border-[var(--border-hairline)] bg-[var(--bg-surface)] p-4 hairline-lift">
               <div className="flex items-center gap-3">
                 {school.logoUrl && (
                   // eslint-disable-next-line @next/next/no-img-element
                   <img
                     src={school.logoUrl}
                     alt={school.nameAr}
-                    className="h-10 w-10 shrink-0 rounded-lg border border-[var(--border-hairline)] bg-[var(--bg-sunken)] p-1 object-contain"
+                    className="h-11 w-11 shrink-0 rounded-xl border border-[var(--border-hairline)] bg-[var(--bg-sunken)] p-1 object-contain"
                   />
                 )}
                 <div className="min-w-0">
-                  <p className="truncate text-xs font-bold text-[var(--text-primary)]">
+                  <p className="text-sm font-bold leading-snug text-[var(--text-primary)]">
                     {school.nameAr}
                   </p>
                   {(school.governorate || school.directorate) && (
-                    <p className="mt-0.5 truncate text-[11px] text-[var(--text-muted)]">
+                    <p className="mt-1 truncate text-xs text-[var(--text-muted)]">
                       {[school.governorate, school.directorate].filter(Boolean).join(" · ")}
                     </p>
                   )}
                 </div>
               </div>
-
-              {typeof school.defaultBufferMinutes === "number" && (
-                <div className="mt-3 flex items-center justify-between border-t border-[var(--border-hairline)] pt-2.5 text-[11px] text-[var(--text-muted)]">
-                  <span className="inline-flex items-center gap-1">
-                    <Clock className="h-3 w-3" />
-                    فاصل المدرجات
-                  </span>
-                  <span className="font-mono font-semibold text-[var(--text-primary)] tabular-nums">
-                    {school.defaultBufferMinutes} دقيقة
-                  </span>
-                </div>
-              )}
             </div>
 
-            {/* Navigation Menu */}
             <nav
-              className="flex flex-col gap-1 rounded-xl border border-[var(--border-hairline)] bg-[var(--bg-surface)] p-2 hairline-lift"
+              className="flex flex-col gap-1.5 rounded-2xl border border-[var(--border-hairline)] bg-[var(--bg-surface)] p-2.5 hairline-lift"
               aria-label="قائمة المدرسة"
             >
               {items.map((item) => (
@@ -172,9 +151,9 @@ export function SchoolShell({
                   key={item.href}
                   href={item.href}
                   className={cn(
-                    "flex items-center justify-between gap-2 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors",
+                    "flex min-h-[46px] items-center justify-between gap-2.5 rounded-xl px-3.5 text-sm font-semibold transition-colors",
                     item.active
-                      ? "bg-[#1E3A8A] text-white dark:bg-blue-600"
+                      ? "bg-[#0B63CE] text-white dark:bg-blue-600"
                       : "text-[var(--text-secondary)] hover:bg-[var(--bg-sunken)] hover:text-[var(--text-primary)]"
                   )}
                 >
@@ -182,42 +161,32 @@ export function SchoolShell({
                     {renderSchoolNavIcon(item.icon, "h-4 w-4 shrink-0")}
                     <span className="truncate">{item.label}</span>
                   </span>
-                  {item.badge !== undefined && (
-                    <Badge
-                      variant={item.active ? "mono" : "neutral"}
-                      size="sm"
-                      className={item.active ? "border-white/25 bg-white/15 text-white" : ""}
-                    >
-                      {item.badge}
-                    </Badge>
-                  )}
                 </Link>
               ))}
             </nav>
 
-            {/* Quick Account / Role Switcher Link */}
             <Link
               href="/login"
-              className="flex items-center justify-between rounded-xl border border-[var(--border-hairline)] bg-[var(--bg-sunken)] px-3.5 py-2.5 text-xs font-medium text-[var(--text-secondary)] transition-colors hover:border-[var(--border-strong)] hover:text-[var(--text-primary)]"
+              className="flex min-h-[44px] items-center justify-between rounded-xl border border-[var(--border-hairline)] bg-[var(--bg-surface)] px-4 text-sm font-medium text-[var(--text-secondary)] transition-colors hover:border-[var(--border-strong)] hover:text-[var(--text-primary)]"
             >
-              <span>تبديل الحساب التجريبي</span>
-              <ArrowRightLeft className="h-3.5 w-3.5 shrink-0" />
+              <span>تبديل الحساب</span>
+              <ArrowRightLeft className="h-4 w-4 shrink-0" />
             </Link>
           </div>
         </aside>
 
-        {/* Main Workspace Content */}
+        {/* Spacious Main Workspace */}
         <main className="min-w-0 flex-1">
           {(pageTitle || headerActions) && (
-            <div className="mb-5 flex flex-wrap items-center justify-between gap-3 border-b border-[var(--border-hairline)] pb-4">
+            <div className="mb-6 flex flex-wrap items-center justify-between gap-3 border-b border-[var(--border-hairline)] pb-4">
               <div>
                 {pageTitle && (
-                  <h1 className="text-xl font-bold text-[var(--text-primary)] sm:text-2xl">
+                  <h1 className="text-2xl font-bold text-[var(--text-primary)]">
                     {pageTitle}
                   </h1>
                 )}
                 {pageSubtitle && (
-                  <p className="mt-1 text-xs text-[var(--text-muted)]">{pageSubtitle}</p>
+                  <p className="mt-1 text-sm text-[var(--text-secondary)]">{pageSubtitle}</p>
                 )}
               </div>
               {headerActions && <div className="flex items-center gap-2">{headerActions}</div>}

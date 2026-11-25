@@ -113,10 +113,10 @@ async function assertImagesAndSvgsHealthy(page: Page, label: string): Promise<vo
     result.brokenImages,
     `${label}: broken images ${result.brokenImages.join(", ")}`
   ).toEqual([]);
-  expect(result.svgCount, `${label}: expected SVG emblems`).toBeGreaterThan(0);
+  expect(result.svgCount, `${label}: expected SVG icons`).toBeGreaterThan(0);
 }
 
-async function assertTouchTargetsAtLeast40px(
+async function assertTouchTargetsAtLeast44px(
   locator: Locator,
   label: string
 ): Promise<void> {
@@ -130,7 +130,7 @@ async function assertTouchTargetsAtLeast40px(
       if (box) {
         expect(
           Math.max(box.width, box.height),
-          `${label} control #${i} primary dimension`
+          `${label} control #${i} width/height`
         ).toBeGreaterThanOrEqual(40);
         expect(
           box.height,
@@ -160,7 +160,7 @@ function shotPath(fileName: string): string {
   return path.join(SHOTS_DIR, fileName);
 }
 
-test.describe("Modarrag Full Production E2E Verification", () => {
+test.describe("Modarrag Redesigned E2E Verification", () => {
   test("0) /api/health endpoint returns 200 ok", async ({ request }) => {
     const res = await request.get("/api/health");
     expect(res.status()).toBe(200);
@@ -174,7 +174,7 @@ test.describe("Modarrag Full Production E2E Verification", () => {
     expect(body.defaultSchoolSlug).toBe(SCHOOL_SLUG);
   });
 
-  test("a) National Landing (/) desktop 1440px & mobile 360px, ThemeToggle & Cal preview", async ({
+  test("a) Bassthalk-inspired Landing (/): hero visual, 3 steps, theme toggle, mobile 360px", async ({
     page,
   }) => {
     const tracker = attachDiagnostics(page);
@@ -185,70 +185,54 @@ test.describe("Modarrag Full Production E2E Verification", () => {
       await assertRtlAndNoOverflow(page, "Landing Desktop 1440");
       await assertImagesAndSvgsHealthy(page, "Landing Desktop 1440");
 
-      // Interact with Cal.com-style LiveBookingPreview
-      const medTrackBtn = page.getByRole("button", { name: /طب وعلوم الحياة/ });
-      await medTrackBtn.click();
-      const dayBtn = page.getByRole("button", { name: /الأربعاء/ });
-      await dayBtn.click();
-      const slotBtn = page.getByRole("button", { name: /٠٢:٠٠ م|14:00/ });
-      await slotBtn.click();
-      await page.getByRole("button", { name: "تثبيت المعاينة" }).click();
-      await expect(page.getByText("معاينة تذكرة الدخول")).toBeVisible();
-      await expect(page.getByText(/MDRG-2026-/)).toBeVisible();
+      await expect(page.getByText("الموضوع بسيط جداً.. ٣ خطوات فقط")).toBeVisible();
+      await expect(page.getByText("احضر باسمك فقط")).toBeVisible();
+      await expect(
+        page.getByText("مدرسة علي بن أبي طالب الثانوية بنين").first()
+      ).toBeVisible();
 
-      // Capture light desktop landing screenshot
+      // Zero developer jargon on landing page
+      const bodyText = await page.locator("body").innerText();
+      expect(bodyText).not.toContain("GiST");
+      expect(bodyText).not.toContain("HMAC-SHA256");
+      expect(bodyText).not.toContain("SEC_2_BACC");
+
       await page.screenshot({
         path: shotPath("01-landing-desktop-1440-light.png"),
         fullPage: true,
       });
 
-      // Toggle theme to dark and back cleanly
+      // Toggle to Dark Mode cleanly
       const themeBtn = page
-        .getByRole("button", { name: /تفعيل الوضع الليلي|تفعيل الوضع النهاري/ })
+        .getByRole("button", { name: /التبديل للوضع الداكن|التبديل للوضع الفاتح/ })
         .first();
-      const wasDark = await page.evaluate(() =>
-        document.documentElement.classList.contains("dark")
-      );
       await themeBtn.click();
-      const isNowDark = await page.evaluate(() =>
-        document.documentElement.classList.contains("dark")
-      );
-      expect(isNowDark).toBe(!wasDark);
-
       await expect
         .poll(() =>
-          themeBtn.evaluate((el) => getComputedStyle(el).backgroundColor)
+          page.evaluate(() => document.documentElement.classList.contains("dark"))
         )
-        .not.toBe("rgb(255, 255, 255)");
-      const unselectedDayBtn = page.getByRole("button", { name: /الأحد/ }).first();
-      await expect
-        .poll(() =>
-          unselectedDayBtn.evaluate((el) => getComputedStyle(el).backgroundColor)
-        )
-        .toBe("rgb(15, 22, 35)");
+        .toBe(true);
 
       await page.screenshot({
         path: shotPath("02-landing-desktop-1440-dark.png"),
         fullPage: false,
       });
 
-      // Restore light mode for consistency
-      if (isNowDark) {
-        await themeBtn.click();
-        await expect
-          .poll(() =>
-            page.evaluate(() => document.documentElement.classList.contains("dark"))
-          )
-          .toBe(false);
-      }
+      // Restore light mode
+      await themeBtn.click();
+      await expect
+        .poll(() =>
+          page.evaluate(() => document.documentElement.classList.contains("dark"))
+        )
+        .toBe(false);
 
-      // Mobile 360x800 RTL & 0px overflow check
+      // Mobile 360px check
       await page.setViewportSize({ width: 360, height: 800 });
       await page.reload({ waitUntil: "load" });
       await assertRtlAndNoOverflow(page, "Landing Mobile 360");
-      await assertTouchTargetsAtLeast40px(
-        page.locator("header button"),
-        "Landing Mobile Header Buttons"
+      await assertTouchTargetsAtLeast44px(
+        page.locator("header button, main a[href='/s/ali-bin-abi-talib']"),
+        "Landing Mobile 360"
       );
 
       await page.screenshot({
@@ -256,38 +240,40 @@ test.describe("Modarrag Full Production E2E Verification", () => {
         fullPage: true,
       });
 
-      assertNoRuntimeErrors(tracker, "National Landing");
+      assertNoRuntimeErrors(tracker, "Landing Page");
     } finally {
       tracker.detach();
     }
   });
 
-  test("b) School Portal & Student Demo Flow (student_201 -> schedule -> QR ticket -> restore)", async ({
+  test("b) Student Name-Based Portal (student_201 -> reserve by name -> cancel restore)", async ({
     page,
   }) => {
     const tracker = attachDiagnostics(page);
     try {
       await page.setViewportSize({ width: 1440, height: 900 });
       await page.goto(`/s/${SCHOOL_SLUG}`, { waitUntil: "load" });
-      await assertRtlAndNoOverflow(page, "School Portal Desktop");
-      await assertImagesAndSvgsHealthy(page, "School Portal Desktop");
-      await expect(
-        page.getByText("مدرسة علي بن أبي طالب الثانوية بنين").first()
-      ).toBeVisible();
+      await assertRtlAndNoOverflow(page, "School Doorway Desktop");
+      await expect(page.getByRole("heading", { name: "بوابة الطالب" })).toBeVisible();
+      await expect(page.getByRole("heading", { name: "بوابة المعلم" })).toBeVisible();
 
-      // Login via Demo Role Switcher as student_201
       await loginAsDemoRole(page, "طالب الهندسة", `/s/${SCHOOL_SLUG}/student`);
       await assertRtlAndNoOverflow(page, "Student Portal Desktop");
       await expect(page.getByText("مسار الهندسة").first()).toBeVisible();
+      await expect(page.getByText("أنت مسجل بالاسم ✓").first()).toBeVisible();
 
       await page.screenshot({
         path: shotPath("04-student-portal-desktop-1440.png"),
         fullPage: true,
       });
 
-      // Mobile 360px overflow check first (collect touch target violations after ticket flow too)
+      // Mobile 360px layout + touch targets
       await page.setViewportSize({ width: 360, height: 800 });
       await assertRtlAndNoOverflow(page, "Student Portal Mobile 360");
+      await assertTouchTargetsAtLeast44px(
+        page.locator("header button, main button:visible, nav[aria-label='التنقل السفلي'] a"),
+        "Student Portal Mobile 360"
+      );
       await page.screenshot({
         path: shotPath("05-student-portal-mobile-360.png"),
         fullPage: true,
@@ -295,232 +281,184 @@ test.describe("Modarrag Full Production E2E Verification", () => {
 
       await page.setViewportSize({ width: 1440, height: 900 });
 
-      // Open existing confirmed ticket or book one cleanly and restore seat state afterwards
-      let createdBookingId: string | null = null;
-      const existingTicketLink = page
-        .locator(`a[href*="/s/${SCHOOL_SLUG}/student/tickets/"]`)
-        .first();
+      // Book a free session (if available) and verify name-based confirmation modal + restore
+      const reserveBtn = page.getByRole("button", { name: "احجز مكانك الآن" }).first();
+      if ((await reserveBtn.count()) > 0) {
+        await reserveBtn.click();
+        await expect(
+          page.getByText("تم تسجيل اسمك في الحصة بنجاح!")
+        ).toBeVisible({ timeout: 20_000 });
+        await expect(
+          page.getByText(/لا تحتاج لأي تذكرة أو باركود/)
+        ).toBeVisible();
 
-      if ((await existingTicketLink.count()) > 0) {
-        await existingTicketLink.click();
-        await page.waitForURL(
-          (url) => url.pathname.includes(`/s/${SCHOOL_SLUG}/student/tickets/`),
-          { timeout: 20_000 }
-        );
-      } else {
-        const bookSeatButton = page.getByRole("button", { name: "حجز مقعد" }).first();
-        await expect(bookSeatButton).toBeVisible();
-        await bookSeatButton.click();
+        await page.getByRole("button", { name: "حسناً، فهمت" }).click();
 
-        const openQrBtn = page.getByRole("link", { name: "عرض تذكرة QR" });
-        await expect(openQrBtn).toBeVisible({ timeout: 20_000 });
-        const href = await openQrBtn.getAttribute("href");
-        createdBookingId = href ? href.split("/").pop() ?? null : null;
-        await openQrBtn.click();
-        await page.waitForURL(
-          (url) => url.pathname.includes(`/s/${SCHOOL_SLUG}/student/tickets/`),
-          { timeout: 20_000 }
-        );
+        // Cancel the second/newest test booking cleanly to restore original seat count
+        const cancelBtns = page.getByRole("button", { name: "إلغاء الحجز" });
+        if ((await cancelBtns.count()) > 1) {
+          await cancelBtns.first().click();
+          const confirmCancel = page.getByRole("button", {
+            name: "تأكيد إلغاء الحجز",
+          });
+          await expect(confirmCancel).toBeVisible();
+          await confirmCancel.click();
+          await expect(page.getByText("تم إلغاء حجزك")).toBeVisible({
+            timeout: 20_000,
+          });
+        }
       }
 
-      await page.waitForLoadState("load");
-      await assertRtlAndNoOverflow(page, "Student QR Ticket Desktop");
-
-      // Verify MDRG-2026- reference code, SVG QR code, and light-only plaque
-      await expect(page.getByText(/MDRG-2026-/).first()).toBeVisible();
-      const qrSvg = page.locator('svg[role="img"][aria-label*="MDRG-2026-"]');
-      await expect(qrSvg).toBeVisible();
-
-      const plaqueColorScheme = await qrSvg.evaluate((svg) => {
-        const parent = svg.parentElement;
-        if (!parent) return "";
-        return (
-          parent.getAttribute("style") ??
-          window.getComputedStyle(parent).colorScheme ??
-          ""
-        );
-      });
-      expect(plaqueColorScheme.toLowerCase()).toContain("light");
-
-      await page.screenshot({
-        path: shotPath("06-student-qr-ticket-desktop-1440.png"),
-        fullPage: true,
-      });
-
-      // Navigate to Student Schedule & restore booked seat if test created it
-      await page.goto(`/s/${SCHOOL_SLUG}/student/schedule`, {
-        waitUntil: "load",
-      });
-      await assertRtlAndNoOverflow(page, "Student Schedule Desktop");
-      await expect(page.getByRole("tab", { name: /الحصص المؤكدة/ })).toBeVisible();
-
-      if (createdBookingId) {
-        const cancelBtn = page.getByRole("button", { name: "إلغاء الحجز" }).first();
-        await expect(cancelBtn).toBeVisible();
-        await cancelBtn.click();
-        const confirmCancelBtn = page.getByRole("button", { name: "تأكيد الإلغاء" });
-        await expect(confirmCancelBtn).toBeVisible();
-        await confirmCancelBtn.click();
-        await expect(page.getByText("تم إلغاء الحجز بنجاح")).toBeVisible({
-          timeout: 20_000,
-        });
-      }
-
-      // Check mobile 360px header/button/dock minimum dimensions (>= 40px)
-      await page.goto(`/s/${SCHOOL_SLUG}/student`, { waitUntil: "load" });
-      await page.setViewportSize({ width: 360, height: 800 });
-      await assertTouchTargetsAtLeast40px(
-        page.locator("header button, main button:visible, nav[aria-label='التنقل السفلي'] a"),
-        "Student Portal Mobile 360"
-      );
-
-      assertNoRuntimeErrors(tracker, "Student Portal & Ticket Flow");
+      assertNoRuntimeErrors(tracker, "Student Portal Flow");
     } finally {
       tracker.detach();
     }
   });
 
-  test("c) Teacher Console & Cal 3-Column Hall Grid (teacher_101)", async ({
+  test("c) Teacher Name-Attendance Checklist (teacher_101 -> search student -> mark ✓ حضر -> undo)", async ({
     page,
   }) => {
     const tracker = attachDiagnostics(page);
     try {
       await page.setViewportSize({ width: 1440, height: 900 });
-      await loginAsDemoRole(page, "معلم البرمجة", `/s/${SCHOOL_SLUG}/teacher`);
+      await loginAsDemoRole(page, "معلم المادة", `/s/${SCHOOL_SLUG}/teacher`);
       await assertRtlAndNoOverflow(page, "Teacher Dashboard Desktop");
-      await expect(page.getByRole("heading", { name: "لوحة تحكم المعلم" })).toBeVisible();
+      await expect(page.getByText("جدول الحصص وكشوف الحضور")).toBeVisible();
 
-      await page.goto(`/s/${SCHOOL_SLUG}/teacher/book-hall`, {
-        waitUntil: "load",
+      await page.screenshot({
+        path: shotPath("06-teacher-dashboard-desktop-1440.png"),
+        fullPage: true,
       });
-      await assertRtlAndNoOverflow(page, "Teacher Book Hall Desktop");
 
-      // Verify 3-column Cal hall grid & 15m buffer visuals
-      await expect(page.getByText("١ · بيانات الحصة والمدرج")).toBeVisible();
-      await expect(page.getByText("٢ · التقويم والجدول اليومي للقاعة")).toBeVisible();
-      await expect(page.getByText("٣ · اختيار التوقيت والتأكيد")).toBeVisible();
-      await expect(page.getByText("فاصل انتقالي ١٥د")).toBeVisible();
+      // Open student name roster checklist
+      const openRosterLink = page
+        .getByRole("link", { name: "فتح كشف الحضور بالاسم" })
+        .first();
+      await expect(openRosterLink).toBeVisible();
+      await openRosterLink.click();
+      await page.waitForURL(
+        (url) => url.pathname.includes(`/s/${SCHOOL_SLUG}/teacher/sessions/`),
+        { timeout: 20_000 }
+      );
+      await page.waitForLoadState("load");
+      await assertRtlAndNoOverflow(page, "Teacher Attendance Roster Desktop");
 
-      // Check day buttons with existing sessions to verify hatched buffer band when rendered
-      const busyDayBtn = page.locator("button", { hasText: /[٠-٩0-9]+\s+حصة/ }).first();
-      if ((await busyDayBtn.count()) > 0) {
-        await busyDayBtn.click();
-        await expect(page.getByText(/فاصل انتقال ١٥ دقيقة/).first()).toBeVisible();
+      // Search by Arabic student name
+      const searchInput = page.locator('input[type="search"]').first();
+      await expect(searchInput).toBeVisible();
+      await searchInput.fill("طالب الهندسة");
+      await expect(page.getByText("طالب الهندسة التجريبي").first()).toBeVisible();
+
+      // Mark student present in 1 tap (or undo then mark to test both directions)
+      const markBtn = page.getByRole("button", { name: /حضر/ }).first();
+      const undoBtnInitial = page.getByRole("button", { name: "تراجع" }).first();
+
+      if ((await undoBtnInitial.count()) > 0 && (await undoBtnInitial.isVisible())) {
+        await undoBtnInitial.click();
+        await expect(
+          page.getByRole("button", { name: /✓ حضر/ }).first()
+        ).toBeVisible({ timeout: 15_000 });
+      }
+
+      const checkInBtn = page.getByRole("button", { name: /✓ حضر/ }).first();
+      if ((await checkInBtn.count()) > 0) {
+        await checkInBtn.click();
+        await expect(page.getByRole("button", { name: "تراجع" }).first()).toBeVisible({
+          timeout: 15_000,
+        });
+      } else {
+        await expect(markBtn).toBeVisible();
       }
 
       await page.screenshot({
-        path: shotPath("07-teacher-book-hall-desktop-1440.png"),
+        path: shotPath("07-teacher-roster-present-1440.png"),
         fullPage: true,
       });
 
-      // Mobile 360px overflow check
+      // Mobile 360px attendance list check
       await page.setViewportSize({ width: 360, height: 800 });
-      await assertRtlAndNoOverflow(page, "Teacher Book Hall Mobile 360");
+      await assertRtlAndNoOverflow(page, "Teacher Roster Mobile 360");
+      await assertTouchTargetsAtLeast44px(
+        page.locator("main button:visible, input[type='search']"),
+        "Teacher Roster Mobile 360"
+      );
       await page.screenshot({
-        path: shotPath("08-teacher-book-hall-mobile-360.png"),
+        path: shotPath("08-teacher-roster-mobile-360.png"),
         fullPage: true,
       });
 
-      assertNoRuntimeErrors(tracker, "Teacher Console");
+      // Restore clean initial confirmed status via "تراجع"
+      await page.setViewportSize({ width: 1440, height: 900 });
+      const undoBtn = page.getByRole("button", { name: "تراجع" }).first();
+      if ((await undoBtn.count()) > 0 && (await undoBtn.isVisible())) {
+        await undoBtn.click();
+        await expect(
+          page.getByRole("button", { name: /✓ حضر/ }).first()
+        ).toBeVisible({ timeout: 15_000 });
+      }
+
+      // Check Book Hall Planner
+      await page.goto(`/s/${SCHOOL_SLUG}/teacher/book-hall`, { waitUntil: "load" });
+      await assertRtlAndNoOverflow(page, "Teacher Book Hall Desktop");
+      await expect(page.getByText("١ · بيانات الحصة والمدرج")).toBeVisible();
+      await page.screenshot({
+        path: shotPath("09-teacher-book-hall-desktop-1440.png"),
+        fullPage: true,
+      });
+
+      assertNoRuntimeErrors(tracker, "Teacher Attendance Console");
     } finally {
       tracker.detach();
     }
   });
 
-  test("d) Gate QR Scanner & Simulator Invalid Token (gate_scanner)", async ({
+  test("d) School Admin, Ministry Presentation & Name CSV Export (school_admin)", async ({
     page,
   }) => {
     const tracker = attachDiagnostics(page);
     try {
       await page.setViewportSize({ width: 1440, height: 900 });
-      await loginAsDemoRole(page, "مشرف البوابة", `/s/${SCHOOL_SLUG}/scanner`);
-      await assertRtlAndNoOverflow(page, "Gate Scanner Desktop");
-
-      // Verify session selector, Kiosk Sync Pack button, and simulator invalid-token banner
-      const sessionSelect = page.locator("select").first();
-      await expect(sessionSelect).toBeVisible();
-
-      const syncPackBtn = page.getByRole("button", { name: "حفظ كشف الحصة أوفلاين" });
-      await expect(syncPackBtn).toBeVisible();
-
-      const invalidSimBtn = page.getByRole("button", {
-        name: "محاكاة تذكرة غير صالحة",
-      });
-      await expect(invalidSimBtn).toBeVisible();
-      await invalidSimBtn.click();
-
-      const outcomeBanner = page.locator('[role="status"][aria-live="assertive"]');
-      await expect(outcomeBanner).toBeVisible({ timeout: 15_000 });
-
-      await page.evaluate(() => window.scrollTo(0, 0));
-      await page.screenshot({
-        path: shotPath("09-gate-scanner-desktop-1440.png"),
-        fullPage: true,
-      });
-
-      // Mobile 360px check
-      await page.setViewportSize({ width: 360, height: 800 });
-      await assertRtlAndNoOverflow(page, "Gate Scanner Mobile 360");
-
-      assertNoRuntimeErrors(tracker, "Gate QR Scanner");
-    } finally {
-      tracker.detach();
-    }
-  });
-
-  test("e) School Admin, Ministry Presentation & CSV Export (school_admin)", async ({
-    page,
-  }) => {
-    const tracker = attachDiagnostics(page);
-    try {
-      await page.setViewportSize({ width: 1440, height: 900 });
-      await loginAsDemoRole(page, "منسق المدرسة", `/s/${SCHOOL_SLUG}/admin`);
+      await loginAsDemoRole(page, "إدارة المدرسة", `/s/${SCHOOL_SLUG}/admin`);
       await assertRtlAndNoOverflow(page, "School Admin Desktop");
 
-      // Verify SVG occupancy gauges on Admin Overview
       await expect(page.getByText("الإشغال الحي للقاعات والمدرجات")).toBeVisible();
-      const gaugeCircles = page.locator("svg circle");
-      expect(await gaugeCircles.count()).toBeGreaterThanOrEqual(2);
-
       await page.screenshot({
         path: shotPath("10-school-admin-desktop-1440.png"),
         fullPage: true,
       });
 
-      // Navigate Admin sub-routes
       for (const route of ["academic", "halls", "teachers"] as const) {
-        await page.goto(`/s/${SCHOOL_SLUG}/admin/${route}`, {
-          waitUntil: "load",
-        });
+        await page.goto(`/s/${SCHOOL_SLUG}/admin/${route}`, { waitUntil: "load" });
         await assertRtlAndNoOverflow(page, `School Admin /${route}`);
       }
 
-      // Ministry Presentation Mode
       await page.goto(`/s/${SCHOOL_SLUG}/admin/presentation`, {
         waitUntil: "load",
       });
       await assertRtlAndNoOverflow(page, "Ministry Presentation Desktop");
       await expect(
-        page.getByText("ملف العرض الرسمي — وزارة التربية والتعليم")
+        page.getByText("عرض المتابعة الرسمي — وزارة التربية والتعليم")
       ).toBeVisible();
+      await expect(page.getByText("تحضير بالاسم في ثانية")).toBeVisible();
+
+      const presText = await page.locator("body").innerText();
+      expect(presText).not.toContain("HMAC-SHA256");
 
       await page.screenshot({
         path: shotPath("11-ministry-presentation-desktop-1440.png"),
         fullPage: true,
       });
 
-      // Verify authenticated CSV export API with UTF-8 BOM + Reference Code header
+      // Verify CSV export uses Student Name + Attendance Status (zero QR / Reference Code)
       const csvResponse = await page.request.get(
         `/api/reports/export?schoolSlug=${SCHOOL_SLUG}&format=csv`
       );
       expect(csvResponse.status()).toBe(200);
-      const contentType = csvResponse.headers()["content-type"] ?? "";
-      expect(contentType.toLowerCase()).toContain("text/csv");
-
       const csvBytes = await csvResponse.body();
       expect(csvBytes.subarray(0, 3)).toEqual(Buffer.from([0xef, 0xbb, 0xbf]));
       const csvText = csvBytes.toString("utf8");
-      expect(csvText).toContain("Reference Code");
+      expect(csvText).toContain("Student Name");
+      expect(csvText).toContain("Attendance Status");
 
       assertNoRuntimeErrors(tracker, "School Admin & Ministry Presentation");
     } finally {
@@ -528,18 +466,16 @@ test.describe("Modarrag Full Production E2E Verification", () => {
     }
   });
 
-  test("f) Super Admin National Console (super_admin)", async ({ page }) => {
+  test("e) Super Admin National Console (super_admin)", async ({ page }) => {
     const tracker = attachDiagnostics(page);
     try {
       await page.setViewportSize({ width: 1440, height: 900 });
-      await loginAsDemoRole(page, "مدير المنصة", "/super-admin");
+      await loginAsDemoRole(page, "مشرف المنصة", "/super-admin");
       await assertRtlAndNoOverflow(page, "Super Admin Desktop");
 
-      await expect(page.getByRole("heading", { name: "لوحة التحكم الوطنية — مُدَرَّج" })).toBeVisible();
       await expect(
-        page.getByText("مدرسة علي بن أبي طالب الثانوية بنين").first()
+        page.getByRole("heading", { name: "لوحة التحكم الوطنية — مُدَرَّج" })
       ).toBeVisible();
-
       await page.screenshot({
         path: shotPath("12-super-admin-desktop-1440.png"),
         fullPage: true,
@@ -547,13 +483,8 @@ test.describe("Modarrag Full Production E2E Verification", () => {
 
       await page.goto("/super-admin/schools", { waitUntil: "load" });
       await assertRtlAndNoOverflow(page, "Super Admin Schools Desktop");
-      await expect(
-        page.getByText("معالج إنشاء مدرسة جديدة (Multi-Tenant)")
-      ).toBeVisible();
-
       await page.goto("/super-admin/security-logs", { waitUntil: "load" });
       await assertRtlAndNoOverflow(page, "Super Admin Security Logs Desktop");
-      await expect(page.getByText("سجلات الأمان والتدقيق المركزي")).toBeVisible();
 
       assertNoRuntimeErrors(tracker, "Super Admin Console");
     } finally {

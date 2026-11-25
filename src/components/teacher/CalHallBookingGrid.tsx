@@ -468,18 +468,13 @@ export function CalHallBookingGrid({ schoolSlug, data }: CalHallBookingGridProps
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h1 className="text-xl font-bold text-[var(--text-primary)] sm:text-2xl">
-            مخطط حجز المدرجات الذكي
+            حجز قاعة وجدولة حصة جديدة
           </h1>
-          <p className="mt-0.5 text-xs sm:text-sm text-[var(--text-muted)]">
-            فحص لحظي لتعارضات القاعات والمعلمين مع فاصل انتقال إلزامي ١٥ دقيقة (حماية GiST)
+          <p className="mt-1 text-sm text-[var(--text-secondary)]">
+            فحص تلقائي لتعارضات القاعات والمواعيد لضمان راحة الطلاب وسهولة الانتقال بين الحصص
           </p>
         </div>
-        <div className="flex items-center gap-2">
-          <Badge variant="mono" dir="ltr">
-            Africa/Cairo
-          </Badge>
-          <Badge variant="warning">فاصل انتقالي ١٥د</Badge>
-        </div>
+        <Badge variant="primary" size="md">بتوقيت القاهرة</Badge>
       </div>
 
       {/* Cal.com-Inspired 3-Column Split Frame */}
@@ -490,12 +485,12 @@ export function CalHallBookingGrid({ schoolSlug, data }: CalHallBookingGridProps
         {/* COLUMN 1: Subject, Hall Selector, Duration & Weekly Toggle */}
         <div className="flex flex-col gap-4 p-4 sm:p-5 lg:col-span-4">
           <div className="flex items-center justify-between">
-            <span className="text-xs font-semibold text-[var(--text-muted)]">
+            <span className="text-sm font-bold text-[var(--text-primary)]">
               ١ · بيانات الحصة والمدرج
             </span>
-            <Badge variant="mono" dir="ltr">
-              {data.teacherCode}
-            </Badge>
+            <span className="text-xs font-medium text-[var(--text-muted)]">
+              {data.specialtyAr}
+            </span>
           </div>
 
           <SelectInput

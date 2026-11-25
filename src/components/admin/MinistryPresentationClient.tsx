@@ -6,12 +6,9 @@ import {
   Building2,
   CheckCircle2,
   Download,
-  Lock,
   Maximize2,
   Minimize2,
   Printer,
-  ShieldCheck,
-  Users,
 } from "lucide-react";
 import type { SchoolAdminDashboardData } from "@/application/academic/actions";
 import type { HallOccupancyData } from "@/application/halls/actions";
@@ -118,23 +115,20 @@ export function MinistryPresentationClient({
       `}</style>
 
       {/* Executive Presentation Header Bar */}
-      <Card className="p-4 sm:p-6">
+      <Card className="p-5 sm:p-6">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
           <div className="flex items-start gap-4 min-w-0">
             <ModarragLogo size="lg" showWordmark showSubtitle />
             <div className="hidden h-10 w-px bg-[var(--border-hairline)] sm:block" />
             <div className="min-w-0">
-              <div className="flex flex-wrap items-center gap-2">
-                <Badge variant="primary">ملف العرض الرسمي — وزارة التربية والتعليم</Badge>
-                <Badge variant="mono" dir="ltr">
-                  {dashboard.school.slug}
-                </Badge>
-              </div>
-              <h1 className="mt-1.5 text-lg font-bold text-[var(--text-primary)] sm:text-2xl">
+              <Badge variant="primary" size="md">
+                عرض المتابعة الرسمي — وزارة التربية والتعليم
+              </Badge>
+              <h1 className="mt-2 text-xl font-bold text-[var(--text-primary)] sm:text-2xl">
                 {dashboard.school.nameAr}
               </h1>
-              <p className="mt-0.5 text-xs text-[var(--text-muted)] tabular-nums">
-                تحديث المؤشرات: {formatCairoDate(nowIso)} · {formatCairoTime(nowIso)} (بتوقيت القاهرة)
+              <p className="mt-1 text-sm text-[var(--text-muted)] tabular-nums">
+                تحديث البيانات: {formatCairoDate(nowIso)} · {formatCairoTime(nowIso)} (بتوقيت القاهرة)
               </p>
             </div>
           </div>
@@ -147,29 +141,26 @@ export function MinistryPresentationClient({
               className={buttonVariants({
                 variant: "outline",
                 size: "md",
-                className: "min-h-[44px]",
               })}
             >
               <Download className="h-4 w-4" />
-              <span>تصدير تقرير الوزارة CSV</span>
+              <span>تصدير كشف الأسماء CSV</span>
             </a>
 
             <Button
               type="button"
               variant="outline"
               size="md"
-              className="min-h-[44px]"
               onClick={() => window.print()}
               leftIcon={<Printer className="h-4 w-4" />}
             >
-              طباعة / تصدير PDF
+              طباعة / PDF
             </Button>
 
             <Button
               type="button"
-              variant="primary"
+              variant="emerald"
               size="md"
-              className="min-h-[44px]"
               onClick={togglePresentationFullscreen}
               leftIcon={
                 isFullscreenMode ? (
@@ -185,55 +176,50 @@ export function MinistryPresentationClient({
         </div>
       </Card>
 
-      {/* Safety-over-Commercial-Centers Comparison Strip */}
+      {/* Safety + Simplicity Pillars */}
       <section className="grid grid-cols-1 gap-4 lg:grid-cols-3">
         <Card className="border-emerald-300/80 p-5 dark:border-emerald-500/35">
-          <div className="flex items-center justify-between">
-            <Badge variant="success" dot>
-              أمان السعة والانضباط
-            </Badge>
-            <Users className="h-5 w-5 text-emerald-600 dark:text-emerald-400" />
-          </div>
-          <h2 className="mt-3 text-base sm:text-lg font-bold text-[var(--text-primary)] leading-snug">
-            سعة مضبوطة بنسبة ١٠٠٪ مقابل تكدس ٣٠٠-٤٠٠ طالب
+          <Badge variant="success" dot size="md">
+            أمان السعة والانضباط
+          </Badge>
+          <h2 className="mt-3 text-lg font-bold text-[var(--text-primary)] leading-snug">
+            سعة مضبوطة بنسبة 100% داخل قاعات المدرسة
           </h2>
-          <p className="mt-2 text-xs text-[var(--text-secondary)] leading-relaxed">
-            على عكس المراكز التجارية المفتوحة، تقيد المنصة كل حصة بالسعة الهندسية للمدرج مع ترقية آلية لقائمة الانتظار وفواصل انتقال إلزامية ١٥ دقيقة.
+          <p className="mt-2 text-sm text-[var(--text-secondary)] leading-relaxed">
+            على عكس المراكز الخاصة المزدحمة، تحدد المنصة كل حصة بالسعة الآمنة للمدرج مع ترقية تلقائية لقائمة الانتظار.
           </p>
         </Card>
 
         <Card className="border-blue-300/80 p-5 dark:border-blue-500/35">
-          <div className="flex items-center justify-between">
-            <Badge variant="primary">الأمان الرقمي للبوابة</Badge>
-            <Lock className="h-5 w-5 text-[#1E3A8A] dark:text-blue-400" />
-          </div>
-          <h2 className="mt-3 text-base sm:text-lg font-bold text-[var(--text-primary)] leading-snug">
-            تذاكر HMAC-SHA256 مشفرة
+          <Badge variant="primary" size="md">
+            تحضير بالاسم في ثانية
+          </Badge>
+          <h2 className="mt-3 text-lg font-bold text-[var(--text-primary)] leading-snug">
+            بساطة تامة بدون تذاكر أو تعقيد
           </h2>
-          <p className="mt-2 text-xs text-[var(--text-secondary)] leading-relaxed">
-            كل مقعد محجوز يصدر برمز تحقق موقّع رقمياً للاستخدام الفردي عند البوابة المدرسية، مما يمنع التكرار أو دخول غير المسجلين بالمدرسة.
+          <p className="mt-2 text-sm text-[var(--text-secondary)] leading-relaxed">
+            يحجز الطالب مقعده باسمه، وتظهر القائمة فوراً للمعلم مرتبة أبجدياً مع بحث سريع بالاسم وتسجيل حضور بضغطة واحدة.
           </p>
         </Card>
 
         <Card className="p-5">
-          <div className="flex items-center justify-between">
-            <Badge variant="info">انضباط الحضور الفعلي</Badge>
-            <ShieldCheck className="h-5 w-5 text-sky-600 dark:text-sky-400" />
-          </div>
+          <Badge variant="info" size="md">
+            نسبة الحضور الفعلي
+          </Badge>
           <div className="mt-3 flex items-baseline gap-3">
             <span
               className="text-3xl font-bold text-[var(--text-primary)] tabular-nums"
               dir="ltr"
             >
-              {formatArabicNumber(attendanceRatePct, { useEasternDigits: false })}%
+              {formatArabicNumber(attendanceRatePct)}%
             </span>
-            <span className="text-xs text-[var(--text-muted)] tabular-nums">
-              ({formatArabicNumber(checkedInCount)} حضور موثق من{" "}
+            <span className="text-sm text-[var(--text-muted)] tabular-nums">
+              ({formatArabicNumber(checkedInCount)} حضور من أصل{" "}
               {formatArabicNumber(totalBookingsCount)} حجز)
             </span>
           </div>
-          <p className="mt-2 text-xs text-[var(--text-secondary)] leading-relaxed">
-            فصل كامل لبيانات المدرسة عبر سياسات قواعد البيانات RLS وسجل تدقيق غير قابل للتعديل.
+          <p className="mt-2 text-sm text-[var(--text-secondary)] leading-relaxed">
+            بيانات كل مدرسة معزولة بالكامل بأعلى معايير الأمان وسجل متابعة معتمد لإدارة المدرسة والوزارة.
           </p>
         </Card>
       </section>
@@ -270,31 +256,28 @@ export function MinistryPresentationClient({
       <section className="flex flex-col gap-3">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <Building2 className="h-4 w-4 text-[#1E3A8A] dark:text-blue-400" />
-            <h2 className="text-base font-bold text-[var(--text-primary)]">
+            <Building2 className="h-5 w-5 text-[#0B63CE] dark:text-blue-400" />
+            <h2 className="text-lg font-bold text-[var(--text-primary)]">
               مؤشر إشغال القاعات والمدرجات المباشر
             </h2>
           </div>
-          <Badge variant="mono" dir="ltr">
-            {formatArabicNumber(occupancy.halls.length)} HALLS
+          <Badge variant="neutral" size="md">
+            {formatArabicNumber(occupancy.halls.length)} قاعات
           </Badge>
         </div>
 
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
           {occupancy.halls.map((hall) => (
             <Card key={hall.id} className="flex items-center justify-between gap-3 p-4">
-              <div className="min-w-0">
-                <Badge variant="mono" dir="ltr">
-                  {hall.code}
-                </Badge>
-                <p className="mt-1.5 truncate text-sm font-bold text-[var(--text-primary)]">
+              <div className="min-w-0 flex-1">
+                <p className="text-base font-bold text-[var(--text-primary)] leading-snug">
                   {hall.nameAr}
                 </p>
                 <p className="mt-1 text-xs text-[var(--text-secondary)] tabular-nums">
                   {formatArabicNumber(hall.currentBookedCount)} /{" "}
                   {formatArabicNumber(hall.maxCapacity)} مقعد
                 </p>
-                <p className="mt-0.5 truncate text-[11px] text-[var(--text-muted)]">
+                <p className="mt-0.5 text-xs text-[var(--text-muted)]">
                   {hall.currentSessionTitleAr ?? "متاحة للجدولة"}
                 </p>
               </div>
@@ -303,7 +286,7 @@ export function MinistryPresentationClient({
                 booked={hall.currentBookedCount}
                 capacity={hall.maxCapacity}
                 status={hall.status}
-                size={84}
+                size={68}
               />
             </Card>
           ))}
@@ -337,14 +320,9 @@ export function MinistryPresentationClient({
                 <div className="flex items-center justify-between gap-2">
                   <div className="flex items-center gap-2.5 min-w-0">
                     <TrackIcon trackCode={track.code} size="sm" />
-                    <div className="min-w-0">
-                      <h3 className="truncate text-sm font-bold text-[var(--text-primary)]">
+                      <h3 className="truncate text-base font-bold text-[var(--text-primary)]">
                         {track.nameAr}
                       </h3>
-                      <p className="font-mono text-[11px] text-[var(--text-muted)]" dir="ltr">
-                        {track.code}
-                      </p>
-                    </div>
                   </div>
                   <Badge variant="success">
                     {formatArabicNumber(linkedSubjects.length)} مواد مرتبطة

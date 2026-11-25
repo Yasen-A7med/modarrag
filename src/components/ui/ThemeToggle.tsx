@@ -34,7 +34,8 @@ function getServerSnapshot(): boolean {
 }
 
 /**
- * Light/dark theme switcher synced with `.dark` class and localStorage.
+ * Light/dark theme switcher using synchronized repaint suppression (`.theme-switching`)
+ * so buttons and cards transition simultaneously without lag artifacts.
  */
 export function ThemeToggle({ className }: ThemeToggleProps) {
   const isDark = React.useSyncExternalStore(
@@ -45,13 +46,20 @@ export function ThemeToggle({ className }: ThemeToggleProps) {
 
   const toggleTheme = React.useCallback(() => {
     const root = document.documentElement;
+    root.classList.add("theme-switching");
     const nextDark = !root.classList.contains("dark");
     root.classList.toggle("dark", nextDark);
     root.style.colorScheme = nextDark ? "dark" : "light";
+    // Force synchronized style recalc before re-enabling transitions.
+    void root.offsetHeight;
+    window.requestAnimationFrame(() => {
+      root.classList.remove("theme-switching");
+    });
+
     try {
       window.localStorage.setItem(STORAGE_KEY, nextDark ? "dark" : "light");
     } catch {
-      // Ignore storage access errors in restricted contexts.
+      // Ignore storage access errors in restricted browsing contexts.
     }
   }, []);
 
@@ -60,19 +68,19 @@ export function ThemeToggle({ className }: ThemeToggleProps) {
       type="button"
       onClick={toggleTheme}
       className={cn(
-        "inline-flex h-10 w-10 items-center justify-center rounded-lg border border-[var(--border-hairline)]",
+        "inline-flex h-11 w-11 items-center justify-center rounded-xl border border-[var(--border-hairline)]",
         "bg-[var(--bg-surface)] text-[var(--text-secondary)] transition-colors duration-150 cursor-pointer",
         "hover:border-[var(--border-strong)] hover:bg-[var(--bg-sunken)] hover:text-[var(--text-primary)]",
-        "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600/40",
+        "active:scale-[0.97] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0B63CE]/40",
         className
       )}
-      aria-label={isDark ? "تفعيل الوضع النهاري" : "تفعيل الوضع الليلي"}
-      title={isDark ? "الوضع النهاري" : "الوضع الليلي"}
+      aria-label={isDark ? "التبديل للوضع الفاتح" : "التبديل للوضع الداكن"}
+      title={isDark ? "الوضع الفاتح" : "الوضع الداكن"}
     >
       {isDark ? (
-        <Sun className="h-4 w-4 text-amber-400" strokeWidth={1.85} />
+        <Sun className="h-5 w-5 text-amber-400" strokeWidth={2} />
       ) : (
-        <Moon className="h-4 w-4" strokeWidth={1.85} />
+        <Moon className="h-5 w-5" strokeWidth={2} />
       )}
     </button>
   );

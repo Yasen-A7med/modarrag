@@ -2,24 +2,22 @@ import {
   BookOpen,
   Building2,
   Calendar,
+  ClipboardCheck,
   Home,
   LayoutDashboard,
   PlusSquare,
-  QrCode,
   Shield,
-  Ticket,
   Users,
 } from "lucide-react";
 
 export type SchoolShellNavIcon =
   | "calendar"
-  | "ticket"
+  | "check"
   | "layout"
   | "plus"
   | "users"
   | "building"
   | "book"
-  | "scan"
   | "shield"
   | "home";
 
@@ -33,29 +31,27 @@ export interface SchoolShellNavItem {
 
 export function renderSchoolNavIcon(
   icon: SchoolShellNavIcon,
-  className = "h-4 w-4"
+  className = "h-5 w-5"
 ) {
   switch (icon) {
     case "calendar":
-      return <Calendar className={className} strokeWidth={1.85} />;
-    case "ticket":
-      return <Ticket className={className} strokeWidth={1.85} />;
+      return <Calendar className={className} strokeWidth={2} />;
+    case "check":
+      return <ClipboardCheck className={className} strokeWidth={2} />;
     case "layout":
-      return <LayoutDashboard className={className} strokeWidth={1.85} />;
+      return <LayoutDashboard className={className} strokeWidth={2} />;
     case "plus":
-      return <PlusSquare className={className} strokeWidth={1.85} />;
+      return <PlusSquare className={className} strokeWidth={2} />;
     case "users":
-      return <Users className={className} strokeWidth={1.85} />;
+      return <Users className={className} strokeWidth={2} />;
     case "building":
-      return <Building2 className={className} strokeWidth={1.85} />;
+      return <Building2 className={className} strokeWidth={2} />;
     case "book":
-      return <BookOpen className={className} strokeWidth={1.85} />;
-    case "scan":
-      return <QrCode className={className} strokeWidth={1.85} />;
+      return <BookOpen className={className} strokeWidth={2} />;
     case "shield":
-      return <Shield className={className} strokeWidth={1.85} />;
+      return <Shield className={className} strokeWidth={2} />;
     case "home":
     default:
-      return <Home className={className} strokeWidth={1.85} />;
+      return <Home className={className} strokeWidth={2} />;
   }
 }

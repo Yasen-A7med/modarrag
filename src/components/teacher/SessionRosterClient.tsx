@@ -6,22 +6,27 @@ import { useRouter } from "next/navigation";
 import {
   ArrowRight,
   Calendar,
-  CheckCircle2,
+  Check,
   Clock,
-  QrCode,
+  MapPin,
+  Phone,
   RefreshCw,
+  RotateCcw,
   Search,
+  UserCheck,
   Users,
+  X,
 } from "lucide-react";
-import type { SessionRosterEntry } from "@/application/sessions/actions";
+import {
+  markStudentAttendanceAction,
+  type AttendanceStudentEntry,
+  type SessionAttendanceData,
+} from "@/application/attendance/actions";
 import { Badge } from "@/components/ui/Badge";
 import { Button, buttonVariants } from "@/components/ui/Button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/Card";
-import { Input } from "@/components/ui/Input";
-import type { BookingStatus } from "@/infrastructure/supabase/database.types";
-import { BOOKING_STATUS_TONES, type BadgeTone } from "@/lib/design-tokens";
+import { Card, CardContent } from "@/components/ui/Card";
+import { useToast } from "@/components/ui/Toast";
 import {
-  BOOKING_STATUS_LABELS,
   formatArabicNumber,
   formatCairoDate,
   formatCairoTime,
@@ -29,332 +34,441 @@ import {
 } from "@/lib/formatters";
 import { cn } from "@/lib/utils";
 
-function resolveBookingBadge(status: string): {
-  readonly label: string;
-  readonly tone: BadgeTone;
-} {
-  if (status in BOOKING_STATUS_LABELS) {
-    const typed = status as BookingStatus;
-    return {
-      label: BOOKING_STATUS_LABELS[typed].ar,
-      tone: BOOKING_STATUS_TONES[typed],
-    };
-  }
-  return { label: status, tone: "neutral" };
-}
-
-export interface RosterSessionSummary {
-  readonly id: string;
-  readonly titleAr: string;
-  readonly startsAt: string;
-  readonly endsAt: string;
-  readonly maxCapacity: number;
-  readonly bookedSeatsCount: number;
-  readonly hallCode: string;
-  readonly subjectCode: string;
-}
-
 export interface SessionRosterClientProps {
   readonly schoolSlug: string;
-  readonly session: RosterSessionSummary | null;
-  readonly sessionId: string;
-  readonly roster: readonly SessionRosterEntry[];
+  readonly initialData: SessionAttendanceData;
 }
 
-type RosterFilter = "all" | "confirmed" | "checked_in" | "waitlisted" | "no_show";
+type RosterFilter = "all" | "pending" | "present";
+
+/** Normalizes Arabic text so search matches reliably regardless of hamza, taa marbuta, or diacritics. */
+function normalizeArabicSearch(input: string): string {
+  return input
+    .trim()
+    .toLowerCase()
+    .replace(/[\u064B-\u065F\u0670]/g, "")
+    .replace(/[أإآ]/g, "ا")
+    .replace(/ى/g, "ي")
+    .replace(/ة/g, "ه");
+}
 
 /**
- * Live student roster table for a teacher session with search by student code,
- * attendance status badges, seat numbers, check-in timestamps, and gate scanner link.
+ * Simple, elderly-friendly Teacher Name Attendance Checklist:
+ * search student by name, filter All / Not Yet Present / Present,
+ * and mark/undo attendance in one generous tap with optimistic UI feedback.
  */
 export function SessionRosterClient({
   schoolSlug,
-  session,
-  sessionId,
-  roster,
+  initialData,
 }: SessionRosterClientProps) {
   const router = useRouter();
+  const { toast } = useToast();
+
+  const [overrides, setOverrides] = React.useState<
+    Readonly<
+      Record<string, Pick<AttendanceStudentEntry, "status" | "checkedInAt">>
+    >
+  >({});
   const [query, setQuery] = React.useState("");
-  const [statusFilter, setStatusFilter] = React.useState<RosterFilter>("all");
+  const [filter, setFilter] = React.useState<RosterFilter>("all");
+  const [pendingBookingId, setPendingBookingId] = React.useState<string | null>(null);
   const [refreshing, setRefreshing] = React.useState(false);
 
-  const counts = React.useMemo(() => {
-    let confirmed = 0;
-    let checkedIn = 0;
-    let waitlisted = 0;
-    let noShow = 0;
-    for (const row of roster) {
-      if (row.status === "confirmed") confirmed++;
-      else if (row.status === "checked_in") checkedIn++;
-      else if (row.status === "waitlisted") waitlisted++;
-      else if (row.status === "no_show") noShow++;
-    }
-    return { confirmed, checkedIn, waitlisted, noShow };
-  }, [roster]);
+  const students = React.useMemo(
+    () =>
+      initialData.students.map((entry) => {
+        const patch = overrides[entry.bookingId];
+        return patch ? { ...entry, ...patch } : entry;
+      }),
+    [initialData.students, overrides]
+  );
 
-  const filteredRoster = React.useMemo(() => {
-    const normalized = query.trim().toLowerCase();
-    return roster.filter((entry) => {
-      if (statusFilter !== "all" && entry.status !== statusFilter) {
+  const { session } = initialData;
+
+  const registeredStudents = React.useMemo(
+    () => students.filter((s) => s.status !== "waitlisted"),
+    [students]
+  );
+
+  const presentCount = React.useMemo(
+    () => registeredStudents.filter((s) => s.status === "checked_in").length,
+    [registeredStudents]
+  );
+
+  const notYetPresentCount = React.useMemo(
+    () =>
+      registeredStudents.filter(
+        (s) => s.status === "confirmed" || s.status === "no_show"
+      ).length,
+    [registeredStudents]
+  );
+
+  const presentPct =
+    registeredStudents.length > 0
+      ? Math.round((presentCount / registeredStudents.length) * 100)
+      : 0;
+
+  const normalizedQuery = normalizeArabicSearch(query);
+
+  const visibleStudents = React.useMemo(() => {
+    return students.filter((entry) => {
+      if (filter === "present" && entry.status !== "checked_in") {
         return false;
       }
-      if (!normalized) return true;
-      return (
-        entry.studentLabel.toLowerCase().includes(normalized) ||
-        (entry.seatNumber?.toLowerCase().includes(normalized) ?? false)
+      if (
+        filter === "pending" &&
+        entry.status !== "confirmed" &&
+        entry.status !== "no_show"
+      ) {
+        return false;
+      }
+      if (!normalizedQuery) {
+        return true;
+      }
+      const haystack = normalizeArabicSearch(
+        `${entry.fullName} ${entry.phone ?? ""} ${entry.seatNumber ?? ""}`
       );
+      return haystack.includes(normalizedQuery);
     });
-  }, [query, roster, statusFilter]);
+  }, [filter, normalizedQuery, students]);
+
+  const handleToggleAttendance = async (
+    entry: AttendanceStudentEntry,
+    markPresent: boolean
+  ) => {
+    if (pendingBookingId) return;
+
+    const prevOverrides = overrides;
+    const optimisticTime = markPresent ? new Date().toISOString() : null;
+
+    setPendingBookingId(entry.bookingId);
+    setOverrides((prev) => ({
+      ...prev,
+      [entry.bookingId]: {
+        status: markPresent ? "checked_in" : "confirmed",
+        checkedInAt: optimisticTime,
+      },
+    }));
+
+    try {
+      const result = await markStudentAttendanceAction({
+        schoolSlug,
+        sessionId: session.id,
+        bookingId: entry.bookingId,
+        present: markPresent,
+      });
+
+      if (!result.ok) {
+        setOverrides(prevOverrides);
+        toast({
+          title: "تعذر تحديث الحضور",
+          description: result.error.message,
+          variant: "error",
+        });
+        return;
+      }
+
+      setOverrides((prev) => ({
+        ...prev,
+        [entry.bookingId]: {
+          status: result.data.status,
+          checkedInAt: result.data.checkedInAt,
+        },
+      }));
+
+      toast({
+        title: markPresent
+          ? `تم تحضير: ${entry.fullName}`
+          : `تم التراجع عن تحضير: ${entry.fullName}`,
+        variant: markPresent ? "success" : "info",
+      });
+      router.refresh();
+    } catch {
+      setOverrides(prevOverrides);
+      toast({
+        title: "خطأ في الاتصال",
+        description: "يرجى المحاولة مرة أخرى.",
+        variant: "error",
+      });
+    } finally {
+      setPendingBookingId(null);
+    }
+  };
 
   const handleRefresh = () => {
     setRefreshing(true);
     router.refresh();
-    window.setTimeout(() => setRefreshing(false), 450);
+    window.setTimeout(() => setRefreshing(false), 500);
   };
 
   return (
     <div className="flex flex-col gap-5">
-      {/* Header Summary Card */}
+      {/* Top Navigation Back + Refresh */}
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <Link
+          href={`/s/${schoolSlug}/teacher`}
+          className={buttonVariants({ variant: "outline", size: "md" })}
+        >
+          <ArrowRight className="h-4 w-4" />
+          <span>العودة لحصصي</span>
+        </Link>
+
+        <Button
+          variant="outline"
+          size="md"
+          onClick={handleRefresh}
+          leftIcon={
+            <RefreshCw className={cn("h-4 w-4", refreshing && "animate-spin")} />
+          }
+        >
+          تحديث الأسماء
+        </Button>
+      </div>
+
+      {/* Clear Session Header & Prominent Attendance Counter */}
       <Card>
-        <div className="flex flex-col gap-4 p-4 sm:flex-row sm:items-center sm:justify-between sm:p-5">
-          <div className="min-w-0">
-            <div className="flex flex-wrap items-center gap-2">
-              <Link
-                href={`/s/${schoolSlug}/teacher`}
-                className="inline-flex items-center gap-1 text-xs font-medium text-[var(--text-muted)] hover:text-[var(--text-primary)]"
-              >
-                <ArrowRight className="h-3.5 w-3.5" />
-                <span>العودة للجدول</span>
-              </Link>
-              {session && (
-                <>
-                  <Badge variant="mono" dir="ltr">
-                    {session.hallCode}
-                  </Badge>
-                  <Badge variant="mono" dir="ltr">
-                    {session.subjectCode}
-                  </Badge>
-                </>
+        <div className="flex flex-col gap-5 p-5 sm:p-6">
+          <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+            <div>
+              {session.subjectNameAr && (
+                <Badge variant="primary" size="md" className="mb-2">
+                  {session.subjectNameAr}
+                </Badge>
               )}
-            </div>
-
-            <h1 className="mt-2 text-lg font-bold text-[var(--text-primary)] sm:text-xl">
-              {session?.titleAr ?? "كشف حضور الحصة"}
-            </h1>
-
-            {session ? (
-              <div className="mt-1.5 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-[var(--text-secondary)]">
-                <span className="inline-flex items-center gap-1.5">
-                  <Calendar className="h-3.5 w-3.5 text-[var(--text-muted)]" />
-                  <span>{formatCairoDate(session.startsAt, { includeWeekday: true })}</span>
-                </span>
-                <span className="inline-flex items-center gap-1.5 tabular-nums">
-                  <Clock className="h-3.5 w-3.5 text-[var(--text-muted)]" />
-                  <span>{formatCairoTimeRange(session.startsAt, session.endsAt)}</span>
-                </span>
-                <span className="inline-flex items-center gap-1.5 tabular-nums">
-                  <Users className="h-3.5 w-3.5 text-[var(--text-muted)]" />
-                  <span>
-                    {formatArabicNumber(session.bookedSeatsCount)} /{" "}
-                    {formatArabicNumber(session.maxCapacity)} مقعد
+              <h1 className="text-2xl font-bold text-[var(--text-primary)]">
+                كشف الحضور: {session.titleAr}
+              </h1>
+              <div className="mt-2 flex flex-wrap items-center gap-x-5 gap-y-1.5 text-base text-[var(--text-secondary)]">
+                {session.hallNameAr && (
+                  <span className="inline-flex items-center gap-1.5 font-semibold text-[var(--text-primary)]">
+                    <MapPin className="h-4 w-4 text-[var(--text-muted)]" />
+                    {session.hallNameAr}
                   </span>
+                )}
+                <span className="inline-flex items-center gap-1.5">
+                  <Calendar className="h-4 w-4 text-[var(--text-muted)]" />
+                  {formatCairoDate(session.startsAt, { includeWeekday: true })}
+                </span>
+                <span className="inline-flex items-center gap-1.5 tabular-nums">
+                  <Clock className="h-4 w-4 text-[var(--text-muted)]" />
+                  {formatCairoTimeRange(session.startsAt, session.endsAt)}
                 </span>
               </div>
-            ) : (
-              <p className="mt-1 font-mono text-xs text-[var(--text-muted)]" dir="ltr">
-                Session: {sessionId}
+            </div>
+
+            <div className="rounded-2xl border-2 border-[#16A34A]/35 bg-emerald-50/75 px-5 py-3.5 text-center dark:border-emerald-500/40 dark:bg-emerald-500/10">
+              <p className="text-sm font-semibold text-emerald-800 dark:text-emerald-300">
+                إجمالي الحضور الآن
               </p>
-            )}
+              <p className="mt-1 text-2xl font-bold text-emerald-900 dark:text-emerald-100 tabular-nums">
+                حضر {formatArabicNumber(presentCount)} من{" "}
+                {formatArabicNumber(registeredStudents.length)} طالب
+              </p>
+            </div>
           </div>
 
-          <div className="flex flex-wrap items-center gap-2">
-            <Button
-              variant="outline"
-              size="md"
-              className="min-h-[44px]"
-              onClick={handleRefresh}
-              leftIcon={
-                <RefreshCw className={cn("h-4 w-4", refreshing && "animate-spin")} />
-              }
-            >
-              تحديث الكشف
-            </Button>
-            <Link
-              href={`/s/${schoolSlug}/scanner`}
-              className={buttonVariants({
-                variant: "primary",
-                size: "md",
-                className: "min-h-[44px]",
-              })}
-            >
-              <QrCode className="h-4 w-4" />
-              <span>فتح ماسح البوابة</span>
-            </Link>
+          <div className="h-2.5 w-full overflow-hidden rounded-full bg-[var(--bg-sunken)]">
+            <div
+              className="h-full rounded-full bg-[#16A34A]"
+              style={{ width: `${presentPct}%` }}
+            />
           </div>
         </div>
       </Card>
 
-      {/* Attendance Breakdown Pills */}
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-        <Card className="p-3.5">
-          <span className="text-xs text-[var(--text-muted)]">إجمالي الكشف</span>
-          <p className="mt-1 text-xl font-bold text-[var(--text-primary)] tabular-nums">
-            {formatArabicNumber(roster.length)}
-          </p>
-        </Card>
-        <Card className="p-3.5">
-          <span className="text-xs text-emerald-700 dark:text-emerald-400">تم الحضور</span>
-          <p className="mt-1 text-xl font-bold text-[var(--text-primary)] tabular-nums">
-            {formatArabicNumber(counts.checkedIn)}
-          </p>
-        </Card>
-        <Card className="p-3.5">
-          <span className="text-xs text-blue-700 dark:text-blue-400">مؤكد (بانتظار البوابة)</span>
-          <p className="mt-1 text-xl font-bold text-[var(--text-primary)] tabular-nums">
-            {formatArabicNumber(counts.confirmed)}
-          </p>
-        </Card>
-        <Card className="p-3.5">
-          <span className="text-xs text-amber-700 dark:text-amber-400">قائمة الانتظار</span>
-          <p className="mt-1 text-xl font-bold text-[var(--text-primary)] tabular-nums">
-            {formatArabicNumber(counts.waitlisted)}
-          </p>
-        </Card>
-      </div>
-
-      {/* Filter & Search Toolbar + Roster Table */}
+      {/* Semantic Name Search (<search><form>) + 3 Clear Filter Pills */}
       <Card>
-        <CardHeader className="border-b border-[var(--border-hairline)] pb-3">
-          <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-            <CardTitle className="text-base">قائمة الطلاب المسجلين</CardTitle>
-
-            <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-              <Input
+        <div className="flex flex-col gap-4 p-4 sm:p-5">
+          <search>
+            <form
+              onSubmit={(e) => e.preventDefault()}
+              className="relative flex items-center"
+            >
+              <label htmlFor="student-name-search" className="sr-only">
+                ابحث باسم الطالب
+              </label>
+              <Search className="pointer-events-none absolute start-4 h-5 w-5 text-[var(--text-muted)]" />
+              <input
+                id="student-name-search"
+                type="search"
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
-                placeholder="بحث بكود الطالب أو رقم المقعد..."
-                startAdornment={<Search className="h-4 w-4" />}
-                containerClassName="sm:w-64"
+                placeholder="اكتب اسم الطالب للبحث السريع..."
+                className="h-[54px] w-full rounded-xl border border-[var(--border-hairline)] bg-[var(--bg-surface)] ps-12 pe-12 text-base font-medium text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:border-[#0B63CE] focus:outline-none focus:ring-2 focus:ring-[#0B63CE]/25"
               />
-              <div className="flex flex-wrap gap-1.5">
-                {(
-                  [
-                    { key: "all", label: "الكل" },
-                    { key: "checked_in", label: "حاضر" },
-                    { key: "confirmed", label: "مؤكد" },
-                    { key: "waitlisted", label: "انتظار" },
-                  ] as const
-                ).map((tab) => (
-                  <button
-                    key={tab.key}
-                    type="button"
-                    onClick={() => setStatusFilter(tab.key)}
-                    className={cn(
-                      "min-h-[38px] rounded-md border px-3 text-xs font-medium cursor-pointer transition-colors",
-                      statusFilter === tab.key
-                        ? "border-[#1E3A8A] bg-[#1E3A8A] text-white dark:border-blue-500 dark:bg-blue-600"
-                        : "border-[var(--border-hairline)] bg-[var(--bg-sunken)] text-[var(--text-secondary)] hover:text-[var(--text-primary)]"
-                    )}
-                  >
-                    {tab.label}
-                  </button>
-                ))}
-              </div>
-            </div>
+              {query && (
+                <button
+                  type="button"
+                  onClick={() => setQuery("")}
+                  className="absolute end-1.5 inline-flex h-11 w-11 items-center justify-center rounded-xl text-[var(--text-muted)] hover:bg-[var(--bg-sunken)] hover:text-[var(--text-primary)] cursor-pointer"
+                  aria-label="مسح البحث"
+                >
+                  <X className="h-5 w-5" />
+                </button>
+              )}
+            </form>
+          </search>
+
+          <div
+            className="flex flex-wrap items-center gap-2"
+            role="group"
+            aria-label="تصفية قائمة الطلاب"
+          >
+            <button
+              type="button"
+              onClick={() => setFilter("all")}
+              className={cn(
+                "min-h-[46px] rounded-xl border px-4 text-sm font-bold transition-colors cursor-pointer",
+                filter === "all"
+                  ? "border-[#0B63CE] bg-[#0B63CE] text-white"
+                  : "border-[var(--border-hairline)] bg-[var(--bg-sunken)] text-[var(--text-secondary)]"
+              )}
+            >
+              الكل ({formatArabicNumber(students.length)})
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setFilter("pending")}
+              className={cn(
+                "min-h-[46px] rounded-xl border px-4 text-sm font-bold transition-colors cursor-pointer",
+                filter === "pending"
+                  ? "border-[#0B63CE] bg-[#0B63CE] text-white"
+                  : "border-[var(--border-hairline)] bg-[var(--bg-sunken)] text-[var(--text-secondary)]"
+              )}
+            >
+              لم يحضر ({formatArabicNumber(notYetPresentCount)})
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setFilter("present")}
+              className={cn(
+                "min-h-[46px] rounded-xl border px-4 text-sm font-bold transition-colors cursor-pointer",
+                filter === "present"
+                  ? "border-[#16A34A] bg-[#16A34A] text-white"
+                  : "border-[var(--border-hairline)] bg-[var(--bg-sunken)] text-[var(--text-secondary)]"
+              )}
+            >
+              حضر ✓ ({formatArabicNumber(presentCount)})
+            </button>
           </div>
-        </CardHeader>
-
-        <CardContent className="p-0">
-          {filteredRoster.length === 0 ? (
-            <div className="flex flex-col items-center justify-center gap-2 px-4 py-12 text-center">
-              <CheckCircle2 className="h-7 w-7 text-[var(--text-muted)]" />
-              <p className="text-sm font-semibold text-[var(--text-primary)]">
-                لا توجد سجلات مطابقة للبحث
-              </p>
-              <p className="text-xs text-[var(--text-muted)]">
-                تأكد من إزالة الفلتر أو البحث بكود طالب آخر.
-              </p>
-            </div>
-          ) : (
-            <>
-              {/* Mobile Card View (< md) — Zero horizontal overflow */}
-              <div className="divide-y divide-[var(--border-hairline)] md:hidden">
-                {filteredRoster.map((entry) => {
-                  const badge = resolveBookingBadge(entry.status);
-                  return (
-                    <div key={entry.bookingId} className="flex flex-col gap-2 p-4">
-                      <div className="flex items-center justify-between gap-2">
-                        <span className="text-sm font-bold text-[var(--text-primary)]">
-                          {entry.studentLabel}
-                        </span>
-                        <Badge variant={badge.tone} dot>
-                          {badge.label}
-                        </Badge>
-                      </div>
-                      <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-[var(--text-secondary)]">
-                        <span className="font-mono font-semibold" dir="ltr">
-                          المقعد: {entry.seatNumber ?? "قيد التخصيص"}
-                        </span>
-                        <span className="tabular-nums">
-                          {entry.checkedInAt
-                            ? `حضر: ${formatCairoTime(entry.checkedInAt)}`
-                            : `حجز: ${formatCairoTime(entry.bookedAt)}`}
-                        </span>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-
-              {/* Desktop Table View (>= md) */}
-              <div className="hidden overflow-x-auto md:block">
-                <table className="w-full border-collapse text-start text-sm">
-                  <thead>
-                    <tr className="border-b border-[var(--border-hairline)] bg-[var(--bg-sunken)] text-xs font-semibold text-[var(--text-muted)]">
-                      <th className="px-4 py-3 text-start">كود الطالب</th>
-                      <th className="px-4 py-3 text-start">رقم المقعد</th>
-                      <th className="px-4 py-3 text-start">حالة الحضور</th>
-                      <th className="px-4 py-3 text-start">توقيت الحجز</th>
-                      <th className="px-4 py-3 text-start">توقيت التحضير</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-[var(--border-hairline)]">
-                    {filteredRoster.map((entry) => {
-                      const badge = resolveBookingBadge(entry.status);
-                      return (
-                        <tr
-                          key={entry.bookingId}
-                          className="transition-colors hover:bg-[var(--bg-sunken)]/50"
-                        >
-                          <td className="px-4 py-3 font-semibold text-[var(--text-primary)]">
-                            {entry.studentLabel}
-                          </td>
-                          <td className="px-4 py-3 font-mono text-xs font-semibold text-[var(--text-primary)] tabular-nums">
-                            {entry.seatNumber ?? "—"}
-                          </td>
-                          <td className="px-4 py-3">
-                            <Badge variant={badge.tone} dot>
-                              {badge.label}
-                            </Badge>
-                          </td>
-                          <td className="px-4 py-3 text-xs text-[var(--text-secondary)] tabular-nums">
-                            {formatCairoDate(entry.bookedAt)} · {formatCairoTime(entry.bookedAt)}
-                          </td>
-                          <td className="px-4 py-3 text-xs text-[var(--text-secondary)] tabular-nums">
-                            {entry.checkedInAt
-                              ? formatCairoTime(entry.checkedInAt)
-                              : "لم يمسح بعد"}
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
-            </>
-          )}
-        </CardContent>
+        </div>
       </Card>
+
+      {/* Responsive Container-Friendly Student Attendance List */}
+      {visibleStudents.length === 0 ? (
+        <Card>
+          <CardContent className="flex flex-col items-center gap-3 py-12 text-center">
+            <Users className="h-10 w-10 text-[var(--text-muted)]" />
+            <p className="text-lg font-bold text-[var(--text-primary)]">
+              {students.length === 0
+                ? "لا يوجد طلاب مسجلون في هذه الحصة حتى الآن"
+                : "لا يوجد اسم مطابق للبحث"}
+            </p>
+            {query && (
+              <Button variant="outline" size="md" onClick={() => setQuery("")}>
+                عرض جميع الأسماء
+              </Button>
+            )}
+          </CardContent>
+        </Card>
+      ) : (
+        <div className="flex flex-col gap-3">
+          {visibleStudents.map((entry) => {
+            const isPresent = entry.status === "checked_in";
+            const isWaitlisted = entry.status === "waitlisted";
+            const isBusy = pendingBookingId === entry.bookingId;
+
+            return (
+              <div
+                key={entry.bookingId}
+                className={cn(
+                  "flex flex-col gap-4 rounded-2xl border p-4 sm:flex-row sm:items-center sm:justify-between sm:p-5 hairline-lift transition-colors",
+                  isPresent
+                    ? "border-emerald-300 bg-emerald-50/55 dark:border-emerald-500/40 dark:bg-emerald-500/10"
+                    : "border-[var(--border-hairline)] bg-[var(--bg-surface)]"
+                )}
+              >
+                <div className="flex items-start gap-3.5 min-w-0">
+                  <span
+                    className={cn(
+                      "inline-flex h-12 w-12 shrink-0 items-center justify-center rounded-xl",
+                      isPresent
+                        ? "bg-[#16A34A] text-white"
+                        : "bg-[var(--bg-sunken)] text-[var(--text-muted)]"
+                    )}
+                    aria-hidden="true"
+                  >
+                    <UserCheck className="h-6 w-6" />
+                  </span>
+
+                  <div className="min-w-0">
+                    <p className="text-lg font-bold text-[var(--text-primary)]">
+                      {entry.fullName}
+                    </p>
+
+                    <div className="mt-1 flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-[var(--text-secondary)]">
+                      {entry.phone && (
+                        <span className="inline-flex items-center gap-1 tabular-nums" dir="ltr">
+                          <Phone className="h-3.5 w-3.5 text-[var(--text-muted)]" />
+                          {entry.phone}
+                        </span>
+                      )}
+                      {entry.seatNumber && (
+                        <span className="font-medium">مقعد {entry.seatNumber}</span>
+                      )}
+                      {isPresent && entry.checkedInAt && (
+                        <span className="font-semibold text-[#16A34A] dark:text-emerald-400">
+                          حضر الساعة {formatCairoTime(entry.checkedInAt)}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Giant 1-Tap Action */}
+                <div className="shrink-0">
+                  {isWaitlisted ? (
+                    <Badge variant="warning" size="md">
+                      قائمة انتظار (رقم {formatArabicNumber(entry.waitlistPosition ?? 1)})
+                    </Badge>
+                  ) : isPresent ? (
+                    <div className="flex items-center justify-between gap-2.5 sm:justify-end">
+                      <span className="inline-flex min-h-[48px] items-center gap-1.5 rounded-xl bg-emerald-100 px-4 text-base font-bold text-emerald-900 dark:bg-emerald-500/20 dark:text-emerald-200">
+                        <Check className="h-5 w-5" />
+                        <span>حضر</span>
+                      </span>
+                      <Button
+                        variant="outline"
+                        size="md"
+                        loading={isBusy}
+                        disabled={pendingBookingId !== null}
+                        onClick={() => handleToggleAttendance(entry, false)}
+                        leftIcon={<RotateCcw className="h-4 w-4" />}
+                      >
+                        تراجع
+                      </Button>
+                    </div>
+                  ) : (
+                    <Button
+                      variant="emerald"
+                      size="lg"
+                      fullWidth
+                      loading={isBusy}
+                      disabled={pendingBookingId !== null}
+                      onClick={() => handleToggleAttendance(entry, true)}
+                      leftIcon={<Check className="h-5 w-5" />}
+                    >
+                      ✓ حضر
+                    </Button>
+                  )}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 }
