@@ -37,6 +37,7 @@ const publishLectureSchema = z.object({
   titleAr: z.string().trim().min(3, "عنوان المحاضرة يجب أن يكون ٣ أحرف على الأقل").max(160),
   descriptionAr: z.string().trim().max(1000).optional(),
   visibility: z.enum(["public", "attendees_only", "secret"]),
+  priceEgp: z.number().int().min(0).max(10000).default(0),
   storagePath: z.string().trim().max(400).nullable().optional(),
   externalVideoUrl: z.string().trim().max(500).nullable().optional(),
   fileSizeBytes: z.number().int().positive().max(MAX_LECTURE_UPLOAD_BYTES).nullable().optional(),
@@ -72,6 +73,7 @@ export interface TeacherLectureRecord {
   readonly titleAr: string;
   readonly descriptionAr: string | null;
   readonly visibility: LectureVisibility;
+  readonly priceEgp: number;
   readonly subjectId: string;
   readonly subjectNameAr: string;
   readonly sessionId: string | null;
@@ -107,6 +109,7 @@ export interface StudentLectureCardItem {
   readonly titleAr: string;
   readonly descriptionAr: string | null;
   readonly visibility: LectureVisibility;
+  readonly priceEgp: number;
   readonly subjectId: string;
   readonly subjectNameAr: string;
   readonly teacherCode: string;
@@ -280,6 +283,7 @@ export async function getTeacherLecturesData(
         title_ar,
         description_ar,
         visibility,
+        price_egp,
         subject_id,
         session_id,
         share_token,
@@ -324,6 +328,7 @@ export async function getTeacherLecturesData(
     title_ar: string;
     description_ar: string | null;
     visibility: LectureVisibility;
+    price_egp: number | null;
     subject_id: string;
     session_id: string | null;
     share_token: string;
@@ -349,6 +354,7 @@ export async function getTeacherLecturesData(
       titleAr: l.title_ar,
       descriptionAr: l.description_ar,
       visibility: l.visibility,
+      priceEgp: l.price_egp ?? 0,
       subjectId: l.subject_id,
       subjectNameAr: l.subjects?.name_ar ?? "مادة دراسية",
       sessionId: l.session_id,
@@ -444,7 +450,7 @@ export async function createLectureUploadIntentAction(
  * and configures 3-tier access control (public / attendees_only / secret with password).
  */
 export async function publishLectureAction(
-  rawInput: z.infer<typeof publishLectureSchema>
+  rawInput: z.input<typeof publishLectureSchema>
 ): Promise<ActionResult<{ readonly lectureId: string; readonly shareToken: string }>> {
   const parsed = publishLectureSchema.safeParse(rawInput);
   if (!parsed.success) {
@@ -515,6 +521,7 @@ export async function publishLectureAction(
       title_ar: input.titleAr,
       description_ar: input.descriptionAr?.trim() || null,
       visibility: input.visibility,
+      price_egp: input.priceEgp,
       file_size_bytes: input.fileSizeBytes ?? null,
       mime_type: input.mimeType ?? null,
       duration_minutes: input.durationMinutes ?? null,
@@ -731,6 +738,7 @@ export async function getSchoolLecturesCatalog(
         title_ar,
         description_ar,
         visibility,
+        price_egp,
         subject_id,
         session_id,
         teacher_id,
@@ -751,6 +759,7 @@ export async function getSchoolLecturesCatalog(
     title_ar: string;
     description_ar: string | null;
     visibility: LectureVisibility;
+    price_egp: number | null;
     subject_id: string;
     session_id: string | null;
     teacher_id: string;
@@ -809,6 +818,7 @@ export async function getSchoolLecturesCatalog(
       titleAr: l.title_ar,
       descriptionAr: l.description_ar,
       visibility: l.visibility,
+      priceEgp: l.price_egp ?? 0,
       subjectId: l.subject_id,
       subjectNameAr: l.subjects?.name_ar ?? "مادة دراسية",
       teacherCode: teacherCodeMap.get(l.teacher_id) ?? "معلم المادة",

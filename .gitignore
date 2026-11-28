@@ -31,3 +31,12 @@ pnpm-debug.log*
 next-env.d.ts
 .DS_Store
 Thumbs.db
+
+# Local private chat logs, design reference decks, and scratch/temp artifacts (strictly non-deployable)
+/public/Chat/
+/public/Examples/
+/public/images/Logo.jpeg
+/public/images/Logo Idea.jpeg
+/public/images/علي بن ابي طالب.jpeg
+/public/رُواق*
+/supabase/.temp/

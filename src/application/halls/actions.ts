@@ -53,6 +53,12 @@ const approveTeacherSchema = z.object({
   teacherId: z.string().uuid(),
 });
 
+const rejectTeacherSchema = z.object({
+  schoolSlug: z.string().min(1),
+  teacherId: z.string().uuid(),
+  reasonAr: z.string().trim().min(3, "يرجى كتابة سبب الرفض بوضوح.").max(240),
+});
+
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
@@ -146,6 +152,7 @@ export async function getHallOccupancyData(
     { id: string; title_ar: string; booked_seats_count: number }
   >();
   for (const s of activeSessions ?? []) {
+    if (!s.hall_id) continue;
     if (!sessionByHall.has(s.hall_id)) {
       sessionByHall.set(s.hall_id, {
         id: s.id,
@@ -424,6 +431,8 @@ export async function approveTeacherAction(
     .from("teacher_profiles")
     .update({
       is_approved: true,
+      approval_status: "approved",
+      rejection_reason_ar: null,
       approved_by: user.id,
       approved_at: new Date().toISOString(),
     })
@@ -448,4 +457,49 @@ export async function approveTeacherAction(
   }
 
   return ok({ approved: true });
+}
+
+export async function rejectTeacherAction(
+  input: z.infer<typeof rejectTeacherSchema>
+): Promise<ActionResult<{ rejected: true }>> {
+  const parsed = rejectTeacherSchema.safeParse(input);
+  if (!parsed.success) {
+    return err("VALIDATION_ERROR", parsed.error.issues[0]?.message ?? "بيانات الرفض غير مكتملة.");
+  }
+
+  const user = await getAuthenticatedUser();
+  if (!user) return err("UNAUTHORIZED", "Authentication required");
+
+  const supabase = await createSupabaseServerClient();
+  const schoolId = await resolveSchoolIdFromSlug(supabase, parsed.data.schoolSlug);
+  if (!schoolId) return err("NOT_FOUND", "School not found");
+
+  const adminResult = await requireSchoolAdmin(supabase, user.id, schoolId);
+  if (!adminResult.ok) return adminResult;
+
+  const { error } = await supabase
+    .from("teacher_profiles")
+    .update({
+      is_approved: false,
+      approval_status: "rejected",
+      rejection_reason_ar: parsed.data.reasonAr,
+    })
+    .eq("id", parsed.data.teacherId)
+    .eq("school_id", schoolId);
+
+  if (error) return err("INTERNAL_ERROR", error.message);
+
+  const adminClient = createSupabaseAdminClient();
+  if (adminClient) {
+    await adminClient.from("notifications").insert({
+      school_id: schoolId,
+      recipient_id: parsed.data.teacherId,
+      type: "compliance_notice",
+      title_ar: "تحديث بخصوص طلب الاعتماد",
+      body_ar: `لم يُعتمد الطلب حالياً: ${parsed.data.reasonAr}`,
+      metadata: { rejectedBy: user.id },
+    });
+  }
+
+  return ok({ rejected: true });
 }

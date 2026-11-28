@@ -1,0 +1,13 @@
+.git
+.next
+node_modules
+/public/Chat
+/public/Examples
+/public/images/Logo.jpeg
+/public/images/Logo Idea.jpeg
+/public/images/علي بن ابي طالب.jpeg
+/public/رُواق*
+/supabase/.temp
+/playwright-report
+/test-results
+/coverage

@@ -1,12 +1,12 @@
 import type { Metadata, Viewport } from "next";
-import { IBM_Plex_Mono, Readex_Pro } from "next/font/google";
+import { Cairo, IBM_Plex_Mono } from "next/font/google";
 import { MotionConfig } from "framer-motion";
 import { ToastProvider } from "@/components/ui/Toast";
 import "./globals.css";
 
-const readexPro = Readex_Pro({
+const cairoFont = Cairo({
   subsets: ["arabic", "latin"],
-  weight: ["400", "500", "600", "700"],
+  weight: ["400", "500", "600", "700", "800"],
   variable: "--font-arabic",
   display: "swap",
 });
@@ -20,24 +20,23 @@ const ibmPlexMono = IBM_Plex_Mono({
 
 export const metadata: Metadata = {
   title: {
-    default: "مُدَرَّج — احجز مقعدك في مدرج مدرستك بسهولة",
+    default: "مُدَرَّج — منصة تنظيم حصص المراجعة بالمدارس المصرية",
     template: "%s | مُدَرَّج",
   },
   description:
-    "منصة مدرسية بسيطة لتنظيم وحجز مدرجات المحاضرات بالاسم لطلاب البكالوريا المصرية — بدون تكدس أو تعقيد.",
-  applicationName: "مُدَرَّج",
+    "منصة رسمية لتنظيم حصص المراجعة المدرسية والأونلاين، حجز المقاعد بالاسم، إدارة القاعات والمطبعة، والمحاضرات المسجلة لكافة المراحل الدراسية ونظام البكالوريا.",
 };
 
 export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
   themeColor: [
-    { media: "(prefers-color-scheme: light)", color: "#F4F8FF" },
-    { media: "(prefers-color-scheme: dark)", color: "#0B0E14" },
+    { media: "(prefers-color-scheme: light)", color: "#F8FAFC" },
+    { media: "(prefers-color-scheme: dark)", color: "#090D16" },
   ],
 };
 
-const THEME_INIT_SCRIPT = `(function(){try{var k='modarrag-theme';var t=localStorage.getItem(k);var d=t==='dark'||(!t&&window.matchMedia('(prefers-color-scheme: dark)').matches);var r=document.documentElement;if(d){r.classList.add('dark');r.style.colorScheme='dark';}else{r.classList.remove('dark');r.style.colorScheme='light';}}catch(e){}})();`;
+const THEME_PREFLIGHT_SCRIPT = `(function(){try{var k='modarrag-theme';var s=localStorage.getItem(k);var d=s==='dark'||(!s&&window.matchMedia('(prefers-color-scheme: dark)').matches);var r=document.documentElement;if(d){r.classList.add('dark');r.style.colorScheme='dark';}else{r.classList.remove('dark');r.style.colorScheme='light';}}catch(e){}})();`;
 
 export default function RootLayout({
   children,
@@ -48,14 +47,13 @@ export default function RootLayout({
     <html
       lang="ar"
       dir="rtl"
+      className={`${cairoFont.variable} ${ibmPlexMono.variable}`}
       suppressHydrationWarning
-      className={`${readexPro.variable} ${ibmPlexMono.variable}`}
     >
       <head>
-        <meta name="color-scheme" content="light dark" />
-        <script dangerouslySetInnerHTML={{ __html: THEME_INIT_SCRIPT }} />
+        <script dangerouslySetInnerHTML={{ __html: THEME_PREFLIGHT_SCRIPT }} />
       </head>
-      <body className="min-h-dvh bg-[var(--bg-canvas)] text-[var(--text-primary)] antialiased">
+      <body className="min-h-dvh bg-[var(--bg-canvas)] font-sans text-[var(--text-primary)] antialiased">
         <MotionConfig reducedMotion="user">
           <ToastProvider>{children}</ToastProvider>
         </MotionConfig>

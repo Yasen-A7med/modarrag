@@ -1,6 +1,8 @@
 "use server";
 
 import { z } from "zod";
+import { EGYPT_K12_EXTRA_GRADES } from "@/domain/academic/k12";
+import { calculateSessionRevenueBreakdown } from "@/domain/finance/revenue";
 import { createSupabaseServerClient, getAuthenticatedUser } from "@/infrastructure/supabase/server";
 import { ok, err, type ActionResult } from "@/domain/common/result";
 
@@ -14,6 +16,7 @@ const createSchoolSchema = z.object({
   nameEn: z.string().trim().min(2).max(120),
   governorate: z.string().trim().min(1).max(80),
   directorate: z.string().trim().min(1).max(80),
+  tenantType: z.enum(["school", "center"]).default("school"),
   brandColorHex: z.string().regex(/^#[0-9A-Fa-f]{6}$/).default("#1E3A8A"),
   logoUrl: z
     .string()
@@ -26,6 +29,7 @@ const createSchoolSchema = z.object({
     .optional(),
   defaultBufferMinutes: z.number().int().min(0).max(60).default(15),
   withBaccalaureateTemplate: z.boolean().default(false),
+  withK12Template: z.boolean().default(false),
 });
 
 const getAuditLogsSchema = z.object({
@@ -67,6 +71,10 @@ export interface SuperAdminConsoleData {
     readonly nameAr: string;
     readonly nameEn: string;
     readonly governorate: string;
+    readonly tenantType: "school" | "center";
+    readonly teacherSharePct: number;
+    readonly platformFeePct: number;
+    readonly vatRatePct: number;
     readonly isActive: boolean;
     readonly createdAt: string;
   }[];
@@ -76,6 +84,14 @@ export interface SuperAdminConsoleData {
     readonly totalTeachers: number;
     readonly totalBookingsToday: number;
     readonly totalCheckinsToday: number;
+  };
+  readonly financials: {
+    readonly totalGrossRevenueEgp: number;
+    readonly totalPlatformEarningsEgp: number;
+    readonly totalVatCollectedEgp: number;
+    readonly totalPrintCommissionEgp: number;
+    readonly printOrdersCount: number;
+    readonly onlineSessionsCount: number;
   };
 }
 
@@ -91,41 +107,102 @@ export async function getSuperAdminConsoleData(): Promise<ActionResult<SuperAdmi
     return adminResult;
   }
 
-  const [schoolsResult, studentsCount, teachersCount, bookingsTodayCount, checkinsTodayCount] =
-    await Promise.all([
-      supabase
-        .from("schools")
-        .select("id, slug, name_ar, name_en, governorate, is_active, created_at")
-        .order("created_at", { ascending: false }),
-      supabase
-        .from("profiles")
-        .select("*", { count: "exact", head: true })
-        .eq("role", "student")
-        .eq("is_active", true),
-      supabase
-        .from("teacher_profiles")
-        .select("*", { count: "exact", head: true })
-        .eq("is_approved", true),
-      supabase
-        .from("bookings")
-        .select("*", { count: "exact", head: true })
-        .gte("booked_at", new Date().toISOString().slice(0, 10)),
-      supabase
-        .from("bookings")
-        .select("*", { count: "exact", head: true })
-        .eq("status", "checked_in")
-        .gte("checked_in_at", new Date().toISOString().slice(0, 10)),
-    ]);
+  const [
+    schoolsResult,
+    studentsCount,
+    teachersCount,
+    bookingsTodayCount,
+    checkinsTodayCount,
+    sessionsFinanceResult,
+    printOrdersFinanceResult,
+  ] = await Promise.all([
+    supabase
+      .from("schools")
+      .select("id, slug, name_ar, name_en, governorate, tenant_type, teacher_share_pct, platform_fee_pct, vat_rate_pct, is_active, created_at")
+      .order("created_at", { ascending: false }),
+    supabase
+      .from("profiles")
+      .select("*", { count: "exact", head: true })
+      .eq("role", "student")
+      .eq("is_active", true),
+    supabase
+      .from("teacher_profiles")
+      .select("*", { count: "exact", head: true })
+      .eq("is_approved", true),
+    supabase
+      .from("bookings")
+      .select("*", { count: "exact", head: true })
+      .gte("booked_at", new Date().toISOString().slice(0, 10)),
+    supabase
+      .from("bookings")
+      .select("*", { count: "exact", head: true })
+      .eq("status", "checked_in")
+      .gte("checked_in_at", new Date().toISOString().slice(0, 10)),
+    supabase
+      .from("sessions")
+      .select("school_id, price_egp, booked_seats_count, delivery_mode, status")
+      .neq("status", "cancelled"),
+    supabase
+      .from("print_orders")
+      .select("platform_commission_egp, status")
+      .neq("status", "cancelled"),
+  ]);
 
-  const schools = (schoolsResult.data ?? []).map((s) => ({
-    id: s.id,
-    slug: s.slug,
-    nameAr: s.name_ar,
-    nameEn: s.name_en,
-    governorate: s.governorate,
-    isActive: s.is_active,
-    createdAt: s.created_at,
-  }));
+  const schoolPolicyById = new Map<
+    string,
+    { teacherPct: number; platformPct: number; vatPct: number }
+  >();
+
+  const schools = (schoolsResult.data ?? []).map((s) => {
+    schoolPolicyById.set(s.id, {
+      teacherPct: s.teacher_share_pct ?? 70,
+      platformPct: s.platform_fee_pct ?? 30,
+      vatPct: s.vat_rate_pct ?? 14,
+    });
+    return {
+      id: s.id,
+      slug: s.slug,
+      nameAr: s.name_ar,
+      nameEn: s.name_en,
+      governorate: s.governorate,
+      tenantType: s.tenant_type ?? "school",
+      teacherSharePct: s.teacher_share_pct ?? 70,
+      platformFeePct: s.platform_fee_pct ?? 30,
+      vatRatePct: s.vat_rate_pct ?? 14,
+      isActive: s.is_active,
+      createdAt: s.created_at,
+    };
+  });
+
+  let totalGrossRevenueEgp = 0;
+  let totalPlatformEarningsEgp = 0;
+  let totalVatCollectedEgp = 0;
+  let onlineSessionsCount = 0;
+
+  for (const s of sessionsFinanceResult.data ?? []) {
+    if (s.delivery_mode === "online") onlineSessionsCount += 1;
+    if ((s.price_egp ?? 0) <= 0) continue;
+    const pol = schoolPolicyById.get(s.school_id) ?? {
+      teacherPct: 70,
+      platformPct: 30,
+      vatPct: 14,
+    };
+    const b = calculateSessionRevenueBreakdown({
+      priceEgp: s.price_egp,
+      seatCount: s.booked_seats_count ?? 0,
+      vatRatePct: pol.vatPct,
+      teacherSharePct: pol.teacherPct,
+      platformFeePct: pol.platformPct,
+    });
+    totalGrossRevenueEgp += b.grossStudentTotalEgp;
+    totalPlatformEarningsEgp += b.platformNetEgp;
+    totalVatCollectedEgp += b.vatCollectedEgp;
+  }
+
+  const totalPrintCommissionEgp = (printOrdersFinanceResult.data ?? []).reduce(
+    (acc, o) => acc + (o.platform_commission_egp ?? 0),
+    0
+  );
 
   return ok({
     schools,
@@ -135,6 +212,14 @@ export async function getSuperAdminConsoleData(): Promise<ActionResult<SuperAdmi
       totalTeachers: teachersCount.count ?? 0,
       totalBookingsToday: bookingsTodayCount.count ?? 0,
       totalCheckinsToday: checkinsTodayCount.count ?? 0,
+    },
+    financials: {
+      totalGrossRevenueEgp,
+      totalPlatformEarningsEgp,
+      totalVatCollectedEgp,
+      totalPrintCommissionEgp,
+      printOrdersCount: (printOrdersFinanceResult.data ?? []).length,
+      onlineSessionsCount,
     },
   });
 }
@@ -166,7 +251,7 @@ const COMMON_SUBJECTS = [
 ] as const;
 
 export async function createSchoolTenantAction(
-  input: z.infer<typeof createSchoolSchema>
+  input: z.input<typeof createSchoolSchema>
 ): Promise<ActionResult<{ schoolId: string; slug: string }>> {
   const parsed = createSchoolSchema.safeParse(input);
   if (!parsed.success) {
@@ -210,6 +295,7 @@ export async function createSchoolTenantAction(
       name_en: parsed.data.nameEn,
       governorate: parsed.data.governorate,
       directorate: parsed.data.directorate,
+      tenant_type: parsed.data.tenantType,
       brand_color_hex: parsed.data.brandColorHex,
       logo_url: parsed.data.logoUrl ?? null,
       default_buffer_minutes: parsed.data.defaultBufferMinutes,
@@ -225,7 +311,6 @@ export async function createSchoolTenantAction(
 
   // If Baccalaureate template requested, seed grade + tracks + common subjects
   if (parsed.data.withBaccalaureateTemplate) {
-    // Create grade
     const { data: gradeData } = await supabase
       .from("academic_grades")
       .insert({
@@ -233,7 +318,7 @@ export async function createSchoolTenantAction(
         code: BACCALAUREATE_GRADE.code,
         name_ar: BACCALAUREATE_GRADE.nameAr,
         name_en: BACCALAUREATE_GRADE.nameEn,
-        sort_order: BACCALAUREATE_GRADE.sortOrder,
+        sort_order: 11,
       })
       .select("id")
       .single();
@@ -241,7 +326,6 @@ export async function createSchoolTenantAction(
     if (gradeData) {
       const gradeId = gradeData.id;
 
-      // Create tracks
       for (const track of BACCALAUREATE_TRACKS) {
         await supabase.from("academic_tracks").insert({
           school_id: schoolId,
@@ -255,7 +339,6 @@ export async function createSchoolTenantAction(
         });
       }
 
-      // Create common subjects
       for (const subject of COMMON_SUBJECTS) {
         await supabase.from("subjects").insert({
           school_id: schoolId,
@@ -266,6 +349,65 @@ export async function createSchoolTenantAction(
           subject_type: "common",
           color_hex: subject.colorHex,
         });
+      }
+    }
+  }
+
+  // If full Egyptian K-12 stage template requested, seed Primary 1..6, Prep 1..3, Sec 1, Sec 3
+  if (parsed.data.withK12Template) {
+    for (const stageGrade of EGYPT_K12_EXTRA_GRADES) {
+      const { data: gRow } = await supabase
+        .from("academic_grades")
+        .insert({
+          school_id: schoolId,
+          code: stageGrade.code,
+          name_ar: stageGrade.nameAr,
+          name_en: stageGrade.nameEn,
+          sort_order: stageGrade.sortOrder,
+        })
+        .select("id")
+        .single();
+
+      if (!gRow) continue;
+
+      const { data: tRow } = await supabase
+        .from("academic_tracks")
+        .insert({
+          school_id: schoolId,
+          grade_id: gRow.id,
+          code: stageGrade.defaultTrackCode,
+          name_ar: stageGrade.defaultTrackNameAr,
+          name_en: stageGrade.defaultTrackCode,
+          color_hex: "#2563EB",
+          icon_key: "book-open",
+          sort_order: 1,
+        })
+        .select("id")
+        .single();
+
+      for (const subj of stageGrade.coreSubjects) {
+        const { data: sRow } = await supabase
+          .from("subjects")
+          .insert({
+            school_id: schoolId,
+            grade_id: gRow.id,
+            code: subj.code,
+            name_ar: subj.nameAr,
+            name_en: subj.code,
+            subject_type: "common",
+            color_hex: "#1E3A8A",
+          })
+          .select("id")
+          .single();
+
+        if (tRow && sRow) {
+          await supabase.from("track_subjects").insert({
+            school_id: schoolId,
+            track_id: tRow.id,
+            subject_id: sRow.id,
+            is_mandatory: true,
+          });
+        }
       }
     }
   }

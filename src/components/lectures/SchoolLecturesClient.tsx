@@ -10,6 +10,7 @@ import {
   PlayCircle,
   UserCheck,
   Video,
+  Wallet,
 } from "lucide-react";
 import {
   getLecturePlaybackAction,
@@ -35,10 +36,7 @@ import {
   DialogTitle,
 } from "@/components/ui/Dialog";
 import { useToast } from "@/components/ui/Toast";
-import {
-  formatArabicNumber,
-  formatCairoDate,
-} from "@/lib/formatters";
+import { formatArabicNumber, formatCairoDate } from "@/lib/formatters";
 import {
   formatFileSizeAr,
   LECTURE_VISIBILITY_META,
@@ -49,6 +47,10 @@ export interface SchoolLecturesClientProps {
   readonly data: SchoolLecturesCatalogData;
 }
 
+/**
+ * Slide 9 Blueprint: Recorded Lectures Library with Deep Navy (#0A1F44) header,
+ * subject pill filter, and responsive Bento video grid featuring live SVG artwork.
+ */
 export function SchoolLecturesClient({ data }: SchoolLecturesClientProps) {
   const { toast } = useToast();
   const [selectedSubjectId, setSelectedSubjectId] = React.useState<string>("all");
@@ -98,18 +100,21 @@ export function SchoolLecturesClient({ data }: SchoolLecturesClientProps) {
 
   return (
     <div className="flex flex-col gap-6">
-      {/* Header Banner */}
-      <MotionReveal className="ambient-mesh rounded-3xl border border-[#2563EB]/20 p-6 hairline-lift dark:border-cyan-500/25">
+      {/* Slide 9 Deep Navy Video Showcase Banner */}
+      <MotionReveal className="rounded-[2rem] bg-[#0A1F44] p-6 sm:p-8 text-white shadow-[0_22px_50px_-18px_rgba(10,31,68,0.45)]">
         <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div>
-            <p className="text-sm font-bold text-[#2563EB] dark:text-cyan-300">
+            <Badge
+              variant="mono"
+              className="border-cyan-400/35 bg-cyan-400/15 text-cyan-200"
+            >
               {data.schoolNameAr}
-            </p>
-            <h1 className="mt-1 text-2xl font-bold text-[#0A1F44] dark:text-[var(--text-primary)]">
+            </Badge>
+            <h1 className="mt-2.5 text-2xl font-extrabold text-white sm:text-3xl">
               مكتبة المحاضرات المسجلة
             </h1>
-            <p className="mt-1 text-base text-[var(--text-secondary)]">
-              تشمل المحاضرات العامة للجميع والمحاضرات المخصصة لمن حضر الحصة وسُجّل حضوره.
+            <p className="mt-1 text-sm text-slate-300">
+              محاضرات المراجعة العامة والحصص المخصصة لمن حضر بالمدرسة أو الأونلاين
             </p>
           </div>
 
@@ -118,22 +123,23 @@ export function SchoolLecturesClient({ data }: SchoolLecturesClientProps) {
             className={buttonVariants({
               variant: "outline",
               size: "md",
-              className: "bg-[var(--bg-surface)]/95 shrink-0",
+              className:
+                "border-white/25 bg-white/10 text-white hover:bg-white/20 shrink-0",
             })}
           >
-            جدول الحصص المباشرة
+            جدول الحصص
           </Link>
         </div>
 
-        <p className="mt-4 inline-flex items-center gap-2 rounded-xl border border-[var(--border-hairline)] bg-[var(--bg-surface)]/90 px-3.5 py-2 text-xs font-medium text-[var(--text-secondary)]">
-          <Lock className="h-3.5 w-3.5 text-amber-600 dark:text-amber-400" />
+        <div className="mt-4 inline-flex items-center gap-2 rounded-xl border border-white/12 bg-white/[0.06] px-3.5 py-2 text-xs font-medium text-cyan-200">
+          <Lock className="h-3.5 w-3.5 text-amber-300 shrink-0" />
           <span>
-            المحاضرات السرية مخفية ولا تظهر هنا — وتُفتح فقط من الرابط الخاص وكلمة المرور التي يرسلها المعلم.
+            المحاضرات السرية مخفية تماماً هنا وتُفتح بالرابط وكلمة المرور من المعلم
           </span>
-        </p>
+        </div>
       </MotionReveal>
 
-      {/* Subject Filter Bar */}
+      {/* Subject Pill Filter */}
       {filterOptions.length > 1 && (
         <AnimatedFilterTabs
           layoutId="lectures-subject-filter"
@@ -144,67 +150,90 @@ export function SchoolLecturesClient({ data }: SchoolLecturesClientProps) {
         />
       )}
 
-      {/* Lectures Grid */}
+      {/* Bento Video Cards Grid */}
       {visibleLectures.length === 0 ? (
         <Card className="rounded-3xl p-10 text-center">
           <Video className="mx-auto h-10 w-10 text-[#2563EB] dark:text-cyan-400" />
           <h2 className="mt-3 text-xl font-bold text-[var(--text-primary)]">
-            لا توجد محاضرات مسجلة متاحة حالياً
+            لا توجد محاضرات مسجلة حالياً
           </h2>
-          <p className="mt-1 text-base text-[var(--text-secondary)]">
-            عند قيام معلمي المدرسة برفع فيديوهات المراجعة ستظهر لك هنا مباشرة.
+          <p className="mt-1 text-sm text-[var(--text-secondary)]">
+            عند رفع المعلمين لمقاطع المراجعة ستظهر هنا مباشرة.
           </p>
         </Card>
       ) : (
         <MotionStaggerGrid className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
-          {visibleLectures.map((lecture) => {
+          {visibleLectures.map((lecture, idx) => {
             const meta = LECTURE_VISIBILITY_META[lecture.visibility];
             const isPublic = lecture.visibility === "public";
+            const isFeatured = idx === 0 && visibleLectures.length >= 3;
+
             return (
               <MotionStaggerCard
                 key={lecture.id}
                 className={cn(
-                  "hover-lift-card flex flex-col justify-between gap-4 rounded-3xl border border-[var(--border-hairline)] bg-[var(--bg-surface)] p-5 hairline-lift",
-                  isPublic
-                    ? "border-t-4 border-t-[#16A34A] dark:border-t-emerald-500"
-                    : "border-t-4 border-t-[#2563EB] dark:border-t-blue-500"
+                  "hover-lift-card group flex flex-col justify-between overflow-hidden rounded-3xl border border-[var(--border-hairline)] bg-[var(--bg-surface)] hairline-lift",
+                  isFeatured && "md:col-span-2 lg:col-span-2"
                 )}
               >
+                {/* Crisp Dark Geometric Video Thumbnail Header (100% live vector art) */}
                 <div>
-                  <div className="flex flex-wrap items-center justify-between gap-2">
-                    <Badge variant="neutral">{lecture.subjectNameAr}</Badge>
-                    <span
-                      className={cn(
-                        "inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-xs font-bold",
-                        meta.badgeClass
-                      )}
+                  <div className="relative flex h-40 items-center justify-center overflow-hidden bg-gradient-to-br from-[#0A1F44] via-[#132E5C] to-[#1E3A8A] p-5 text-white">
+                    <svg
+                      className="pointer-events-none absolute inset-0 h-full w-full opacity-20"
+                      viewBox="0 0 400 160"
+                      fill="none"
+                      aria-hidden="true"
                     >
-                      {isPublic ? (
-                        <Globe className="h-3.5 w-3.5" />
-                      ) : (
-                        <UserCheck className="h-3.5 w-3.5" />
-                      )}
-                      <span>{meta.shortLabelAr}</span>
-                    </span>
+                      <circle cx="340" cy="30" r="90" stroke="#22D3EE" strokeWidth="1.5" />
+                      <circle cx="60" cy="140" r="70" stroke="#2563EB" strokeWidth="1.5" />
+                    </svg>
+
+                    <div className="relative z-10 flex w-full items-start justify-between gap-2 self-start">
+                      <span className="rounded-lg bg-white/15 px-2.5 py-1 text-xs font-bold text-white backdrop-blur-xs">
+                        {lecture.subjectNameAr}
+                      </span>
+
+                      <span
+                        className={cn(
+                          "inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-xs font-bold backdrop-blur-xs",
+                          meta.badgeClass
+                        )}
+                      >
+                        {isPublic ? (
+                          <Globe className="h-3.5 w-3.5" />
+                        ) : (
+                          <UserCheck className="h-3.5 w-3.5" />
+                        )}
+                        <span>{meta.shortLabelAr}</span>
+                      </span>
+                    </div>
+
+                    <div className="absolute inset-0 flex items-center justify-center">
+                      <span className="inline-flex h-14 w-14 items-center justify-center rounded-full border border-cyan-300/40 bg-white/10 text-cyan-200 shadow-lg backdrop-blur-md transition-transform duration-200 group-hover:scale-110">
+                        {lecture.canWatch ? (
+                          <PlayCircle className="h-7 w-7" />
+                        ) : (
+                          <Lock className="h-6 w-6 text-amber-300" />
+                        )}
+                      </span>
+                    </div>
                   </div>
 
-                  <h3 className="mt-3 text-lg font-bold text-[var(--text-primary)]">
-                    {lecture.titleAr}
-                  </h3>
+                  <div className="p-5 pb-3">
+                    <h2 className="text-lg font-extrabold text-[var(--text-primary)]">
+                      {lecture.titleAr}
+                    </h2>
 
-                  {lecture.descriptionAr && (
-                    <p className="mt-1.5 line-clamp-2 text-sm text-[var(--text-secondary)]">
-                      {lecture.descriptionAr}
-                    </p>
-                  )}
-
-                  <div className="mt-3 flex flex-col gap-1 text-xs text-[var(--text-muted)]">
-                    <span>المعلم: {lecture.teacherCode}</span>
-                    {lecture.sessionTitleAr && (
-                      <span>الحصة المرتبطة: {lecture.sessionTitleAr}</span>
+                    {lecture.descriptionAr && (
+                      <p className="mt-1 line-clamp-2 text-sm text-[var(--text-secondary)]">
+                        {lecture.descriptionAr}
+                      </p>
                     )}
-                    <div className="flex flex-wrap gap-3 pt-1">
-                      <span className="inline-flex items-center gap-1">
+
+                    <div className="mt-3 flex flex-wrap items-center gap-3 text-xs text-[var(--text-muted)]">
+                      <span>{lecture.teacherCode}</span>
+                      <span className="inline-flex items-center gap-1 tabular-nums">
                         <Clock className="h-3.5 w-3.5" />
                         {lecture.durationMinutes
                           ? `${formatArabicNumber(lecture.durationMinutes)} دقيقة`
@@ -215,11 +244,17 @@ export function SchoolLecturesClient({ data }: SchoolLecturesClientProps) {
                           {formatFileSizeAr(lecture.fileSizeBytes)}
                         </span>
                       )}
+                      <span className="inline-flex items-center gap-1 font-bold text-emerald-700 dark:text-emerald-400">
+                        <Wallet className="h-3.5 w-3.5" />
+                        {lecture.priceEgp > 0
+                          ? `${formatArabicNumber(lecture.priceEgp)} ج.م`
+                          : "مجانية"}
+                      </span>
                     </div>
                   </div>
                 </div>
 
-                <div className="flex flex-col gap-2.5 border-t border-[var(--border-hairline)] pt-3">
+                <div className="flex flex-col gap-2.5 border-t border-[var(--border-hairline)] px-5 py-4">
                   <div
                     className={cn(
                       "flex items-center gap-2 rounded-xl px-3 py-2 text-xs font-semibold",
@@ -239,13 +274,13 @@ export function SchoolLecturesClient({ data }: SchoolLecturesClientProps) {
                   {lecture.canWatch ? (
                     <Button
                       variant={isPublic ? "emerald" : "primary"}
-                      size="lg"
+                      size="md"
                       fullWidth
                       loading={loadingId === lecture.id}
                       onClick={() => handleWatch(lecture)}
                       leftIcon={<PlayCircle className="h-5 w-5" />}
                     >
-                      شاهد المحاضرة الآن
+                      تشغيل المحاضرة
                     </Button>
                   ) : lecture.requiresLoginToCheck ? (
                     <Link
@@ -256,11 +291,11 @@ export function SchoolLecturesClient({ data }: SchoolLecturesClientProps) {
                         fullWidth: true,
                       })}
                     >
-                      سجّل دخولك للتحقق من الحضور
+                      سجّل للتحقق من الحضور
                     </Link>
                   ) : (
                     <Button variant="secondary" size="md" fullWidth disabled>
-                      مخصصة لمن حضر الحصة ✓
+                      مخصصة للحاضرين ✓
                     </Button>
                   )}
                 </div>
@@ -270,7 +305,7 @@ export function SchoolLecturesClient({ data }: SchoolLecturesClientProps) {
         </MotionStaggerGrid>
       )}
 
-      {/* Video Player Modal */}
+      {/* Cinema Playback Dialog */}
       <Dialog
         open={activePlayback !== null}
         onOpenChange={(open) => {
@@ -283,7 +318,8 @@ export function SchoolLecturesClient({ data }: SchoolLecturesClientProps) {
               <DialogHeader>
                 <DialogTitle>{activePlayback.lecture.titleAr}</DialogTitle>
                 <DialogDescription>
-                  {activePlayback.lecture.subjectNameAr} · {activePlayback.lecture.teacherCode}
+                  {activePlayback.lecture.subjectNameAr} ·{" "}
+                  {activePlayback.lecture.teacherCode}
                 </DialogDescription>
               </DialogHeader>
               <div className="mt-3">

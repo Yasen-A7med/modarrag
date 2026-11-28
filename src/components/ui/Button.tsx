@@ -2,7 +2,14 @@ import * as React from "react";
 import { Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
-export type ButtonVariant = "primary" | "emerald" | "secondary" | "outline" | "ghost" | "danger";
+export type ButtonVariant =
+  | "primary"
+  | "navy"
+  | "emerald"
+  | "secondary"
+  | "outline"
+  | "ghost"
+  | "danger";
 export type ButtonSize = "sm" | "md" | "lg" | "icon";
 
 export interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
@@ -17,6 +24,8 @@ export interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElemen
 const VARIANT_CLASSES: Readonly<Record<ButtonVariant, string>> = {
   primary:
     "border border-[#2563EB] bg-gradient-to-l from-[#1D4ED8] to-[#2563EB] text-white hover:from-[#1E40AF] hover:to-[#1D4ED8] hover:border-[#1E40AF] dark:border-blue-500 dark:from-blue-600 dark:to-blue-500 dark:hover:from-blue-500 dark:hover:to-blue-400",
+  navy:
+    "border border-[#0A1F44] bg-[#0A1F44] text-white hover:bg-[#132E5C] dark:border-blue-400/30 dark:bg-slate-900 dark:hover:bg-slate-800",
   emerald:
     "border border-[#16A34A] bg-gradient-to-l from-[#15803D] to-[#16A34A] text-white hover:from-[#166534] hover:to-[#15803D] hover:border-[#166534] dark:border-emerald-500 dark:from-emerald-600 dark:to-emerald-500 dark:hover:from-emerald-500 dark:hover:to-emerald-400",
   secondary:

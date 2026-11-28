@@ -1,23 +1,23 @@
 "use client";
 
 import * as React from "react";
-import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
   Check,
+  Clock,
   Copy,
-  Eye,
-  EyeOff,
-  FileVideo,
+  Film,
   Globe,
   KeyRound,
   Link2,
   Lock,
+  Pencil,
   PlayCircle,
-  Settings2,
   Trash2,
   UploadCloud,
   UserCheck,
+  Video,
+  Wallet,
 } from "lucide-react";
 import {
   createLectureUploadIntentAction,
@@ -30,11 +30,7 @@ import {
   type TeacherLecturesWorkspaceData,
 } from "@/application/lectures/actions";
 import { LectureVideoPlayer } from "@/components/lectures/LectureVideoPlayer";
-import {
-  MotionReveal,
-  MotionStaggerCard,
-  MotionStaggerGrid,
-} from "@/components/motion/MotionPrimitives";
+import { MotionReveal } from "@/components/motion/MotionPrimitives";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/Card";
@@ -46,76 +42,97 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/Dialog";
-import { Input } from "@/components/ui/Input";
+import { Input, SelectInput } from "@/components/ui/Input";
 import { useToast } from "@/components/ui/Toast";
-import { createSupabaseBrowserClient } from "@/infrastructure/supabase/client";
 import type { LectureVisibility } from "@/infrastructure/supabase/database.types";
-import {
-  formatArabicNumber,
-  formatCairoDate,
-  formatCairoTime,
-} from "@/lib/formatters";
+import { formatArabicNumber, formatCairoDate } from "@/lib/formatters";
 import {
   formatFileSizeAr,
   isSupportedLectureVideoMime,
-  LECTURE_BUCKET_NAME,
   LECTURE_VISIBILITY_META,
   MAX_LECTURE_UPLOAD_BYTES,
 } from "@/lib/lecture-media";
 import { cn } from "@/lib/utils";
 
-export interface TeacherLecturesClientProps {
-  readonly data: TeacherLecturesWorkspaceData;
-}
-
-const VISIBILITY_OPTIONS: readonly {
+const VISIBILITY_CHOICES: readonly {
   readonly value: LectureVisibility;
+  readonly title: string;
+  readonly hint: string;
   readonly icon: typeof Globe;
   readonly activeClass: string;
 }[] = [
   {
     value: "public",
+    title: "عامة للجميع",
+    hint: "تظهر بمكتبة المدرسة مباشرةً",
     icon: Globe,
     activeClass:
-      "border-[#16A34A] bg-emerald-50/80 ring-2 ring-emerald-500/20 dark:border-emerald-400 dark:bg-emerald-500/15",
+      "border-emerald-500 bg-emerald-50 text-emerald-950 ring-2 ring-emerald-500/25 dark:bg-emerald-500/15 dark:text-emerald-100",
   },
   {
     value: "attendees_only",
+    title: "للحاضرين فقط",
+    hint: "تفتح لمن سُجّل حضوره بالحصة",
     icon: UserCheck,
     activeClass:
-      "border-[#2563EB] bg-[#EEF5FF]/85 ring-2 ring-[#2563EB]/20 dark:border-blue-400 dark:bg-blue-500/15",
+      "border-[#22D3EE] bg-cyan-50/70 text-[#0A1F44] ring-2 ring-[#22D3EE]/35 shadow-[0_10px_28px_-10px_rgba(34,211,238,0.45)] dark:bg-cyan-500/15 dark:text-cyan-100",
   },
   {
     value: "secret",
-    icon: KeyRound,
+    title: "سرية بكلمة مرور",
+    hint: "مخفية — برابط خاص وكلمة مرور",
+    icon: Lock,
     activeClass:
-      "border-[#D97706] bg-amber-50/85 ring-2 ring-amber-500/20 dark:border-amber-400 dark:bg-amber-500/15",
+      "border-amber-500 bg-amber-50/80 text-amber-950 ring-2 ring-amber-500/30 dark:bg-amber-500/15 dark:text-amber-100",
   },
 ];
 
+export interface TeacherLecturesClientProps {
+  readonly data: TeacherLecturesWorkspaceData;
+}
+
+/**
+ * Slide 3 Blueprint: Teacher Recorded Lectures Studio with Drag/Drop file uploader +
+ * video URL switch, 3 large glowing tier selector pills, pricing field, and compact actions table.
+ */
 export function TeacherLecturesClient({ data }: TeacherLecturesClientProps) {
   const router = useRouter();
   const { toast } = useToast();
 
-  // Upload & publish state
+  const [editedById, setEditedById] = React.useState<
+    Record<string, { readonly titleAr: string; readonly visibility: LectureVisibility }>
+  >({});
+  const [deletedIds, setDeletedIds] = React.useState<readonly string[]>([]);
+
+  const lectures = React.useMemo(
+    () =>
+      data.lectures
+        .filter((l) => !deletedIds.includes(l.id))
+        .map((l) => {
+          const override = editedById[l.id];
+          return override ? { ...l, ...override } : l;
+        }),
+    [data.lectures, deletedIds, editedById]
+  );
   const [sourceMode, setSourceMode] = React.useState<"file" | "url">("file");
+  const [subjectId, setSubjectId] = React.useState(data.subjects[0]?.id ?? "");
+  const [sessionId, setSessionId] = React.useState("");
   const [titleAr, setTitleAr] = React.useState("");
   const [descriptionAr, setDescriptionAr] = React.useState("");
-  const [subjectId, setSubjectId] = React.useState(data.subjects[0]?.id ?? "");
   const [visibility, setVisibility] = React.useState<LectureVisibility>("public");
-  const [sessionId, setSessionId] = React.useState(data.sessions[0]?.id ?? "");
+  const [priceEgp, setPriceEgp] = React.useState("0");
   const [secretPassword, setSecretPassword] = React.useState("");
-  const [showPassword, setShowPassword] = React.useState(false);
+  const [externalUrl, setExternalUrl] = React.useState("");
   const [durationMinutes, setDurationMinutes] = React.useState("");
   const [selectedFile, setSelectedFile] = React.useState<File | null>(null);
-  const [externalVideoUrl, setExternalVideoUrl] = React.useState("");
-  const [uploadingState, setUploadingState] = React.useState<string | null>(null);
+  const [uploadProgress, setUploadProgress] = React.useState(0);
   const [submitting, setSubmitting] = React.useState(false);
 
-  // Playback / Copy / Edit / Delete states
   const [copiedId, setCopiedId] = React.useState<string | null>(null);
-  const [playingMedia, setPlayingMedia] = React.useState<PlaybackMediaPayload | null>(null);
-  const [loadingPlayerId, setLoadingPlayerId] = React.useState<string | null>(null);
+  const [previewData, setPreviewData] = React.useState<{
+    readonly titleAr: string;
+    readonly media: PlaybackMediaPayload;
+  } | null>(null);
   const [editTarget, setEditTarget] = React.useState<TeacherLectureRecord | null>(null);
   const [editTitle, setEditTitle] = React.useState("");
   const [editVisibility, setEditVisibility] = React.useState<LectureVisibility>("public");
@@ -125,220 +142,169 @@ export function TeacherLecturesClient({ data }: TeacherLecturesClientProps) {
   const [deleteTarget, setDeleteTarget] = React.useState<TeacherLectureRecord | null>(null);
   const [deleting, setDeleting] = React.useState(false);
 
-  const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0] ?? null;
+  const handleFileChange = (file: File | null) => {
     if (!file) {
       setSelectedFile(null);
       return;
     }
-
-    if (!isSupportedLectureVideoMime(file.type || "video/mp4")) {
-      toast({
-        title: "صيغة الملف غير مدعومة",
-        description: "يرجى اختيار فيديو بصيغة MP4 أو WebM أو MOV.",
-        variant: "error",
-      });
-      event.target.value = "";
-      return;
-    }
-
     if (file.size > MAX_LECTURE_UPLOAD_BYTES) {
       toast({
-        title: "حجم الملف أكبر من ٥٠ ميجابايت",
-        description:
-          "الحد الأقصى للرفع المباشر هو ٥٠ ميجابايت. يمكنك ضغط الفيديو أو لصق رابط يوتيوب / درايف في التبويب المجاور.",
-        variant: "info",
+        title: "حجم الملف يتجاوز ٥٠ ميجابايت",
+        description: "يمكنك استخدام خيار «رابط فيديو» للملفات الكبيرة.",
+        variant: "error",
       });
-      event.target.value = "";
       return;
     }
-
+    if (!isSupportedLectureVideoMime(file.type)) {
+      toast({
+        title: "صيغة غير مدعومة",
+        description: "الصيغ المدعومة: MP4، WebM، MOV.",
+        variant: "error",
+      });
+      return;
+    }
     setSelectedFile(file);
   };
 
-  const handlePublish = async (event: React.FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-
+  const handlePublish = async (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
     if (!subjectId) {
-      toast({ title: "اختر المادة أولاً", variant: "error" });
-      return;
-    }
-
-    if (visibility === "attendees_only" && !sessionId) {
-      toast({
-        title: "اختر الحصة المرتبطة",
-        description: "لتقييد المشاهدة على الحاضرين فقط، حدد الحصة المدرسية.",
-        variant: "error",
-      });
-      return;
-    }
-
-    if (visibility === "secret" && secretPassword.trim().length < 4) {
-      toast({
-        title: "أدخل كلمة مرور قوية",
-        description: "اكتب كلمة مرور من ٤ أحرف أو أرقام على الأقل لحماية الرابط السري.",
-        variant: "error",
-      });
-      return;
-    }
-
-    if (sourceMode === "file" && !selectedFile) {
-      toast({ title: "اختر ملف الفيديو أولاً", variant: "error" });
-      return;
-    }
-
-    if (sourceMode === "url" && !externalVideoUrl.trim()) {
-      toast({ title: "أدخل رابط الفيديو أولاً", variant: "error" });
+      toast({ title: "يرجى اختيار المادة الدراسية", variant: "error" });
       return;
     }
 
     setSubmitting(true);
+    setUploadProgress(0);
     try {
       let storagePath: string | null = null;
       let fileSizeBytes: number | null = null;
       let mimeType: string | null = null;
 
-      if (sourceMode === "file" && selectedFile) {
-        setUploadingState("جاري تجهيز الرفع الآمن...");
-        const resolvedMime = selectedFile.type || "video/mp4";
+      if (sourceMode === "file") {
+        if (!selectedFile) {
+          toast({ title: "اختر ملف فيديو أو تحول لرابط فيديو", variant: "error" });
+          return;
+        }
         const intent = await createLectureUploadIntentAction({
           schoolSlug: data.schoolSlug,
           fileName: selectedFile.name,
-          mimeType: resolvedMime,
+          mimeType: selectedFile.type,
           fileSizeBytes: selectedFile.size,
         });
-
         if (!intent.ok) {
           toast({
-            title: "تعذر بدء رفع الفيديو",
+            title: "تعذر تجهيز الرفع",
             description: intent.error.message,
             variant: "error",
           });
           return;
         }
 
-        setUploadingState("جاري رفع ملف المحاضرة المسجلة...");
-        const supabase = createSupabaseBrowserClient();
-        const { error: uploadErr } = await supabase.storage
-          .from(LECTURE_BUCKET_NAME)
-          .uploadToSignedUrl(intent.data.storagePath, intent.data.token, selectedFile, {
-            contentType: resolvedMime,
-          });
-
-        if (uploadErr) {
-          toast({
-            title: "فشل رفع ملف الفيديو",
-            description: uploadErr.message,
-            variant: "error",
-          });
+        setUploadProgress(40);
+        const upRes = await fetch(intent.data.signedUrl, {
+          method: "PUT",
+          headers: { "Content-Type": selectedFile.type },
+          body: selectedFile,
+        });
+        if (!upRes.ok) {
+          toast({ title: "فشل رفع الفيديو إلى التخزين السحابي", variant: "error" });
           return;
         }
-
+        setUploadProgress(100);
         storagePath = intent.data.storagePath;
         fileSizeBytes = selectedFile.size;
-        mimeType = resolvedMime;
+        mimeType = selectedFile.type;
       }
 
-      setUploadingState("جاري حفظ بيانات المحاضرة...");
-      const durationNum = Number.parseInt(durationMinutes, 10);
-      const published = await publishLectureAction({
+      const parsedDuration = durationMinutes
+        ? Number.parseInt(durationMinutes, 10)
+        : null;
+      const parsedPrice = Math.max(0, Number.parseInt(priceEgp || "0", 10) || 0);
+
+      const pubRes = await publishLectureAction({
         schoolSlug: data.schoolSlug,
         subjectId,
-        sessionId: visibility === "attendees_only" || sessionId ? sessionId || null : null,
+        sessionId: sessionId || null,
         titleAr: titleAr.trim(),
         descriptionAr: descriptionAr.trim() || undefined,
         visibility,
+        priceEgp: parsedPrice,
         storagePath,
-        externalVideoUrl: sourceMode === "url" ? externalVideoUrl.trim() : null,
+        externalVideoUrl: sourceMode === "url" ? externalUrl.trim() : null,
         fileSizeBytes,
         mimeType,
-        durationMinutes: Number.isFinite(durationNum) && durationNum > 0 ? durationNum : null,
+        durationMinutes:
+          parsedDuration && !Number.isNaN(parsedDuration) ? parsedDuration : null,
         secretPassword: visibility === "secret" ? secretPassword.trim() : undefined,
       });
 
-      if (!published.ok) {
+      if (!pubRes.ok) {
         toast({
           title: "تعذر نشر المحاضرة",
-          description: published.error.message,
+          description: pubRes.error.message,
           variant: "error",
         });
         return;
       }
 
-      toast({
-        title: "تم رفع ونشر المحاضرة بنجاح!",
-        description:
-          visibility === "secret"
-            ? "يمكنك الآن نسخ الرابط السري من القائمة بالأسفل وإرساله مع كلمة المرور."
-            : "المحاضرة متاحة الآن حسب مستوى الخصوصية الذي اخترته.",
-        variant: "success",
-      });
-
+      toast({ title: "تم نشر المحاضرة بنجاح ✓", variant: "success" });
       setTitleAr("");
       setDescriptionAr("");
-      setSelectedFile(null);
-      setExternalVideoUrl("");
+      setExternalUrl("");
       setSecretPassword("");
-      setDurationMinutes("");
+      setSelectedFile(null);
+      setUploadProgress(0);
       router.refresh();
     } finally {
       setSubmitting(false);
-      setUploadingState(null);
     }
   };
 
-  const handleCopyShareLink = async (lecture: TeacherLectureRecord) => {
+  const handleCopyLink = async (lecture: TeacherLectureRecord) => {
     const shareUrl = `${window.location.origin}/s/${data.schoolSlug}/lectures/${lecture.shareToken}`;
-    await navigator.clipboard.writeText(shareUrl);
-    setCopiedId(lecture.id);
-    toast({
-      title: "تم نسخ رابط المحاضرة",
-      description:
-        lecture.visibility === "secret"
-          ? "أرسل هذا الرابط مع كلمة المرور للشخص المصرّح له فقط."
-          : "تم نسخ الرابط المباشر بنجاح.",
-      variant: "success",
-    });
-    setTimeout(() => {
-      setCopiedId((prev) => (prev === lecture.id ? null : prev));
-    }, 2500);
+    try {
+      await navigator.clipboard.writeText(shareUrl);
+      setCopiedId(lecture.id);
+      toast({
+        title:
+          lecture.visibility === "secret"
+            ? "تم نسخ الرابط السري ✓"
+            : "تم نسخ رابط المحاضرة ✓",
+        variant: "success",
+      });
+      window.setTimeout(() => setCopiedId(null), 2000);
+    } catch {
+      toast({ title: "تعذر النسخ التلقائي", variant: "warning" });
+    }
   };
 
-  const handlePreviewLecture = async (lecture: TeacherLectureRecord) => {
-    setLoadingPlayerId(lecture.id);
-    try {
-      const res = await getLecturePlaybackAction({
-        schoolSlug: data.schoolSlug,
-        lectureId: lecture.id,
+  const handlePreview = async (lecture: TeacherLectureRecord) => {
+    const res = await getLecturePlaybackAction({
+      schoolSlug: data.schoolSlug,
+      lectureId: lecture.id,
+    });
+    if (!res.ok) {
+      toast({
+        title: "تعذر تشغيل المعاينة",
+        description: res.error.message,
+        variant: "error",
       });
-
-      if (!res.ok) {
-        toast({
-          title: "تعذر تشغيل الفيديو",
-          description: res.error.message,
-          variant: "error",
-        });
-        return;
-      }
-
-      setPlayingMedia(res.data);
-    } finally {
-      setLoadingPlayerId(null);
+      return;
     }
+    setPreviewData({ titleAr: lecture.titleAr, media: res.data });
   };
 
   const openEditDialog = (lecture: TeacherLectureRecord) => {
     setEditTarget(lecture);
     setEditTitle(lecture.titleAr);
     setEditVisibility(lecture.visibility);
-    setEditSessionId(lecture.sessionId ?? data.sessions[0]?.id ?? "");
+    setEditSessionId(lecture.sessionId ?? "");
     setEditPassword("");
   };
 
   const handleSaveEdit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     if (!editTarget) return;
-
     setSavingEdit(true);
     try {
       const res = await updateLectureAccessAction({
@@ -346,20 +312,25 @@ export function TeacherLecturesClient({ data }: TeacherLecturesClientProps) {
         lectureId: editTarget.id,
         titleAr: editTitle.trim(),
         visibility: editVisibility,
-        sessionId: editVisibility === "attendees_only" ? editSessionId || null : null,
+        sessionId: editSessionId || null,
         newSecretPassword: editPassword.trim() || undefined,
       });
-
       if (!res.ok) {
         toast({
-          title: "تعذر حفظ التعديلات",
+          title: "تعذر التحديث",
           description: res.error.message,
           variant: "error",
         });
         return;
       }
-
-      toast({ title: "تم تحديث إعدادات الوصول للمحاضرة", variant: "success" });
+      setEditedById((prev) => ({
+        ...prev,
+        [editTarget.id]: {
+          titleAr: editTitle.trim(),
+          visibility: editVisibility,
+        },
+      }));
+      toast({ title: "تم حفظ التعديلات ✓", variant: "success" });
       setEditTarget(null);
       router.refresh();
     } finally {
@@ -367,7 +338,7 @@ export function TeacherLecturesClient({ data }: TeacherLecturesClientProps) {
     }
   };
 
-  const handleConfirmDelete = async () => {
+  const handleDelete = async () => {
     if (!deleteTarget) return;
     setDeleting(true);
     try {
@@ -375,17 +346,16 @@ export function TeacherLecturesClient({ data }: TeacherLecturesClientProps) {
         schoolSlug: data.schoolSlug,
         lectureId: deleteTarget.id,
       });
-
       if (!res.ok) {
         toast({
-          title: "تعذر حذف المحاضرة",
+          title: "تعذر الحذف",
           description: res.error.message,
           variant: "error",
         });
         return;
       }
-
-      toast({ title: "تم حذف المحاضرة والملف بنجاح", variant: "success" });
+      setDeletedIds((prev) => [...prev, deleteTarget.id]);
+      toast({ title: "تم حذف المحاضرة ✓", variant: "success" });
       setDeleteTarget(null);
       router.refresh();
     } finally {
@@ -395,545 +365,435 @@ export function TeacherLecturesClient({ data }: TeacherLecturesClientProps) {
 
   return (
     <div className="flex flex-col gap-6">
-      {/* Header Summary */}
-      <MotionReveal className="ambient-mesh rounded-3xl border border-[#2563EB]/20 p-6 hairline-lift dark:border-cyan-500/25">
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <div>
-            <p className="text-sm font-bold text-[#2563EB] dark:text-cyan-300">
-              {data.schoolNameAr}
-            </p>
-            <h1 className="mt-1 text-2xl font-bold text-[#0A1F44] dark:text-[var(--text-primary)]">
-              رفع المحاضرات المسجلة والتحكم في صلاحية المشاهدة
-            </h1>
-            <p className="mt-1 text-base text-[var(--text-secondary)]">
-              اختر الفيديو ثم حدد هل يشاهده الجميع، أم من حضر الحصة فقط، أم برابط سري وكلمة مرور.
-            </p>
-          </div>
-          <Link
-            href={`/s/${data.schoolSlug}/lectures`}
-            className="inline-flex min-h-[44px] shrink-0 items-center gap-2 rounded-xl border border-[#2563EB]/25 bg-[var(--bg-surface)] px-4 text-sm font-bold text-[#2563EB] hover:border-[#2563EB] dark:text-cyan-300"
-          >
-            <PlayCircle className="h-4 w-4" />
-            <span>معاينة مكتبة المدرسة</span>
-          </Link>
-        </div>
-      </MotionReveal>
-
-      {/* Upload & Access Selection Form */}
-      <Card className="rounded-3xl">
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2 text-xl">
-            <UploadCloud className="h-5 w-5 text-[#2563EB] dark:text-cyan-400" />
-            <span>إضافة محاضرة مسجلة جديدة</span>
-          </CardTitle>
-        </CardHeader>
-
-        <CardContent>
-          <form onSubmit={handlePublish} className="flex flex-col gap-5">
-            {/* Step 1: Metadata */}
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-              <Input
-                label="عنوان المحاضرة"
-                inputSize="lg"
-                required
-                minLength={3}
-                placeholder="مثال: مراجعة التفاضل والتكامل — الوحدة الثانية"
-                value={titleAr}
-                onChange={(e) => setTitleAr(e.target.value)}
-              />
-
-              <div className="flex flex-col gap-1.5">
-                <label className="text-sm font-bold text-[var(--text-primary)]">
-                  المادة الدراسية
-                </label>
-                <select
-                  value={subjectId}
-                  onChange={(e) => setSubjectId(e.target.value)}
-                  required
-                  className="min-h-[48px] rounded-xl border border-[var(--border-hairline)] bg-[var(--bg-surface)] px-3.5 text-base font-medium text-[var(--text-primary)] focus:border-[#2563EB] focus:outline-none"
-                >
-                  {data.subjects.map((sub) => (
-                    <option key={sub.id} value={sub.id}>
-                      {sub.nameAr}
-                    </option>
-                  ))}
-                </select>
-              </div>
-            </div>
-
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-              <div className="sm:col-span-2">
-                <Input
-                  label="وصف مختصر (اختياري)"
-                  inputSize="md"
-                  placeholder="أبرز النقاط المشروحة في هذا الفيديو للطلاب..."
-                  value={descriptionAr}
-                  onChange={(e) => setDescriptionAr(e.target.value)}
-                />
+      {/* Studio Upload Card */}
+      <MotionReveal>
+        <Card className="overflow-hidden rounded-[2rem]">
+          <CardHeader className="border-b border-[var(--border-hairline)] pb-4">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <Badge variant="info" size="md">
+                  استوديو المحاضرات المسجلة
+                </Badge>
+                <CardTitle className="mt-2 text-2xl font-extrabold">
+                  نشر محاضرة مسجلة
+                </CardTitle>
               </div>
 
-              <Input
-                label="مدة الفيديو بالدقائق (اختياري)"
-                type="number"
-                inputSize="md"
-                min={1}
-                max={600}
-                dir="ltr"
-                placeholder="45"
-                value={durationMinutes}
-                onChange={(e) => setDurationMinutes(e.target.value)}
-              />
-            </div>
-
-            {/* Step 2: Source Switcher (File Upload vs External Link) */}
-            <div className="rounded-2xl border border-[var(--border-hairline)] bg-[var(--bg-sunken)] p-4">
-              <div className="flex flex-wrap gap-2">
+              <div className="inline-flex rounded-xl border border-[var(--border-hairline)] bg-[var(--bg-sunken)] p-1 text-xs">
                 <button
                   type="button"
                   onClick={() => setSourceMode("file")}
                   className={cn(
-                    "inline-flex min-h-[44px] items-center gap-2 rounded-xl border px-4 text-sm font-bold cursor-pointer transition-colors",
+                    "inline-flex min-h-[38px] items-center gap-1.5 rounded-lg px-3 font-bold cursor-pointer",
                     sourceMode === "file"
-                      ? "border-[#2563EB] bg-[#2563EB] text-white"
-                      : "border-[var(--border-hairline)] bg-[var(--bg-surface)] text-[var(--text-secondary)]"
+                      ? "bg-[#0A1F44] text-white dark:bg-blue-600"
+                      : "text-[var(--text-secondary)]"
                   )}
                 >
-                  <FileVideo className="h-4 w-4" />
-                  <span>رفع ملف فيديو من جهازك (حتى ٥٠ م.ب)</span>
+                  <UploadCloud className="h-3.5 w-3.5" />
+                  <span>رفع فيديو</span>
                 </button>
                 <button
                   type="button"
                   onClick={() => setSourceMode("url")}
                   className={cn(
-                    "inline-flex min-h-[44px] items-center gap-2 rounded-xl border px-4 text-sm font-bold cursor-pointer transition-colors",
+                    "inline-flex min-h-[38px] items-center gap-1.5 rounded-lg px-3 font-bold cursor-pointer",
                     sourceMode === "url"
-                      ? "border-[#2563EB] bg-[#2563EB] text-white"
-                      : "border-[var(--border-hairline)] bg-[var(--bg-surface)] text-[var(--text-secondary)]"
+                      ? "bg-[#2563EB] text-white"
+                      : "text-[var(--text-secondary)]"
                   )}
                 >
-                  <Link2 className="h-4 w-4" />
-                  <span>أو إضافة رابط فيديو كبير (YouTube / Drive / Vimeo)</span>
+                  <Link2 className="h-3.5 w-3.5" />
+                  <span>رابط فيديو</span>
                 </button>
               </div>
+            </div>
+          </CardHeader>
 
+          <CardContent className="pt-5">
+            <form onSubmit={handlePublish} className="flex flex-col gap-5">
+              {/* Drag / Drop or Link Source */}
               {sourceMode === "file" ? (
-                <div className="mt-4">
-                  <label className="flex cursor-pointer flex-col items-center justify-center rounded-2xl border-2 border-dashed border-[#2563EB]/35 bg-[var(--bg-surface)] p-6 text-center transition-colors hover:border-[#2563EB]">
-                    <UploadCloud className="h-8 w-8 text-[#2563EB] dark:text-cyan-400" />
-                    <span className="mt-2 text-base font-bold text-[var(--text-primary)]">
-                      {selectedFile
-                        ? `تم اختيار: ${selectedFile.name} (${formatFileSizeAr(selectedFile.size)})`
-                        : "اضغط هنا لاختيار فيديو المحاضرة (MP4 / WebM / MOV)"}
+                <div className="rounded-2xl border-2 border-dashed border-[#2563EB]/35 bg-[var(--bg-sunken)] p-6 text-center transition-colors hover:border-[#2563EB]">
+                  <label className="flex cursor-pointer flex-col items-center gap-2">
+                    <span className="inline-flex h-12 w-12 items-center justify-center rounded-2xl bg-[#0A1F44] text-cyan-300">
+                      <Film className="h-6 w-6" />
                     </span>
-                    <span className="mt-1 text-xs text-[var(--text-muted)]">
-                      يُرفع الفيديو إلى خادم خاص محمي ولا يُفتح إلا لمن تمنحه الصلاحية.
+                    <span className="text-sm font-extrabold text-[var(--text-primary)]">
+                      {selectedFile
+                        ? `${selectedFile.name} (${formatFileSizeAr(selectedFile.size)})`
+                        : "اسحب ملف الفيديو هنا أو اضغط للاختيار"}
+                    </span>
+                    <span className="text-xs text-[var(--text-muted)]">
+                      MP4 أو WebM — حتى ٥٠ ميجابايت، أو اختر «رابط فيديو» للمحاضرات الطويلة
                     </span>
                     <input
                       type="file"
-                      accept="video/mp4,video/webm,video/quicktime,video/x-matroska"
-                      onChange={handleFileChange}
+                      accept="video/mp4,video/webm,video/quicktime"
                       className="sr-only"
+                      onChange={(e) => handleFileChange(e.target.files?.[0] ?? null)}
                     />
                   </label>
-                </div>
-              ) : (
-                <div className="mt-4">
-                  <Input
-                    label="رابط الفيديو الآمن (HTTPS)"
-                    type="url"
-                    inputSize="lg"
-                    dir="ltr"
-                    placeholder="https://www.youtube.com/watch?v=... أو رابط Google Drive / Vimeo"
-                    value={externalVideoUrl}
-                    onChange={(e) => setExternalVideoUrl(e.target.value)}
-                    hint="يبقى الرابط مخفياً في الخادم ولا يُعرض إلا للطالب المستوفي شروط الوصول."
-                  />
-                </div>
-              )}
-            </div>
 
-            {/* Step 3: 3-Tier Visibility Selector */}
-            <div className="flex flex-col gap-3">
-              <label className="text-base font-bold text-[var(--text-primary)]">
-                من يحق له مشاهدة هذه المحاضرة؟
-              </label>
-
-              <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
-                {VISIBILITY_OPTIONS.map((opt) => {
-                  const meta = LECTURE_VISIBILITY_META[opt.value];
-                  const Icon = opt.icon;
-                  const isActive = visibility === opt.value;
-                  return (
-                    <button
-                      key={opt.value}
-                      type="button"
-                      onClick={() => setVisibility(opt.value)}
-                      className={cn(
-                        "flex flex-col items-start gap-2 rounded-2xl border p-4 text-start transition-all cursor-pointer",
-                        isActive
-                          ? opt.activeClass
-                          : "border-[var(--border-hairline)] bg-[var(--bg-surface)] hover:border-[var(--border-strong)]"
-                      )}
-                    >
-                      <div className="flex w-full items-center justify-between">
-                        <Icon className="h-5 w-5 text-[#0A1F44] dark:text-cyan-300" />
-                        <span
-                          className={cn(
-                            "h-4 w-4 rounded-full border-2",
-                            isActive
-                              ? "border-[#2563EB] bg-[#2563EB]"
-                              : "border-[var(--border-strong)]"
-                          )}
-                        />
-                      </div>
-                      <p className="text-base font-bold text-[var(--text-primary)]">
-                        {meta.labelAr}
-                      </p>
-                      <p className="text-xs leading-relaxed text-[var(--text-secondary)]">
-                        {meta.descriptionAr}
-                      </p>
-                    </button>
-                  );
-                })}
-              </div>
-
-              {visibility === "attendees_only" && (
-                <div className="mt-2 rounded-2xl border border-blue-200 bg-[#EEF5FF]/70 p-4 dark:border-blue-500/35 dark:bg-blue-500/12">
-                  <label className="block text-sm font-bold text-[#0A1F44] dark:text-blue-200">
-                    اختر الحصة المدرسية المرتبطة (للتحقق من كشف الحضور تلقائياً)
-                  </label>
-                  {data.sessions.length === 0 ? (
-                    <p className="mt-2 text-sm text-amber-800 dark:text-amber-200">
-                      لا توجد حصص مسجلة لك حتى الآن. احجز قاعة لحصة أولاً ليتم ربط الحاضرين بها.
-                    </p>
-                  ) : (
-                    <select
-                      value={sessionId}
-                      onChange={(e) => setSessionId(e.target.value)}
-                      required
-                      className="mt-2 min-h-[48px] w-full rounded-xl border border-blue-200 bg-[var(--bg-surface)] px-3.5 text-sm font-semibold text-[var(--text-primary)] focus:border-[#2563EB] focus:outline-none dark:border-blue-500/40"
-                    >
-                      {data.sessions.map((sess) => (
-                        <option key={sess.id} value={sess.id}>
-                          {sess.subjectNameAr} — {sess.titleAr} (
-                          {formatCairoDate(sess.startsAt)} · {formatCairoTime(sess.startsAt)})
-                        </option>
-                      ))}
-                    </select>
+                  {uploadProgress > 0 && (
+                    <div className="mt-3 h-2 w-full overflow-hidden rounded-full bg-slate-200 dark:bg-slate-800">
+                      <div
+                        className="h-full bg-[#2563EB] transition-all duration-300"
+                        style={{ width: `${uploadProgress}%` }}
+                      />
+                    </div>
                   )}
                 </div>
+              ) : (
+                <Input
+                  label="رابط الفيديو (YouTube أو Google Drive أو Vimeo)"
+                  type="url"
+                  required
+                  dir="ltr"
+                  placeholder="https://www.youtube.com/watch?v=..."
+                  value={externalUrl}
+                  onChange={(e) => setExternalUrl(e.target.value)}
+                  startAdornment={<Link2 className="h-4 w-4" />}
+                />
               )}
 
-              {visibility === "secret" && (
-                <div className="mt-2 rounded-2xl border border-amber-200 bg-amber-50/80 p-4 dark:border-amber-500/35 dark:bg-amber-500/12">
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+                <Input
+                  label="عنوان المحاضرة"
+                  required
+                  placeholder="مثال: حل امتحانات الوحدة الثانية"
+                  value={titleAr}
+                  onChange={(e) => setTitleAr(e.target.value)}
+                  containerClassName="lg:col-span-2"
+                />
+
+                <SelectInput
+                  label="المادة"
+                  value={subjectId}
+                  onChange={(e) => setSubjectId(e.target.value)}
+                >
+                  {data.subjects.map((s) => (
+                    <option key={s.id} value={s.id}>
+                      {s.nameAr}
+                    </option>
+                  ))}
+                </SelectInput>
+
+                <Input
+                  label="سعر المحاضرة (ج.م)"
+                  type="number"
+                  min={0}
+                  max={10000}
+                  dir="ltr"
+                  value={priceEgp}
+                  onChange={(e) => setPriceEgp(e.target.value)}
+                  startAdornment={<Wallet className="h-4 w-4" />}
+                />
+              </div>
+
+              {/* Slide 3: 3 Glowing Visibility Selector Pills */}
+              <div className="flex flex-col gap-2">
+                <span className="text-sm font-bold text-[var(--text-primary)]">
+                  صلاحية المشاهدة
+                </span>
+                <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
+                  {VISIBILITY_CHOICES.map((opt) => {
+                    const Icon = opt.icon;
+                    const active = visibility === opt.value;
+                    return (
+                      <button
+                        key={opt.value}
+                        type="button"
+                        onClick={() => setVisibility(opt.value)}
+                        className={cn(
+                          "flex min-h-[76px] items-center gap-3 rounded-2xl border p-4 text-start transition-all cursor-pointer",
+                          active
+                            ? opt.activeClass
+                            : "border-[var(--border-hairline)] bg-[var(--bg-surface)] hover:border-[var(--border-strong)]"
+                        )}
+                      >
+                        <Icon className="h-5 w-5 shrink-0" />
+                        <div>
+                          <p className="text-sm font-extrabold">{opt.title}</p>
+                          <p className="mt-0.5 text-xs opacity-80">{opt.hint}</p>
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+                {visibility === "attendees_only" && (
+                  <SelectInput
+                    label="الحصة المرتبطة للتحقق من الحضور"
+                    value={sessionId}
+                    onChange={(e) => setSessionId(e.target.value)}
+                    containerClassName="sm:col-span-2"
+                  >
+                    <option value="">اختر الحصة...</option>
+                    {data.sessions.map((s) => (
+                      <option key={s.id} value={s.id}>
+                        {s.titleAr} ({s.subjectNameAr})
+                      </option>
+                    ))}
+                  </SelectInput>
+                )}
+
+                {visibility === "secret" && (
                   <Input
                     label="كلمة مرور المحاضرة السرية"
-                    type={showPassword ? "text" : "password"}
-                    inputSize="lg"
+                    type="text"
                     required
                     minLength={4}
                     dir="ltr"
-                    placeholder="اكتب كلمة سر مخصصة لهذه المحاضرة (٤ أحرف فأكثر)"
-                    hint="لن تظهر هذه المحاضرة في قوائم المدرسة أبداً — ولن تفتح إلا عبر الرابط الخاص + هذه الكلمة."
+                    placeholder="مثال: Phys2026"
                     value={secretPassword}
                     onChange={(e) => setSecretPassword(e.target.value)}
-                    startAdornment={<KeyRound className="h-5 w-5" />}
-                    endAdornment={
-                      <button
-                        type="button"
-                        onClick={() => setShowPassword((prev) => !prev)}
-                        className="inline-flex h-11 w-11 items-center justify-center rounded-xl text-[var(--text-muted)] cursor-pointer"
-                        aria-label={showPassword ? "إخفاء" : "إظهار"}
-                      >
-                        {showPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
-                      </button>
-                    }
+                    startAdornment={<KeyRound className="h-4 w-4" />}
+                    containerClassName="sm:col-span-2"
                   />
-                </div>
-              )}
-            </div>
+                )}
 
-            <div className="flex flex-wrap items-center justify-between gap-3 pt-2">
-              {uploadingState ? (
-                <span className="text-sm font-semibold text-[#2563EB] dark:text-cyan-300">
-                  {uploadingState}
-                </span>
-              ) : (
-                <span className="text-xs text-[var(--text-muted)]">
-                  يمكنك تعديل خصوصية المحاضرة أو حذفها في أي وقت لاحقاً.
-                </span>
-              )}
+                <Input
+                  label="المدة التقريبية (دقائق)"
+                  type="number"
+                  min={1}
+                  max={600}
+                  dir="ltr"
+                  placeholder="60"
+                  value={durationMinutes}
+                  onChange={(e) => setDurationMinutes(e.target.value)}
+                />
+              </div>
 
               <Button
                 type="submit"
                 variant="primary"
                 size="lg"
+                fullWidth
                 loading={submitting}
-                leftIcon={<UploadCloud className="h-5 w-5" />}
+                leftIcon={<Video className="h-5 w-5" />}
               >
-                {submitting ? "جاري الرفع والحفظ..." : "رفع ونشر المحاضرة"}
+                نشر المحاضرة الآن
               </Button>
+            </form>
+          </CardContent>
+        </Card>
+      </MotionReveal>
+
+      {/* Published Lectures List */}
+      <Card>
+        <CardHeader className="border-b border-[var(--border-hairline)] pb-3">
+          <div className="flex items-center justify-between">
+            <CardTitle className="text-base font-extrabold">
+              المحاضرات المنشورة ({formatArabicNumber(lectures.length)})
+            </CardTitle>
+          </div>
+        </CardHeader>
+
+        <CardContent className="p-0">
+          {lectures.length === 0 ? (
+            <div className="p-8 text-center text-sm text-[var(--text-muted)]">
+              لم ترفع أي محاضرات مسجلة بعد.
             </div>
-          </form>
+          ) : (
+            <div className="divide-y divide-[var(--border-hairline)]">
+              {lectures.map((lecture) => {
+                const meta = LECTURE_VISIBILITY_META[lecture.visibility];
+                return (
+                  <div
+                    key={lecture.id}
+                    className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between"
+                  >
+                    <div className="min-w-0">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <Badge variant="neutral">{lecture.subjectNameAr}</Badge>
+                        <span
+                          className={cn(
+                            "inline-flex items-center gap-1 rounded-full border px-2.5 py-0.5 text-xs font-bold",
+                            meta.badgeClass
+                          )}
+                        >
+                          {meta.shortLabelAr}
+                        </span>
+                        {lecture.priceEgp > 0 && (
+                          <Badge variant="warning">
+                            {formatArabicNumber(lecture.priceEgp)} ج.م
+                          </Badge>
+                        )}
+                      </div>
+
+                      <h3 className="mt-1.5 text-base font-extrabold text-[var(--text-primary)]">
+                        {lecture.titleAr}
+                      </h3>
+                      <p className="mt-0.5 flex flex-wrap items-center gap-2 text-xs text-[var(--text-muted)] tabular-nums">
+                        <span className="inline-flex items-center gap-1">
+                          <Clock className="h-3.5 w-3.5" />
+                          {formatCairoDate(lecture.createdAt)}
+                        </span>
+                        {lecture.sessionTitleAr && (
+                          <span>· مرتبطة بـ: {lecture.sessionTitleAr}</span>
+                        )}
+                      </p>
+                    </div>
+
+                    <div className="flex flex-wrap items-center gap-2">
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => handleCopyLink(lecture)}
+                        leftIcon={
+                          copiedId === lecture.id ? (
+                            <Check className="h-3.5 w-3.5 text-emerald-600" />
+                          ) : (
+                            <Copy className="h-3.5 w-3.5" />
+                          )
+                        }
+                      >
+                        {lecture.visibility === "secret" ? "نسخ الرابط السري" : "نسخ الرابط"}
+                      </Button>
+
+                      <Button
+                        size="icon"
+                        variant="outline"
+                        aria-label="معاينة الفيديو"
+                        onClick={() => handlePreview(lecture)}
+                      >
+                        <PlayCircle className="h-4 w-4 text-[#2563EB]" />
+                      </Button>
+
+                      <Button
+                        size="icon"
+                        variant="outline"
+                        aria-label="تعديل المحاضرة"
+                        onClick={() => openEditDialog(lecture)}
+                      >
+                        <Pencil className="h-4 w-4" />
+                      </Button>
+
+                      <Button
+                        size="icon"
+                        variant="outline"
+                        aria-label="حذف"
+                        onClick={() => setDeleteTarget(lecture)}
+                      >
+                        <Trash2 className="h-4 w-4 text-red-500" />
+                      </Button>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
         </CardContent>
       </Card>
 
-      {/* Teacher Uploaded Lectures List */}
-      <section className="flex flex-col gap-3">
-        <h2 className="text-xl font-bold text-[var(--text-primary)]">
-          محاضراتي المسجلة ({formatArabicNumber(data.lectures.length)})
-        </h2>
-
-        {data.lectures.length === 0 ? (
-          <Card className="rounded-3xl p-8 text-center">
-            <p className="text-lg font-bold text-[var(--text-primary)]">
-              لم ترفع أي محاضرات مسجلة بعد
-            </p>
-            <p className="mt-1 text-base text-[var(--text-secondary)]">
-              استخدم النموذج بالأعلى لرفع أول فيديو وتحديد من يحق له مشاهدته.
-            </p>
-          </Card>
-        ) : (
-          <MotionStaggerGrid className="grid grid-cols-1 gap-4 md:grid-cols-2">
-            {data.lectures.map((lec) => {
-              const meta = LECTURE_VISIBILITY_META[lec.visibility];
-              const isCopied = copiedId === lec.id;
-              return (
-                <MotionStaggerCard
-                  key={lec.id}
-                  className="hover-lift-card flex flex-col justify-between gap-4 rounded-3xl border border-[var(--border-hairline)] bg-[var(--bg-surface)] p-5 hairline-lift"
-                >
-                  <div>
-                    <div className="flex flex-wrap items-center justify-between gap-2">
-                      <Badge variant="neutral">{lec.subjectNameAr}</Badge>
-                      <span
-                        className={cn(
-                          "inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-bold",
-                          meta.badgeClass
-                        )}
-                      >
-                        {lec.visibility === "secret" && <Lock className="h-3.5 w-3.5" />}
-                        <span>{meta.shortLabelAr}</span>
-                      </span>
-                    </div>
-
-                    <h3 className="mt-3 text-lg font-bold text-[var(--text-primary)]">
-                      {lec.titleAr}
-                    </h3>
-
-                    {lec.descriptionAr && (
-                      <p className="mt-1 line-clamp-2 text-sm text-[var(--text-secondary)]">
-                        {lec.descriptionAr}
-                      </p>
-                    )}
-
-                    <div className="mt-3 flex flex-wrap gap-2 text-xs text-[var(--text-muted)]">
-                      {lec.sessionTitleAr && (
-                        <span className="rounded-lg bg-[var(--bg-sunken)] px-2.5 py-1">
-                          الحصة: {lec.sessionTitleAr}
-                        </span>
-                      )}
-                      {lec.fileSizeBytes && (
-                        <span className="rounded-lg bg-[var(--bg-sunken)] px-2.5 py-1 tabular-nums">
-                          الحجم: {formatFileSizeAr(lec.fileSizeBytes)}
-                        </span>
-                      )}
-                      {lec.durationMinutes && (
-                        <span className="rounded-lg bg-[var(--bg-sunken)] px-2.5 py-1 tabular-nums">
-                          {formatArabicNumber(lec.durationMinutes)} دقيقة
-                        </span>
-                      )}
-                    </div>
-                  </div>
-
-                  <div className="flex flex-wrap gap-2 border-t border-[var(--border-hairline)] pt-3">
-                    <Button
-                      variant="primary"
-                      size="sm"
-                      loading={loadingPlayerId === lec.id}
-                      onClick={() => handlePreviewLecture(lec)}
-                      leftIcon={<PlayCircle className="h-4 w-4" />}
-                    >
-                      تشغيل
-                    </Button>
-
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => handleCopyShareLink(lec)}
-                      leftIcon={
-                        isCopied ? (
-                          <Check className="h-4 w-4 text-emerald-600" />
-                        ) : (
-                          <Copy className="h-4 w-4" />
-                        )
-                      }
-                    >
-                      {lec.visibility === "secret" ? "نسخ الرابط السري" : "نسخ الرابط"}
-                    </Button>
-
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => openEditDialog(lec)}
-                      leftIcon={<Settings2 className="h-4 w-4" />}
-                    >
-                      تعديل الصلاحية
-                    </Button>
-
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => setDeleteTarget(lec)}
-                      className="text-red-600 hover:bg-red-50 hover:text-red-700 dark:text-red-400"
-                      leftIcon={<Trash2 className="h-4 w-4" />}
-                    >
-                      حذف
-                    </Button>
-                  </div>
-                </MotionStaggerCard>
-              );
-            })}
-          </MotionStaggerGrid>
-        )}
-      </section>
-
-      {/* Video Player Preview Dialog */}
+      {/* Preview Dialog */}
       <Dialog
-        open={playingMedia !== null}
+        open={previewData !== null}
         onOpenChange={(open) => {
-          if (!open) setPlayingMedia(null);
+          if (!open) setPreviewData(null);
         }}
       >
         <DialogContent className="max-w-3xl">
-          {playingMedia && (
+          {previewData && (
             <>
               <DialogHeader>
-                <DialogTitle>{playingMedia.titleAr}</DialogTitle>
+                <DialogTitle>{previewData.titleAr}</DialogTitle>
               </DialogHeader>
               <div className="mt-3">
-                <LectureVideoPlayer media={playingMedia} />
+                <LectureVideoPlayer media={previewData.media} />
               </div>
             </>
           )}
         </DialogContent>
       </Dialog>
 
-      {/* Edit Visibility / Password Dialog */}
+      {/* Edit Lecture Dialog */}
       <Dialog
         open={editTarget !== null}
         onOpenChange={(open) => {
-          if (!open && !savingEdit) setEditTarget(null);
-        }}
-      >
-        <DialogContent>
-          {editTarget && (
-            <>
-              <DialogHeader>
-                <DialogTitle>تعديل إعدادات وصول المحاضرة</DialogTitle>
-                <DialogDescription>
-                  غيّر العنوان أو مستوى الصلاحية أو جدّد كلمة المرور للمحاضرة السرية.
-                </DialogDescription>
-              </DialogHeader>
-
-              <form onSubmit={handleSaveEdit} className="mt-4 flex flex-col gap-4">
-                <Input
-                  label="عنوان المحاضرة"
-                  inputSize="md"
-                  required
-                  value={editTitle}
-                  onChange={(e) => setEditTitle(e.target.value)}
-                />
-
-                <div className="flex flex-col gap-1.5">
-                  <label className="text-sm font-bold text-[var(--text-primary)]">
-                    صلاحية المشاهدة
-                  </label>
-                  <select
-                    value={editVisibility}
-                    onChange={(e) => setEditVisibility(e.target.value as LectureVisibility)}
-                    className="min-h-[46px] rounded-xl border border-[var(--border-hairline)] bg-[var(--bg-surface)] px-3.5 text-sm font-semibold text-[var(--text-primary)]"
-                  >
-                    <option value="public">عامة — متاحة للجميع</option>
-                    <option value="attendees_only">للحاضرين في الحصة فقط</option>
-                    <option value="secret">سرية ومخفية — برابط وكلمة مرور</option>
-                  </select>
-                </div>
-
-                {editVisibility === "attendees_only" && (
-                  <div className="flex flex-col gap-1.5">
-                    <label className="text-sm font-bold text-[var(--text-primary)]">
-                      الحصة المرتبطة
-                    </label>
-                    <select
-                      value={editSessionId}
-                      onChange={(e) => setEditSessionId(e.target.value)}
-                      required
-                      className="min-h-[46px] rounded-xl border border-[var(--border-hairline)] bg-[var(--bg-surface)] px-3.5 text-sm font-semibold text-[var(--text-primary)]"
-                    >
-                      {data.sessions.map((sess) => (
-                        <option key={sess.id} value={sess.id}>
-                          {sess.subjectNameAr} — {sess.titleAr}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                )}
-
-                {editVisibility === "secret" && (
-                  <Input
-                    label="كلمة مرور جديدة (اختياري للإبقاء على الحالية)"
-                    type="password"
-                    dir="ltr"
-                    minLength={4}
-                    placeholder="اتركه فارغاً للإبقاء على كلمة المرور الحالية"
-                    value={editPassword}
-                    onChange={(e) => setEditPassword(e.target.value)}
-                  />
-                )}
-
-                <DialogFooter>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    disabled={savingEdit}
-                    onClick={() => setEditTarget(null)}
-                  >
-                    إلغاء
-                  </Button>
-                  <Button type="submit" variant="primary" loading={savingEdit}>
-                    حفظ التعديلات
-                  </Button>
-                </DialogFooter>
-              </form>
-            </>
-          )}
-        </DialogContent>
-      </Dialog>
-
-      {/* Delete Confirmation Dialog */}
-      <Dialog
-        open={deleteTarget !== null}
-        onOpenChange={(open) => {
-          if (!open && !deleting) setDeleteTarget(null);
+          if (!open) setEditTarget(null);
         }}
       >
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>حذف المحاضرة نهائياً؟</DialogTitle>
+            <DialogTitle>تعديل إعدادات المحاضرة</DialogTitle>
+          </DialogHeader>
+          <form onSubmit={handleSaveEdit} className="mt-4 flex flex-col gap-4">
+            <Input
+              label="عنوان المحاضرة"
+              required
+              value={editTitle}
+              onChange={(e) => setEditTitle(e.target.value)}
+            />
+            <SelectInput
+              label="الصلاحية"
+              value={editVisibility}
+              onChange={(e) =>
+                setEditVisibility(e.target.value as LectureVisibility)
+              }
+            >
+              <option value="public">عامة للجميع</option>
+              <option value="attendees_only">للحاضرين فقط</option>
+              <option value="secret">سرية بكلمة مرور</option>
+            </SelectInput>
+            {editVisibility === "secret" && (
+              <Input
+                label="كلمة مرور جديدة (اختياري)"
+                type="text"
+                dir="ltr"
+                placeholder="اتركه فارغاً للإبقاء على الحالية"
+                value={editPassword}
+                onChange={(e) => setEditPassword(e.target.value)}
+              />
+            )}
+            <DialogFooter>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setEditTarget(null)}
+              >
+                إلغاء
+              </Button>
+              <Button type="submit" variant="primary" loading={savingEdit}>
+                حفظ التعديلات
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete Confirm Dialog */}
+      <Dialog
+        open={deleteTarget !== null}
+        onOpenChange={(open) => {
+          if (!open) setDeleteTarget(null);
+        }}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>حذف المحاضرة نهائياً</DialogTitle>
             <DialogDescription>
-              سيتم حذف «{deleteTarget?.titleAr}» وملف الفيديو الخاص بها بشكل دائم.
+              هل تريد حذف «{deleteTarget?.titleAr}» وملفها المسجل؟
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
             <Button
+              type="button"
               variant="outline"
-              disabled={deleting}
               onClick={() => setDeleteTarget(null)}
+              disabled={deleting}
             >
               تراجع
             </Button>
-            <Button variant="danger" loading={deleting} onClick={handleConfirmDelete}>
+            <Button
+              type="button"
+              variant="danger"
+              loading={deleting}
+              onClick={handleDelete}
+            >
               نعم، احذف المحاضرة
             </Button>
           </DialogFooter>

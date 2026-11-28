@@ -4,191 +4,70 @@ import * as React from "react";
 import { useRouter } from "next/navigation";
 import {
   AlertTriangle,
-  Building2,
-  Calendar,
+  CalendarDays,
   CheckCircle2,
   Clock,
+  Laptop,
+  Lock,
+  MapPin,
+  Plus,
   Repeat,
-  Sparkles,
+  Wallet,
 } from "lucide-react";
 import {
   createSessionAction,
   createSessionSeriesAction,
   type TeacherConsoleData,
 } from "@/application/sessions/actions";
+import { MotionReveal } from "@/components/motion/MotionPrimitives";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
-import { Card } from "@/components/ui/Card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/Card";
 import { Input, SelectInput } from "@/components/ui/Input";
 import { useToast } from "@/components/ui/Toast";
 import { doBufferedSessionsOverlap } from "@/domain/booking/time-slots";
-import {
-  CAIRO_TIME_ZONE,
-  formatArabicNumber,
-  formatCairoDate,
-  formatCairoDayKey,
-  formatCairoTime,
-  formatCairoTimeRange,
-  formatDurationAr,
-} from "@/lib/formatters";
+import { calculateSessionRevenueBreakdown } from "@/domain/finance/revenue";
+import { formatArabicNumber } from "@/lib/formatters";
 import { cn } from "@/lib/utils";
 
-const DURATION_OPTIONS = [60, 90, 120, 180] as const;
-const SERIES_WEEK_PRESETS = [4, 8, 12] as const;
+const SLOT_HOURS = [9, 11, 13, 15, 17, 19] as const;
+const DURATION_OPTIONS = [60, 90, 120] as const;
 
-const SLOT_TIMES_24 = [
-  "08:00",
-  "08:30",
-  "09:00",
-  "09:30",
-  "10:00",
-  "10:30",
-  "11:00",
-  "11:30",
-  "12:00",
-  "12:30",
-  "13:00",
-  "13:30",
-  "14:00",
-  "14:30",
-  "15:00",
-  "15:30",
-  "16:00",
-  "16:30",
-  "17:00",
-  "17:30",
-  "18:00",
-  "18:30",
-  "19:00",
-  "19:30",
-  "20:00",
-] as const;
-
-const BUFFER_HATCH_STYLE: React.CSSProperties = {
-  backgroundImage:
-    "repeating-linear-gradient(-45deg, rgba(217, 119, 6, 0.18), rgba(217, 119, 6, 0.18) 5px, transparent 5px, transparent 10px)",
-};
-
-const CONFLICT_HATCH_STYLE: React.CSSProperties = {
-  backgroundImage:
-    "repeating-linear-gradient(-45deg, rgba(220, 38, 38, 0.12), rgba(220, 38, 38, 0.12) 4px, transparent 4px, transparent 8px)",
-};
-
-function getCairoParts(date: Date): {
-  year: number;
-  month: number;
-  day: number;
-  hour: number;
-  minute: number;
-} {
-  const formatter = new Intl.DateTimeFormat("en-CA", {
-    timeZone: CAIRO_TIME_ZONE,
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-    hour: "2-digit",
-    minute: "2-digit",
-    hour12: false,
-  });
-
-  const parts = formatter.formatToParts(date);
-  const read = (type: Intl.DateTimeFormatPartTypes): number => {
-    const val = parts.find((p) => p.type === type)?.value;
-    const parsed = val ? Number.parseInt(val, 10) : 0;
-    return Number.isNaN(parsed) ? 0 : parsed;
-  };
-
-  const hourRaw = read("hour");
-  return {
-    year: read("year"),
-    month: read("month"),
-    day: read("day"),
-    hour: hourRaw === 24 ? 0 : hourRaw,
-    minute: read("minute"),
-  };
-}
-
-/**
- * Converts a Cairo calendar day (`YYYY-MM-DD`) and wall-clock time (`HH:MM`)
- * into an exact UTC ISO-8601 timestamp respecting DST transitions.
- */
-function cairoWallTimeToIso(dayKey: string, time24: string): string {
-  const [yStr, mStr, dStr] = dayKey.split("-");
-  const [hStr, minStr] = time24.split(":");
-  const year = Number.parseInt(yStr ?? "2026", 10);
-  const month = Number.parseInt(mStr ?? "1", 10);
-  const day = Number.parseInt(dStr ?? "1", 10);
-  const hour = Number.parseInt(hStr ?? "12", 10);
-  const minute = Number.parseInt(minStr ?? "0", 10);
-
-  const targetWallMs = Date.UTC(year, month - 1, day, hour, minute, 0, 0);
-  let utcMs = targetWallMs - 2 * 3_600_000;
-
-  for (let i = 0; i < 2; i++) {
-    const p = getCairoParts(new Date(utcMs));
-    const currentWallMs = Date.UTC(p.year, p.month - 1, p.day, p.hour, p.minute, 0, 0);
-    const diff = targetWallMs - currentWallMs;
-    if (diff === 0) break;
-    utcMs += diff;
+function buildCairoDayIsoList(days = 7): readonly {
+  readonly dateKey: string;
+  readonly label: string;
+  readonly weekday: string;
+}[] {
+  const list: { dateKey: string; label: string; weekday: string }[] = [];
+  const now = new Date();
+  for (let i = 0; i < days; i++) {
+    const d = new Date(now.getTime() + i * 86_400_000);
+    const key = new Intl.DateTimeFormat("en-CA", {
+      timeZone: "Africa/Cairo",
+    }).format(d);
+    const label = new Intl.DateTimeFormat("ar-EG-u-nu-latn", {
+      timeZone: "Africa/Cairo",
+      day: "numeric",
+      month: "short",
+    }).format(d);
+    const weekday =
+      i === 0
+        ? "اليوم"
+        : i === 1
+          ? "غداً"
+          : new Intl.DateTimeFormat("ar-EG", {
+              timeZone: "Africa/Cairo",
+              weekday: "short",
+            }).format(d);
+    list.push({ dateKey: key, label, weekday });
   }
-
-  return new Date(utcMs).toISOString();
+  return list;
 }
 
-function extractCairoTime24(iso: string): string {
-  const p = getCairoParts(new Date(iso));
-  const hh = String(p.hour).padStart(2, "0");
-  const mm = String(p.minute).padStart(2, "0");
-  return `${hh}:${mm}`;
-}
-
-function buildFourteenCairoDays(): ReadonlyArray<{
-  readonly dayKey: string;
-  readonly weekdayLabel: string;
-  readonly dayNumLabel: string;
-  readonly monthLabel: string;
-}> {
-  const todayKey = formatCairoDayKey(new Date());
-  const noonIso = cairoWallTimeToIso(todayKey, "12:00");
-  const baseMs = new Date(noonIso).getTime();
-
-  const weekdayFmt = new Intl.DateTimeFormat("ar-EG", {
-    timeZone: CAIRO_TIME_ZONE,
-    weekday: "short",
-  });
-  const dayNumFmt = new Intl.DateTimeFormat("ar-EG", {
-    timeZone: CAIRO_TIME_ZONE,
-    day: "numeric",
-  });
-  const monthFmt = new Intl.DateTimeFormat("ar-EG", {
-    timeZone: CAIRO_TIME_ZONE,
-    month: "short",
-  });
-
-  const days: Array<{
-    readonly dayKey: string;
-    readonly weekdayLabel: string;
-    readonly dayNumLabel: string;
-    readonly monthLabel: string;
-  }> = [];
-
-  for (let offset = 0; offset < 14; offset++) {
-    const date = new Date(baseMs + offset * 86_400_000);
-    days.push({
-      dayKey: formatCairoDayKey(date),
-      weekdayLabel: offset === 0 ? "اليوم" : weekdayFmt.format(date),
-      dayNumLabel: dayNumFmt.format(date),
-      monthLabel: monthFmt.format(date),
-    });
-  }
-
-  return days;
-}
-
-interface ConflictSuggestion {
-  readonly message: string;
-  readonly nextFreeSlotIso: string | null;
-  readonly alternativeHallCode: string | null;
+function buildCairoSlotStartIso(dateKey: string, hour: number): string {
+  const padded = String(hour).padStart(2, "0");
+  // Egypt standard offset +02:00 handles Cairo scheduling cleanly without UTC day shift
+  return new Date(`${dateKey}T${padded}:00:00+02:00`).toISOString();
 }
 
 export interface CalHallBookingGridProps {
@@ -197,83 +76,66 @@ export interface CalHallBookingGridProps {
 }
 
 /**
- * Cal.com-inspired 3-column desktop / responsive mobile Hall Booking Planner
- * with 14-day Cairo picker, 15m diagonal-hatched transition buffers,
- * weekly series support, and 1-click smart SCHEDULE_CONFLICT resolution.
+ * Slide 4 Blueprint: Teacher Timetable Matrix & Online Class Scheduler.
+ * Supports Dual Delivery ('in_person' physical halls OR 'online' home streaming),
+ * single/weekly recurrence, transparent 70/30 + 14% VAT revenue preview,
+ * interactive hall-slot availability matrix, and automatic conflict resolution hints.
  */
 export function CalHallBookingGrid({ schoolSlug, data }: CalHallBookingGridProps) {
   const router = useRouter();
   const { toast } = useToast();
 
-  const days = React.useMemo(() => buildFourteenCairoDays(), []);
-  const firstDayKey = days[0]?.dayKey ?? formatCairoDayKey(new Date());
-  const firstHall = data.halls[0];
-  const firstSubject = data.subjects[0];
-
-  const [selectedSubjectId, setSelectedSubjectId] = React.useState<string>(
-    firstSubject?.id ?? ""
+  const days = React.useMemo(() => buildCairoDayIsoList(7), []);
+  const [selectedDay, setSelectedDay] = React.useState(days[0]?.dateKey ?? "");
+  const [deliveryMode, setDeliveryMode] = React.useState<"in_person" | "online">(
+    "in_person"
   );
-  const [selectedHallId, setSelectedHallId] = React.useState<string>(
-    firstHall?.id ?? ""
+  const [bookingMode, setBookingMode] = React.useState<"single" | "series">("single");
+  const [selectedHallId, setSelectedHallId] = React.useState(
+    data.halls[0]?.id ?? ""
   );
-  const [selectedDayKey, setSelectedDayKey] = React.useState<string>(firstDayKey);
-  const [selectedTime24, setSelectedTime24] = React.useState<string>("16:00");
+  const [selectedHour, setSelectedHour] = React.useState<number>(11);
+  const [subjectId, setSubjectId] = React.useState(data.subjects[0]?.id ?? "");
+  const [titleAr, setTitleAr] = React.useState("");
   const [durationMinutes, setDurationMinutes] = React.useState<number>(90);
-  const [hourFormat, setHourFormat] = React.useState<"12h" | "24h">("12h");
-  const [titleAr, setTitleAr] = React.useState<string>("");
-  const [customMaxCapacity, setCustomMaxCapacity] = React.useState<string>("");
-  const [isWeeklySeries, setIsWeeklySeries] = React.useState<boolean>(false);
   const [recurrenceWeeks, setRecurrenceWeeks] = React.useState<number>(4);
+  const [priceEgp, setPriceEgp] = React.useState<string>("0");
+  const [meetingUrl, setMeetingUrl] = React.useState<string>("");
+  const [maxCapacity, setMaxCapacity] = React.useState<string>("120");
+  const [submitting, setSubmitting] = React.useState(false);
+  const [conflictHint, setConflictHint] = React.useState<string | null>(null);
 
-  const [submitting, setSubmitting] = React.useState<boolean>(false);
-  const [conflict, setConflict] = React.useState<ConflictSuggestion | null>(null);
-  const [formError, setFormError] = React.useState<string | null>(null);
-  const [seriesSummary, setSeriesSummary] = React.useState<{
-    readonly createdCount: number;
-    readonly conflictDates: readonly string[];
-  } | null>(null);
+  const selectedHall = data.halls.find((h) => h.id === selectedHallId);
+  const parsedPrice = Math.max(0, Number.parseInt(priceEgp || "0", 10) || 0);
+  const sampleSeats =
+    deliveryMode === "online"
+      ? Number.parseInt(maxCapacity || "100", 10) || 100
+      : (selectedHall?.maxCapacity ?? 40);
 
-  const selectedHall = data.halls.find((h) => h.id === selectedHallId) ?? firstHall;
-  const selectedSubject =
-    data.subjects.find((s) => s.id === selectedSubjectId) ?? firstSubject;
+  const financePreview = calculateSessionRevenueBreakdown({
+    priceEgp: parsedPrice,
+    seatCount: sampleSeats,
+    vatRatePct: data.financialPolicy.vatRatePct,
+    teacherSharePct: data.financialPolicy.teacherSharePct,
+    platformFeePct: data.financialPolicy.platformFeePct,
+  });
 
-  // Sessions in the selected hall on the selected day (for the live daily timeline)
-  const dayHallSessions = React.useMemo(() => {
-    return data.sessions
-      .filter(
+  const activeSessions = React.useMemo(
+    () => data.sessions.filter((s) => s.status !== "cancelled"),
+    [data.sessions]
+  );
+
+  const checkHallSlotStatus = React.useCallback(
+    (hallId: string, hour: number) => {
+      if (!selectedDay) return { occupied: false, label: null as string | null };
+      const startIso = buildCairoSlotStartIso(selectedDay, hour);
+      const startDate = new Date(startIso);
+      const endDate = new Date(startDate.getTime() + durationMinutes * 60_000);
+      const candidate = { startsAt: startDate, endsAt: endDate, bufferMinutes: 15 };
+
+      const blocking = activeSessions.find(
         (s) =>
-          s.hallId === selectedHallId &&
-          formatCairoDayKey(s.startsAt) === selectedDayKey
-      )
-      .sort((a, b) => new Date(a.startsAt).getTime() - new Date(b.startsAt).getTime());
-  }, [data.sessions, selectedHallId, selectedDayKey]);
-
-  // Count sessions per day in selected hall for badge dots on 14-day grid
-  const hallCountByDay = React.useMemo(() => {
-    const map: Record<string, number> = {};
-    for (const s of data.sessions) {
-      if (s.hallId !== selectedHallId) continue;
-      const key = formatCairoDayKey(s.startsAt);
-      map[key] = (map[key] ?? 0) + 1;
-    }
-    return map;
-  }, [data.sessions, selectedHallId]);
-
-  const checkSlotConflict = React.useCallback(
-    (time24: string) => {
-      const startsAtIso = cairoWallTimeToIso(selectedDayKey, time24);
-      const startMs = new Date(startsAtIso).getTime();
-      const endsAtIso = new Date(startMs + durationMinutes * 60_000).toISOString();
-
-      const candidate = {
-        startsAt: startsAtIso,
-        endsAt: endsAtIso,
-        bufferMinutes: 15,
-      };
-
-      const hallOverlap = data.sessions.some(
-        (s) =>
-          s.hallId === selectedHallId &&
+          s.hallId === hallId &&
           doBufferedSessionsOverlap(candidate, {
             startsAt: s.startsAt,
             endsAt: s.endsAt,
@@ -281,731 +143,492 @@ export function CalHallBookingGrid({ schoolSlug, data }: CalHallBookingGridProps
           })
       );
 
-      const teacherOverlap = data.sessions.some(
-        (s) =>
-          s.isOwnSession &&
-          s.hallId !== selectedHallId &&
-          doBufferedSessionsOverlap(candidate, {
-            startsAt: s.startsAt,
-            endsAt: s.endsAt,
-            bufferMinutes: 0,
-          })
-      );
-
-      return { hallOverlap, teacherOverlap, startsAtIso, endsAtIso };
+      if (blocking) {
+        return { occupied: true, label: blocking.subjectNameAr };
+      }
+      return { occupied: false, label: null };
     },
-    [data.sessions, durationMinutes, selectedDayKey, selectedHallId]
+    [activeSessions, durationMinutes, selectedDay]
   );
 
-  const activePreview = React.useMemo(
-    () => checkSlotConflict(selectedTime24),
-    [checkSlotConflict, selectedTime24]
-  );
-
-  const handleApplySuggestedTime = (nextFreeSlotIso: string) => {
-    const suggestedDay = formatCairoDayKey(nextFreeSlotIso);
-    const suggestedTime = extractCairoTime24(nextFreeSlotIso);
-    setSelectedDayKey(suggestedDay);
-    setSelectedTime24(suggestedTime);
-    setConflict(null);
-    toast({
-      title: "تم تطبيق الموعد البديل المقترح",
-      description: `${formatCairoDate(nextFreeSlotIso)} · ${formatCairoTime(nextFreeSlotIso)}`,
-      variant: "success",
-    });
+  const handleSelectMatrixSlot = (hallId: string, hour: number) => {
+    setDeliveryMode("in_person");
+    setSelectedHallId(hallId);
+    setSelectedHour(hour);
+    setConflictHint(null);
   };
 
-  const handleApplySuggestedHall = (altHallCode: string) => {
-    const targetHall = data.halls.find((h) => h.code === altHallCode);
-    if (!targetHall) return;
-    setSelectedHallId(targetHall.id);
-    setConflict(null);
-    toast({
-      title: "تم اختيار القاعة البديلة",
-      description: `${targetHall.nameAr} (${targetHall.code})`,
-      variant: "success",
-    });
-  };
-
-  const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-    setConflict(null);
-    setFormError(null);
-    setSeriesSummary(null);
-
-    if (!selectedHallId || !selectedSubjectId) {
-      setFormError("يرجى اختيار المادة الدراسية والمدرج أولاً.");
-      return;
-    }
-
-    const effectiveTitle =
-      titleAr.trim() ||
-      (selectedSubject ? `محاضرة ${selectedSubject.nameAr}` : "حصة دراسية");
-
-    const startsAtIso = cairoWallTimeToIso(selectedDayKey, selectedTime24);
-    const parsedCap = customMaxCapacity.trim()
-      ? Number.parseInt(customMaxCapacity.trim(), 10)
-      : undefined;
-
-    if (
-      parsedCap !== undefined &&
-      (Number.isNaN(parsedCap) ||
-        parsedCap < 1 ||
-        (selectedHall && parsedCap > selectedHall.maxCapacity))
-    ) {
-      setFormError(
-        `السعة المخصصة يجب أن تكون بين ١ و ${formatArabicNumber(selectedHall?.maxCapacity ?? 500)} مقعد.`
-      );
+  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    setConflictHint(null);
+    if (!subjectId) {
+      toast({
+        title: "لا توجد مواد معتمدة",
+        description: "تواصل مع إدارة المدرسة لتعيين موادك الدراسية أولاً.",
+        variant: "error",
+      });
       return;
     }
 
     setSubmitting(true);
     try {
-      if (isWeeklySeries) {
-        const result = await createSessionSeriesAction({
+      const startsAtIso = buildCairoSlotStartIso(selectedDay, selectedHour);
+      const parsedOnlineCap = Math.max(
+        10,
+        Math.min(500, Number.parseInt(maxCapacity || "150", 10) || 150)
+      );
+
+      if (bookingMode === "single") {
+        const res = await createSessionAction({
           schoolSlug,
-          hallId: selectedHallId,
-          subjectId: selectedSubjectId,
-          titleAr: effectiveTitle,
+          hallId: deliveryMode === "online" ? null : selectedHallId,
+          subjectId,
+          titleAr: titleAr.trim(),
           startsAtIso,
           durationMinutes,
-          recurrenceWeeks,
+          maxCapacity:
+            deliveryMode === "online" ? parsedOnlineCap : selectedHall?.maxCapacity,
+          deliveryMode,
+          meetingUrl: deliveryMode === "online" ? meetingUrl.trim() || null : null,
+          priceEgp: parsedPrice,
         });
 
-        if (!result.ok) {
-          setFormError(result.error.message);
+        if (!res.ok) {
+          if (res.error.code === "SCHEDULE_CONFLICT") {
+            setConflictHint(res.error.message);
+          }
           toast({
-            title: "تعذر إنشاء السلسلة الأسبوعية",
-            description: result.error.message,
+            title: "تعذر جدولة الحصة",
+            description: res.error.message,
             variant: "error",
           });
           return;
         }
 
-        setSeriesSummary(result.data);
         toast({
-          title: `تم جدولة ${formatArabicNumber(result.data.createdCount)} حصة أسبوعية`,
-          description:
-            result.data.conflictDates.length > 0
-              ? `تم تخطي ${formatArabicNumber(result.data.conflictDates.length)} تواريخ متعارضة`
-              : "جميع الأسابيع بدون تعارضات",
-          variant: result.data.createdCount > 0 ? "success" : "warning",
+          title:
+            deliveryMode === "online"
+              ? "تم نشر الحصة الأونلاين ✓"
+              : "تم حجز القاعة وإعلان الحصة ✓",
+          variant: "success",
         });
-        router.refresh();
-        return;
-      }
+      } else {
+        const res = await createSessionSeriesAction({
+          schoolSlug,
+          hallId: deliveryMode === "online" ? null : selectedHallId,
+          subjectId,
+          titleAr: titleAr.trim(),
+          startsAtIso,
+          durationMinutes,
+          recurrenceWeeks,
+          maxCapacity:
+            deliveryMode === "online" ? parsedOnlineCap : selectedHall?.maxCapacity,
+          deliveryMode,
+          meetingUrl: deliveryMode === "online" ? meetingUrl.trim() || null : null,
+          priceEgp: parsedPrice,
+        });
 
-      const result = await createSessionAction({
-        schoolSlug,
-        hallId: selectedHallId,
-        subjectId: selectedSubjectId,
-        titleAr: effectiveTitle,
-        startsAtIso,
-        durationMinutes,
-        ...(parsedCap !== undefined ? { maxCapacity: parsedCap } : {}),
-      });
-
-      if (!result.ok) {
-        if (result.error.code === "SCHEDULE_CONFLICT") {
-          const rawDetails = result.error.details;
-          const nextFreeSlotIso =
-            rawDetails && typeof rawDetails.nextFreeSlotIso === "string"
-              ? rawDetails.nextFreeSlotIso
-              : null;
-          const alternativeHallCode =
-            rawDetails && typeof rawDetails.alternativeHallCode === "string"
-              ? rawDetails.alternativeHallCode
-              : null;
-
-          setConflict({
-            message: result.error.message,
-            nextFreeSlotIso,
-            alternativeHallCode,
+        if (!res.ok) {
+          toast({
+            title: "تعذر جدولة السلسلة",
+            description: res.error.message,
+            variant: "error",
           });
-        } else {
-          setFormError(result.error.message);
+          return;
         }
 
         toast({
-          title: "تعذر تثبيت الحجز",
-          description: result.error.message,
-          variant: "error",
+          title: `تم جدولة ${formatArabicNumber(res.data.createdCount)} حصص بنجاح ✓`,
+          description:
+            res.data.conflictDates.length > 0
+              ? `تعارضت ${formatArabicNumber(res.data.conflictDates.length)} تواريخ وتم تخطيها`
+              : undefined,
+          variant: "success",
         });
-        return;
       }
 
-      toast({
-        title: "تم حجز المدرج وجدولة الحصة",
-        description: `${effectiveTitle} · ${selectedHall?.nameAr ?? ""}`,
-        variant: "success",
-      });
       setTitleAr("");
+      router.push(`/s/${schoolSlug}/teacher`);
       router.refresh();
-    } catch {
-      setFormError("حدث خطأ غير متوقع أثناء إرسال طلب الجدولة.");
     } finally {
       setSubmitting(false);
     }
   };
 
-  if (data.halls.length === 0 || data.subjects.length === 0) {
-    return (
-      <Card className="p-6 text-center">
-        <Building2 className="mx-auto h-8 w-8 text-[var(--text-muted)]" />
-        <h2 className="mt-3 text-base font-bold text-[var(--text-primary)]">
-          بيانات القاعات أو المواد غير مكتملة بعد
-        </h2>
-        <p className="mt-1 text-xs text-[var(--text-muted)]">
-          يرجى التأكد من وجود قاعة نشطة ومادة دراسية مسندة لحساب المعلم من إدارة المدرسة.
-        </p>
-      </Card>
-    );
-  }
-
   return (
-    <div className="flex flex-col gap-5">
-      {/* Header Bar */}
-      <div className="flex flex-wrap items-center justify-between gap-3">
+    <div className="flex flex-col gap-6">
+      {/* Top Controls Bar */}
+      <MotionReveal className="flex flex-wrap items-center justify-between gap-4 rounded-[2rem] border border-[var(--border-hairline)] bg-[var(--bg-surface)] p-5 sm:p-6 hairline-lift">
         <div>
-          <h1 className="text-xl font-bold text-[var(--text-primary)] sm:text-2xl">
-            حجز قاعة وجدولة حصة جديدة
+          <Badge variant="info" size="md">
+            حضوري بالمدرجات · بث أونلاين
+          </Badge>
+          <h1 className="mt-2 text-2xl font-extrabold text-[var(--text-primary)]">
+            جدولة وحجز القاعات
           </h1>
-          <p className="mt-1 text-sm text-[var(--text-secondary)]">
-            فحص تلقائي لتعارضات القاعات والمواعيد لضمان راحة الطلاب وسهولة الانتقال بين الحصص
+          <p className="mt-0.5 text-sm text-[var(--text-secondary)]">
+            اختر توقيتاً متاحاً من المصفوفة أو أطلق حصة أونلاين مباشرة
           </p>
         </div>
-        <Badge variant="primary" size="md">بتوقيت القاهرة</Badge>
+
+        <div className="flex flex-wrap items-center gap-2">
+          {/* Delivery Mode Switch */}
+          <div className="inline-flex rounded-xl border border-[var(--border-hairline)] bg-[var(--bg-sunken)] p-1">
+            <button
+              type="button"
+              onClick={() => setDeliveryMode("in_person")}
+              className={cn(
+                "inline-flex min-h-[40px] items-center gap-1.5 rounded-lg px-3 text-xs font-bold cursor-pointer",
+                deliveryMode === "in_person"
+                  ? "bg-[#0A1F44] text-white dark:bg-blue-600"
+                  : "text-[var(--text-secondary)]"
+              )}
+            >
+              <MapPin className="h-3.5 w-3.5" />
+              <span>قاعة مدرسية</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setDeliveryMode("online")}
+              className={cn(
+                "inline-flex min-h-[40px] items-center gap-1.5 rounded-lg px-3 text-xs font-bold cursor-pointer",
+                deliveryMode === "online"
+                  ? "bg-[#2563EB] text-white"
+                  : "text-[var(--text-secondary)]"
+              )}
+            >
+              <Laptop className="h-3.5 w-3.5" />
+              <span>أونلاين من البيت</span>
+            </button>
+          </div>
+
+          {/* Single / Weekly Toggle */}
+          <div className="inline-flex rounded-xl border border-[var(--border-hairline)] bg-[var(--bg-sunken)] p-1">
+            <button
+              type="button"
+              onClick={() => setBookingMode("single")}
+              className={cn(
+                "inline-flex min-h-[40px] items-center gap-1 rounded-lg px-3 text-xs font-bold cursor-pointer",
+                bookingMode === "single"
+                  ? "bg-[var(--bg-surface)] text-[var(--text-primary)] shadow-xs"
+                  : "text-[var(--text-secondary)]"
+              )}
+            >
+              <Clock className="h-3.5 w-3.5" />
+              <span>حصة مفردة</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setBookingMode("series")}
+              className={cn(
+                "inline-flex min-h-[40px] items-center gap-1 rounded-lg px-3 text-xs font-bold cursor-pointer",
+                bookingMode === "series"
+                  ? "bg-[var(--bg-surface)] text-[var(--text-primary)] shadow-xs"
+                  : "text-[var(--text-secondary)]"
+              )}
+            >
+              <Repeat className="h-3.5 w-3.5" />
+              <span>تكرار أسبوعي</span>
+            </button>
+          </div>
+        </div>
+      </MotionReveal>
+
+      {/* 7-Day Selector */}
+      <div className="flex gap-2 overflow-x-auto pb-1">
+        {days.map((d) => {
+          const active = selectedDay === d.dateKey;
+          return (
+            <button
+              key={d.dateKey}
+              type="button"
+              onClick={() => setSelectedDay(d.dateKey)}
+              className={cn(
+                "flex min-h-[60px] min-w-[92px] shrink-0 flex-col items-center justify-center rounded-2xl border px-3 py-2 text-xs font-bold transition-all cursor-pointer",
+                active
+                  ? "border-[#2563EB] bg-[#2563EB] text-white shadow-sm"
+                  : "border-[var(--border-hairline)] bg-[var(--bg-surface)] text-[var(--text-secondary)] hover:border-[var(--border-strong)]"
+              )}
+            >
+              <span>{d.weekday}</span>
+              <span className="mt-0.5 text-[11px] opacity-90">{d.label}</span>
+            </button>
+          );
+        })}
       </div>
 
-      {/* Cal.com-Inspired 3-Column Split Frame */}
-      <form
-        onSubmit={handleSubmit}
-        className="grid grid-cols-1 divide-y divide-[var(--border-hairline)] overflow-hidden rounded-xl border border-[var(--border-hairline)] bg-[var(--bg-surface)] hairline-lift lg:grid-cols-12 lg:divide-y-0 lg:divide-x lg:divide-x-reverse"
-      >
-        {/* COLUMN 1: Subject, Hall Selector, Duration & Weekly Toggle */}
-        <div className="flex flex-col gap-4 p-4 sm:p-5 lg:col-span-4">
-          <div className="flex items-center justify-between">
-            <span className="text-sm font-bold text-[var(--text-primary)]">
-              ١ · بيانات الحصة والمدرج
-            </span>
-            <span className="text-xs font-medium text-[var(--text-muted)]">
-              {data.specialtyAr}
-            </span>
-          </div>
+      {/* Slide 4 Blueprint: Interactive Hall × Time Slot Matrix */}
+      {deliveryMode === "in_person" && (
+        <Card className="overflow-hidden">
+          <CardHeader className="border-b border-[var(--border-hairline)] pb-3">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <CardTitle className="flex items-center gap-2 text-base">
+                <CalendarDays className="h-4 w-4 text-[#2563EB] dark:text-cyan-300" />
+                <span>مصفوفة إتاحة القاعات والأوقات</span>
+              </CardTitle>
+              <div className="flex items-center gap-3 text-[11px] font-semibold text-[var(--text-muted)]">
+                <span className="inline-flex items-center gap-1">
+                  <span className="h-2.5 w-2.5 rounded-xs border border-cyan-500 bg-cyan-400/20" />
+                  متاحة
+                </span>
+                <span className="inline-flex items-center gap-1">
+                  <span className="h-2.5 w-2.5 rounded-xs border border-[#2563EB] bg-[#2563EB]" />
+                  اختيارك
+                </span>
+                <span className="inline-flex items-center gap-1">
+                  <span className="h-2.5 w-2.5 rounded-xs bg-slate-300 dark:bg-slate-700" />
+                  محجوزة
+                </span>
+              </div>
+            </div>
+          </CardHeader>
 
-          <SelectInput
-            label="المادة الدراسية"
-            value={selectedSubjectId}
-            onChange={(e) => {
-              setSelectedSubjectId(e.target.value);
-              setConflict(null);
-            }}
+          <div
+            tabIndex={0}
+            role="region"
+            aria-label="مصفوفة القاعات والأوقات"
+            className="table-wrapper"
           >
-            {data.subjects.map((subj) => (
-              <option key={subj.id} value={subj.id}>
-                {subj.nameAr} ({subj.code})
-              </option>
-            ))}
-          </SelectInput>
-
-          <div className="flex flex-col gap-1.5">
-            <span className="text-xs sm:text-sm font-medium text-[var(--text-primary)]">
-              اختيار القاعة / المدرج
-            </span>
-            <div className="grid grid-cols-1 gap-2">
-              {data.halls.map((hall) => {
-                const active = hall.id === selectedHallId;
-                return (
-                  <button
-                    key={hall.id}
-                    type="button"
-                    onClick={() => {
-                      setSelectedHallId(hall.id);
-                      setConflict(null);
-                    }}
-                    className={cn(
-                      "flex min-h-[48px] items-center justify-between rounded-lg border px-3 py-2 text-start transition-colors cursor-pointer",
-                      active
-                        ? "border-[#1E3A8A] bg-blue-50/70 dark:border-blue-500 dark:bg-blue-500/15"
-                        : "border-[var(--border-hairline)] bg-[var(--bg-surface)] hover:border-[var(--border-strong)] hover:bg-[var(--bg-sunken)]"
-                    )}
-                  >
-                    <div className="min-w-0">
-                      <p className="truncate text-sm font-semibold text-[var(--text-primary)]">
-                        {hall.nameAr}
-                      </p>
-                      <p className="font-mono text-[11px] text-[var(--text-muted)]" dir="ltr">
-                        {hall.code}
-                      </p>
-                    </div>
-                    <Badge variant={active ? "primary" : "neutral"} size="sm">
-                      {formatArabicNumber(hall.maxCapacity)} مقعد
-                    </Badge>
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-
-          <Input
-            label="عنوان الحصة"
-            maxLength={160}
-            placeholder={
-              selectedSubject
-                ? `مثال: مراجعة ${selectedSubject.nameAr} — الفصل الأول`
-                : "عنوان المحاضرة"
-            }
-            value={titleAr}
-            onChange={(e) => setTitleAr(e.target.value)}
-          />
-
-          <div className="flex flex-col gap-1.5">
-            <span className="text-xs sm:text-sm font-medium text-[var(--text-primary)]">
-              مدة الحصة
-            </span>
-            <div className="grid grid-cols-4 gap-1.5">
-              {DURATION_OPTIONS.map((mins) => {
-                const active = durationMinutes === mins;
-                return (
-                  <button
-                    key={mins}
-                    type="button"
-                    onClick={() => {
-                      setDurationMinutes(mins);
-                      setConflict(null);
-                    }}
-                    className={cn(
-                      "min-h-[44px] rounded-lg border text-xs font-semibold tabular-nums transition-colors cursor-pointer",
-                      active
-                        ? "border-[#1E3A8A] bg-[#1E3A8A] text-white dark:border-blue-500 dark:bg-blue-600"
-                        : "border-[var(--border-hairline)] bg-[var(--bg-sunken)] text-[var(--text-secondary)] hover:border-[var(--border-strong)]"
-                    )}
-                  >
-                    {formatArabicNumber(mins)} د
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-1">
-            <Input
-              label="سعة مخصصة (اختياري)"
-              type="number"
-              min={1}
-              max={selectedHall?.maxCapacity ?? 2000}
-              placeholder={
-                selectedHall
-                  ? `الافتراضي: ${selectedHall.maxCapacity} مقعد`
-                  : "سعة القاعة"
-              }
-              value={customMaxCapacity}
-              onChange={(e) => setCustomMaxCapacity(e.target.value)}
-              disabled={isWeeklySeries}
-              hint={isWeeklySeries ? "السلسلة الأسبوعية تستخدم السعة الكاملة للقاعة" : undefined}
-            />
-          </div>
-
-          {/* Weekly Recurrence Toggle */}
-          <div className="rounded-lg border border-[var(--border-hairline)] bg-[var(--bg-sunken)] p-3">
-            <div className="flex items-center justify-between gap-2">
-              <div className="flex items-center gap-2">
-                <Repeat className="h-4 w-4 text-[#1E3A8A] dark:text-blue-400" />
-                <span className="text-xs font-semibold text-[var(--text-primary)]">
-                  تكرار أسبوعي تلقائي
-                </span>
-              </div>
-              <button
-                type="button"
-                role="switch"
-                aria-checked={isWeeklySeries}
-                onClick={() => {
-                  setIsWeeklySeries((prev) => !prev);
-                  setConflict(null);
-                }}
-                className={cn(
-                  "inline-flex min-h-[36px] items-center rounded-md border px-2.5 text-xs font-semibold transition-colors cursor-pointer",
-                  isWeeklySeries
-                    ? "border-[#1E3A8A] bg-[#1E3A8A] text-white dark:border-blue-500 dark:bg-blue-600"
-                    : "border-[var(--border-hairline)] bg-[var(--bg-surface)] text-[var(--text-secondary)]"
-                )}
-              >
-                {isWeeklySeries ? "مفعّل" : "حصة مفردة"}
-              </button>
-            </div>
-
-            {isWeeklySeries && (
-              <div className="mt-3 flex flex-col gap-2 border-t border-[var(--border-hairline)] pt-2.5">
-                <div className="flex items-center justify-between text-xs text-[var(--text-muted)]">
-                  <span>عدد الأسابيع المتتالية</span>
-                  <span className="font-mono font-semibold text-[var(--text-primary)] tabular-nums">
-                    {formatArabicNumber(recurrenceWeeks)} أسابيع
-                  </span>
-                </div>
-                <div className="grid grid-cols-3 gap-1.5">
-                  {SERIES_WEEK_PRESETS.map((weeks) => (
-                    <button
-                      key={weeks}
-                      type="button"
-                      onClick={() => setRecurrenceWeeks(weeks)}
-                      className={cn(
-                        "min-h-[38px] rounded-md border text-xs font-semibold tabular-nums cursor-pointer",
-                        recurrenceWeeks === weeks
-                          ? "border-[#1E3A8A] bg-[var(--bg-surface)] text-[#1E3A8A] dark:border-blue-400 dark:text-blue-400"
-                          : "border-[var(--border-hairline)] bg-[var(--bg-surface)] text-[var(--text-secondary)]"
-                      )}
+            <table className="w-full min-w-[640px] border-collapse text-xs">
+              <thead>
+                <tr className="border-b border-[var(--border-hairline)] bg-[var(--bg-sunken)]">
+                  <th className="sticky start-0 z-10 bg-[var(--bg-sunken)] px-4 py-3 text-start font-extrabold text-[var(--text-primary)]">
+                    القاعة / السعة
+                  </th>
+                  {SLOT_HOURS.map((hour) => (
+                    <th
+                      key={hour}
+                      className="px-2.5 py-3 text-center font-bold text-[var(--text-secondary)] tabular-nums"
                     >
-                      {formatArabicNumber(weeks)} أسابيع
-                    </button>
+                      {hour > 12 ? `${formatArabicNumber(hour - 12)}:00 م` : `${formatArabicNumber(hour)}:00 ص`}
+                    </th>
                   ))}
-                </div>
-              </div>
-            )}
-          </div>
-        </div>
-
-        {/* COLUMN 2: 14-Day Cairo Date Grid & Live Daily Hall Timeline with 15m Hatched Buffers */}
-        <div className="flex flex-col gap-4 p-4 sm:p-5 lg:col-span-4">
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-semibold text-[var(--text-muted)]">
-              ٢ · التقويم والجدول اليومي للقاعة
-            </span>
-            <span className="inline-flex items-center gap-1 text-xs font-medium text-[var(--text-primary)]">
-              <Calendar className="h-3.5 w-3.5 text-[var(--text-muted)]" />
-              <span>١٤ يوماً</span>
-            </span>
-          </div>
-
-          {/* 14-day compact grid */}
-          <div className="grid grid-cols-4 gap-1.5 sm:grid-cols-7 lg:grid-cols-4">
-            {days.map((day) => {
-              const active = day.dayKey === selectedDayKey;
-              const busyCount = hallCountByDay[day.dayKey] ?? 0;
-              return (
-                <button
-                  key={day.dayKey}
-                  type="button"
-                  onClick={() => {
-                    setSelectedDayKey(day.dayKey);
-                    setConflict(null);
-                  }}
-                  className={cn(
-                    "flex min-h-[58px] flex-col items-center justify-center rounded-lg border px-1 py-1.5 transition-colors cursor-pointer",
-                    active
-                      ? "border-[#1E3A8A] bg-[#1E3A8A] text-white dark:border-blue-500 dark:bg-blue-600"
-                      : "border-[var(--border-hairline)] bg-[var(--bg-surface)] text-[var(--text-primary)] hover:border-[var(--border-strong)] hover:bg-[var(--bg-sunken)]"
-                  )}
-                >
-                  <span
-                    className={cn(
-                      "text-[10px]",
-                      active ? "text-blue-100" : "text-[var(--text-muted)]"
-                    )}
-                  >
-                    {day.weekdayLabel}
-                  </span>
-                  <span className="text-sm font-bold tabular-nums leading-tight">
-                    {day.dayNumLabel}
-                  </span>
-                  <span
-                    className={cn(
-                      "text-[10px] tabular-nums",
-                      active ? "text-blue-100" : "text-[var(--text-muted)]"
-                    )}
-                  >
-                    {busyCount > 0 ? `${formatArabicNumber(busyCount)} حصة` : day.monthLabel}
-                  </span>
-                </button>
-              );
-            })}
-          </div>
-
-          {/* Live Daily Hall Timeline with Diagonal-Hatched 15m Buffers */}
-          <div className="flex flex-1 flex-col rounded-xl border border-[var(--border-hairline)] bg-[var(--bg-sunken)] p-3">
-            <div className="flex items-center justify-between gap-2 border-b border-[var(--border-hairline)] pb-2">
-              <span className="text-xs font-bold text-[var(--text-primary)]">
-                جدول {selectedHall?.nameAr ?? "القاعة"}
-              </span>
-              <span className="text-[11px] text-[var(--text-muted)]">
-                {formatCairoDate(cairoWallTimeToIso(selectedDayKey, "12:00"))}
-              </span>
-            </div>
-
-            {dayHallSessions.length === 0 ? (
-              <div className="flex flex-1 flex-col items-center justify-center gap-1.5 py-8 text-center">
-                <CheckCircle2 className="h-6 w-6 text-emerald-600 dark:text-emerald-400" />
-                <p className="text-xs font-semibold text-[var(--text-primary)]">
-                  القاعة شاغرة طوال اليوم
-                </p>
-                <p className="text-[11px] text-[var(--text-muted)]">
-                  يمكنك حجز أي فترة زمنية متاحة من القائمة المجاورة
-                </p>
-              </div>
-            ) : (
-              <div className="mt-2.5 flex flex-col gap-2">
-                {dayHallSessions.map((s) => {
-                  const bufferedEndIso = new Date(
-                    new Date(s.endsAt).getTime() + s.bufferMinutes * 60_000
-                  ).toISOString();
-                  return (
-                    <div
-                      key={s.id}
-                      className="overflow-hidden rounded-lg border border-[var(--border-hairline)] bg-[var(--bg-surface)]"
-                    >
-                      {/* Occupied Session Band */}
-                      <div className="flex items-start justify-between gap-2 p-2.5">
-                        <div className="min-w-0">
-                          <p className="truncate text-xs font-bold text-[var(--text-primary)]">
-                            {s.titleAr}
-                          </p>
-                          <p className="mt-0.5 text-[11px] text-[var(--text-secondary)] tabular-nums">
-                            {formatCairoTimeRange(s.startsAt, s.endsAt)}
-                          </p>
-                        </div>
-                        <Badge variant={s.isOwnSession ? "primary" : "neutral"} dir="ltr">
-                          {s.teacherCode}
-                        </Badge>
-                      </div>
-
-                      {/* 15m Diagonal-Hatched Buffer Band */}
-                      <div
-                        style={BUFFER_HATCH_STYLE}
-                        className="flex items-center justify-between border-t border-amber-300/70 px-2.5 py-1 text-[10px] font-medium text-amber-800 dark:border-amber-500/30 dark:text-amber-300"
-                      >
-                        <span>
-                          فاصل انتقال {formatArabicNumber(s.bufferMinutes)} دقيقة (تهوية وتفريغ)
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-[var(--border-hairline)]">
+                {data.halls.map((hall) => (
+                  <tr key={hall.id}>
+                    <th className="sticky start-0 z-10 bg-[var(--bg-surface)] px-4 py-3 text-start">
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="font-bold text-[var(--text-primary)]">
+                          {hall.nameAr}
                         </span>
-                        <span className="font-mono tabular-nums" dir="ltr">
-                          → {formatCairoTime(bufferedEndIso, { hour12: false, locale: "en-GB" })}
+                        <span className="rounded-md bg-cyan-500/15 px-2 py-0.5 text-[11px] font-bold text-cyan-800 dark:text-cyan-300 tabular-nums">
+                          {formatArabicNumber(hall.maxCapacity)} مقعد
                         </span>
                       </div>
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-          </div>
-        </div>
+                    </th>
 
-        {/* COLUMN 3: Time Slot Picker, Conflict Suggestions & Confirm */}
-        <div className="flex flex-col justify-between gap-4 p-4 sm:p-5 lg:col-span-4">
-          <div className="flex flex-col gap-3">
-            <div className="flex items-center justify-between">
-              <span className="text-xs font-semibold text-[var(--text-muted)]">
-                ٣ · اختيار التوقيت والتأكيد
-              </span>
+                    {SLOT_HOURS.map((hour) => {
+                      const slot = checkHallSlotStatus(hall.id, hour);
+                      const isSelected =
+                        selectedHallId === hall.id && selectedHour === hour;
+                      return (
+                        <td key={hour} className="p-1.5 text-center">
+                          {slot.occupied ? (
+                            <div
+                              className="slot-locked-hatch flex min-h-[46px] flex-col items-center justify-center rounded-xl border border-[var(--border-hairline)] px-2 py-1 text-[11px] text-[var(--text-muted)]"
+                              title={slot.label ?? "مشغول"}
+                            >
+                              <Lock className="h-3.5 w-3.5" />
+                              <span className="mt-0.5 max-w-[78px] truncate">
+                                {slot.label}
+                              </span>
+                            </div>
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={() => handleSelectMatrixSlot(hall.id, hour)}
+                              className={cn(
+                                "flex min-h-[46px] w-full flex-col items-center justify-center rounded-xl border text-[11px] font-bold transition-all cursor-pointer",
+                                isSelected
+                                  ? "border-[#2563EB] bg-[#2563EB] text-white shadow-sm ring-2 ring-cyan-300/60"
+                                  : "border-cyan-400/40 bg-cyan-50/40 text-cyan-900 hover:border-cyan-500 hover:bg-cyan-100/60 dark:border-cyan-500/30 dark:bg-cyan-500/10 dark:text-cyan-200"
+                              )}
+                            >
+                              {isSelected ? (
+                                <>
+                                  <CheckCircle2 className="h-4 w-4" />
+                                  <span>مختار</span>
+                                </>
+                              ) : (
+                                <span>متاح</span>
+                              )}
+                            </button>
+                          )}
+                        </td>
+                      );
+                    })}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </Card>
+      )}
+
+      {/* Booking Details Form */}
+      <Card>
+        <CardHeader className="border-b border-[var(--border-hairline)] pb-3">
+          <CardTitle className="flex items-center gap-2 text-lg">
+            <Plus className="h-5 w-5 text-[#2563EB]" />
+            <span>
+              {deliveryMode === "online"
+                ? "تفاصيل الحصة الأونلاين"
+                : `تأكيد الحجز — ${selectedHall?.nameAr ?? "اختر قاعة"}`}
+            </span>
+          </CardTitle>
+        </CardHeader>
+
+        <CardContent className="pt-5">
+          <form onSubmit={handleSubmit} className="flex flex-col gap-4">
+            {conflictHint && (
               <div
-                className="inline-flex rounded-md border border-[var(--border-hairline)] bg-[var(--bg-sunken)] p-0.5"
-                role="group"
-                aria-label="تنسيق الساعة"
+                role="alert"
+                className="flex items-start gap-2.5 rounded-2xl border border-amber-300 bg-amber-50 p-4 text-sm font-semibold text-amber-900 dark:border-amber-500/40 dark:bg-amber-500/10 dark:text-amber-200"
               >
-                <button
-                  type="button"
-                  onClick={() => setHourFormat("12h")}
-                  className={cn(
-                    "min-h-[30px] rounded px-2 text-[11px] font-medium cursor-pointer",
-                    hourFormat === "12h"
-                      ? "bg-[var(--bg-surface)] text-[var(--text-primary)] shadow-xs"
-                      : "text-[var(--text-muted)]"
-                  )}
+                <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0" />
+                <span>{conflictHint}</span>
+              </div>
+            )}
+
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+              <SelectInput
+                label="المادة الدراسية"
+                value={subjectId}
+                onChange={(e) => setSubjectId(e.target.value)}
+              >
+                {data.subjects.map((subj) => (
+                  <option key={subj.id} value={subj.id}>
+                    {subj.nameAr}
+                  </option>
+                ))}
+              </SelectInput>
+
+              <Input
+                label="عنوان الحصة"
+                required
+                placeholder="مثال: مراجعة الجبر والهندسة الفراغية"
+                value={titleAr}
+                onChange={(e) => setTitleAr(e.target.value)}
+              />
+
+              <SelectInput
+                label="الساعة (بتوقيت القاهرة)"
+                value={String(selectedHour)}
+                onChange={(e) => setSelectedHour(Number(e.target.value))}
+              >
+                {SLOT_HOURS.map((h) => (
+                  <option key={h} value={String(h)}>
+                    {h > 12 ? `${formatArabicNumber(h - 12)}:00 م` : `${formatArabicNumber(h)}:00 ص`}
+                  </option>
+                ))}
+              </SelectInput>
+            </div>
+
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+              <SelectInput
+                label="مدة الحصة"
+                value={String(durationMinutes)}
+                onChange={(e) => setDurationMinutes(Number(e.target.value))}
+              >
+                {DURATION_OPTIONS.map((m) => (
+                  <option key={m} value={String(m)}>
+                    {formatArabicNumber(m)} دقيقة
+                  </option>
+                ))}
+              </SelectInput>
+
+              <Input
+                label="سعر المقعد (ج.م — 0 للمجانية)"
+                type="number"
+                min={0}
+                max={10000}
+                dir="ltr"
+                value={priceEgp}
+                onChange={(e) => setPriceEgp(e.target.value)}
+                startAdornment={<Wallet className="h-4 w-4" />}
+              />
+
+              {bookingMode === "series" ? (
+                <SelectInput
+                  label="عدد الأسابيع المتكررة"
+                  value={String(recurrenceWeeks)}
+                  onChange={(e) => setRecurrenceWeeks(Number(e.target.value))}
                 >
-                  ١٢ س
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setHourFormat("24h")}
-                  className={cn(
-                    "min-h-[30px] rounded px-2 font-mono text-[11px] font-medium cursor-pointer",
-                    hourFormat === "24h"
-                      ? "bg-[var(--bg-surface)] text-[var(--text-primary)] shadow-xs"
-                      : "text-[var(--text-muted)]"
-                  )}
+                  <option value="2">أسبوعان</option>
+                  <option value="4">٤ أسابيع (شهر)</option>
+                  <option value="8">٨ أسابيع</option>
+                </SelectInput>
+              ) : deliveryMode === "online" ? (
+                <Input
+                  label="أقصى عدد للطلاب أونلاين"
+                  type="number"
+                  min={10}
+                  max={500}
                   dir="ltr"
+                  value={maxCapacity}
+                  onChange={(e) => setMaxCapacity(e.target.value)}
+                />
+              ) : (
+                <SelectInput
+                  label="القاعة المختارة"
+                  value={selectedHallId}
+                  onChange={(e) => setSelectedHallId(e.target.value)}
                 >
-                  24h
-                </button>
-              </div>
-            </div>
-
-            {/* Slot grid */}
-            <div className="grid max-h-[320px] grid-cols-2 gap-1.5 overflow-y-auto pe-0.5">
-              {SLOT_TIMES_24.map((time24) => {
-                const { hallOverlap, teacherOverlap, startsAtIso } =
-                  checkSlotConflict(time24);
-                const hasConflict = hallOverlap || teacherOverlap;
-                const isSelected = selectedTime24 === time24;
-                const displayTime = formatCairoTime(startsAtIso, {
-                  hour12: hourFormat === "12h",
-                  locale: hourFormat === "24h" ? "en-GB" : "ar-EG",
-                });
-
-                return (
-                  <button
-                    key={time24}
-                    type="button"
-                    onClick={() => {
-                      setSelectedTime24(time24);
-                      setConflict(null);
-                      setFormError(null);
-                    }}
-                    style={hasConflict && !isSelected ? CONFLICT_HATCH_STYLE : undefined}
-                    className={cn(
-                      "flex min-h-[44px] items-center justify-between gap-1.5 rounded-lg border px-2.5 py-2 text-start transition-colors cursor-pointer",
-                      isSelected
-                        ? hasConflict
-                          ? "border-amber-600 bg-amber-50 dark:border-amber-500 dark:bg-amber-500/15"
-                          : "border-[#1E3A8A] bg-blue-50/80 dark:border-blue-500 dark:bg-blue-500/15"
-                        : hasConflict
-                          ? "border-red-200 text-[var(--text-muted)] dark:border-red-500/25"
-                          : "border-[var(--border-hairline)] bg-[var(--bg-surface)] hover:border-[var(--border-strong)]"
-                    )}
-                  >
-                    <span className="flex items-center gap-1.5">
-                      <span
-                        className={cn(
-                          "h-2 w-2 shrink-0 rounded-full",
-                          hasConflict ? "bg-red-500" : "bg-emerald-500"
-                        )}
-                      />
-                      <span
-                        className={cn(
-                          "text-xs font-semibold tabular-nums",
-                          hourFormat === "24h" && "font-mono"
-                        )}
-                        dir={hourFormat === "24h" ? "ltr" : undefined}
-                      >
-                        {displayTime}
-                      </span>
-                    </span>
-                    <span className="text-[10px] font-medium">
-                      {hallOverlap
-                        ? "مشغول"
-                        : teacherOverlap
-                          ? "تعارض"
-                          : "متاح"}
-                    </span>
-                  </button>
-                );
-              })}
-            </div>
-
-            {/* Selected Slot Summary */}
-            <div className="rounded-lg border border-[var(--border-hairline)] bg-[var(--bg-sunken)] p-3 text-xs">
-              <div className="flex items-center justify-between">
-                <span className="text-[var(--text-muted)]">الموعد المختار</span>
-                <span className="font-semibold text-[var(--text-primary)] tabular-nums">
-                  {formatCairoTimeRange(activePreview.startsAtIso, activePreview.endsAtIso)}
-                </span>
-              </div>
-              <div className="mt-1.5 flex items-center justify-between">
-                <span className="text-[var(--text-muted)]">المدة والفاصل</span>
-                <span className="text-[var(--text-secondary)] tabular-nums">
-                  {formatDurationAr(durationMinutes)} + ١٥ دقيقة فاصل
-                </span>
-              </div>
-              {(activePreview.hallOverlap || activePreview.teacherOverlap) && (
-                <p className="mt-2 flex items-center gap-1.5 text-[11px] font-medium text-amber-700 dark:text-amber-300">
-                  <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
-                  <span>
-                    {activePreview.hallOverlap
-                      ? "تنبيه: القاعة مشغولة أو ضمن فاصل الـ ١٥ دقيقة — عند الإرسال سيقترح النظام البديل المتاح."
-                      : "تنبيه: لديك حصة أخرى في نفس التوقيت."}
-                  </span>
-                </p>
+                  {data.halls.map((h) => (
+                    <option key={h.id} value={h.id}>
+                      {h.nameAr} ({formatArabicNumber(h.maxCapacity)} مقعد)
+                    </option>
+                  ))}
+                </SelectInput>
               )}
             </div>
 
-            {/* Smart Conflict Resolution Box (from 23P01 SCHEDULE_CONFLICT) */}
-            {conflict && (
-              <div
-                role="alert"
-                className="flex flex-col gap-2.5 rounded-xl border border-amber-300 bg-amber-50 p-3.5 dark:border-amber-500/40 dark:bg-amber-500/10"
-              >
-                <div className="flex items-start gap-2 text-xs font-semibold text-amber-900 dark:text-amber-200">
-                  <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-600 dark:text-amber-400" />
-                  <p className="leading-relaxed">{conflict.message}</p>
-                </div>
+            {deliveryMode === "online" && (
+              <Input
+                label="رابط البث المباشر (Zoom / Google Meet — اختياري الآن)"
+                type="url"
+                dir="ltr"
+                placeholder="https://meet.google.com/..."
+                value={meetingUrl}
+                onChange={(e) => setMeetingUrl(e.target.value)}
+                startAdornment={<Laptop className="h-4 w-4" />}
+              />
+            )}
 
-                <div className="flex flex-col gap-1.5">
-                  {conflict.nextFreeSlotIso && (
-                    <Button
-                      type="button"
-                      variant="primary"
-                      size="sm"
-                      className="min-h-[44px] w-full justify-between"
-                      onClick={() =>
-                        conflict.nextFreeSlotIso &&
-                        handleApplySuggestedTime(conflict.nextFreeSlotIso)
-                      }
-                      leftIcon={<Sparkles className="h-4 w-4" />}
-                    >
-                      <span>تطبيق البديل المقترح</span>
-                      <span className="font-mono text-xs tabular-nums">
-                        {formatCairoTime(conflict.nextFreeSlotIso)}
-                      </span>
-                    </Button>
-                  )}
-
-                  {conflict.alternativeHallCode && (
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      className="min-h-[44px] w-full justify-between"
-                      onClick={() =>
-                        conflict.alternativeHallCode &&
-                        handleApplySuggestedHall(conflict.alternativeHallCode)
-                      }
-                      leftIcon={<Building2 className="h-4 w-4" />}
-                    >
-                      <span>تطبيق البديل المقترح (قاعة بديلة)</span>
-                      <span className="font-mono text-xs" dir="ltr">
-                        {conflict.alternativeHallCode}
-                      </span>
-                    </Button>
-                  )}
-                </div>
+            {parsedPrice > 0 && (
+              <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-[#22D3EE]/35 bg-cyan-50/40 px-4 py-3 text-xs dark:bg-cyan-950/20">
+                <span className="font-bold text-[var(--text-primary)]">
+                  السعر للطالب شامل {formatArabicNumber(data.financialPolicy.vatRatePct)}٪ VAT:{" "}
+                  <strong className="text-[#2563EB] dark:text-cyan-300 tabular-nums">
+                    {formatArabicNumber(financePreview.studentPayablePerSeatEgp)} ج.م
+                  </strong>
+                </span>
+                <span className="font-semibold text-emerald-700 dark:text-emerald-400 tabular-nums">
+                  متوقع صافي المعلم ({formatArabicNumber(data.financialPolicy.teacherSharePct)}٪ عند اكتمال السعة):{" "}
+                  {formatArabicNumber(financePreview.teacherNetEgp)} ج.م
+                </span>
               </div>
             )}
 
-            {formError && (
-              <div
-                role="alert"
-                className="rounded-lg border border-red-300 bg-red-50 px-3 py-2 text-xs text-red-800 dark:border-red-500/40 dark:bg-red-500/10 dark:text-red-300"
-              >
-                {formError}
-              </div>
-            )}
-
-            {seriesSummary && (
-              <div className="rounded-lg border border-emerald-300 bg-emerald-50 p-3 text-xs text-emerald-900 dark:border-emerald-500/40 dark:bg-emerald-500/10 dark:text-emerald-200">
-                <p className="font-bold">
-                  تم جدولة {formatArabicNumber(seriesSummary.createdCount)} حصة ضمن السلسلة
-                </p>
-                {seriesSummary.conflictDates.length > 0 && (
-                  <p className="mt-1 font-mono text-[11px]" dir="ltr">
-                    Conflict dates skipped: {seriesSummary.conflictDates.join(", ")}
-                  </p>
-                )}
-              </div>
-            )}
-          </div>
-
-          <Button
-            type="submit"
-            variant="primary"
-            size="lg"
-            fullWidth
-            loading={submitting}
-            className="min-h-[48px]"
-            leftIcon={<Clock className="h-4 w-4" />}
-          >
-            {isWeeklySeries
-              ? `إنشاء سلسلة (${formatArabicNumber(recurrenceWeeks)} أسابيع)`
-              : "تثبيت وحجز المدرج"}
-          </Button>
-        </div>
-      </form>
+            <Button
+              type="submit"
+              variant="primary"
+              size="lg"
+              fullWidth
+              loading={submitting}
+              leftIcon={<CheckCircle2 className="h-5 w-5" />}
+            >
+              {bookingMode === "series"
+                ? "اعتماد وجدولة السلسلة الأسبوعية"
+                : deliveryMode === "online"
+                  ? "إطلاق الحصة الأونلاين"
+                  : "تأكيد حجز المدرج والحصة"}
+            </Button>
+          </form>
+        </CardContent>
+      </Card>
     </div>
   );
 }

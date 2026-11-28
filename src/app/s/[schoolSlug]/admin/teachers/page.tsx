@@ -32,7 +32,9 @@ export default async function SchoolAdminTeachersPage({
   const supabase = await createSupabaseServerClient();
   const { data: approvedRows } = await supabase
     .from("teacher_profiles")
-    .select("id, teacher_code, specialty_ar, approved_at")
+    .select(
+      "id, teacher_code, specialty_ar, qualifications_ar, experience_years, compliance_score, total_deductions_egp, approved_at"
+    )
     .eq("school_id", result.data.school.id)
     .eq("is_approved", true)
     .order("teacher_code", { ascending: true });
@@ -42,6 +44,10 @@ export default async function SchoolAdminTeachersPage({
       id: row.id,
       teacherCode: row.teacher_code,
       specialtyAr: row.specialty_ar,
+      qualificationsAr: row.qualifications_ar,
+      experienceYears: row.experience_years ?? 0,
+      complianceScore: row.compliance_score ?? 100,
+      totalDeductionsEgp: row.total_deductions_egp ?? 0,
       approvedAt: row.approved_at,
     })
   );

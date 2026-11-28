@@ -48,23 +48,26 @@ export default async function SchoolAdminHallsPage({
       `
       )
       .eq("school_id", school.id)
+      .not("hall_id", "is", null)
       .in("status", ["scheduled", "ongoing"])
       .gte("ends_at", nowIso)
       .order("starts_at", { ascending: true })
       .limit(50);
 
-    activeSessions = (rows ?? []).map((row) => {
-      const hall = row.halls as unknown as { code: string } | null;
-      return {
-        id: row.id,
-        titleAr: row.title_ar,
-        hallId: row.hall_id,
-        hallCode: hall?.code ?? "",
-        startsAt: row.starts_at,
-        endsAt: row.ends_at,
-        bookedSeatsCount: row.booked_seats_count,
-      };
-    });
+    activeSessions = (rows ?? [])
+      .filter((row) => Boolean(row.hall_id))
+      .map((row) => {
+        const hall = row.halls as unknown as { code: string } | null;
+        return {
+          id: row.id,
+          titleAr: row.title_ar,
+          hallId: row.hall_id ?? "",
+          hallCode: hall?.code ?? "",
+          startsAt: row.starts_at,
+          endsAt: row.ends_at,
+          bookedSeatsCount: row.booked_seats_count,
+        };
+      });
   }
 
   return (

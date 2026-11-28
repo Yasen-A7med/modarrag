@@ -11,19 +11,16 @@ import {
   Lock,
   Mail,
   Shield,
+  Sparkles,
 } from "lucide-react";
 import {
   signInDemoRoleAction,
   signInWithPasswordAction,
 } from "@/application/auth/actions";
 import { GoogleSignInButton } from "@/components/auth/GoogleSignInButton";
-import {
-  MotionReveal,
-  MotionStaggerCard,
-  MotionStaggerGrid,
-} from "@/components/motion/MotionPrimitives";
+import { MotionReveal } from "@/components/motion/MotionPrimitives";
+import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/Card";
 import { Input } from "@/components/ui/Input";
 import { useToast } from "@/components/ui/Toast";
 import { cn } from "@/lib/utils";
@@ -47,30 +44,34 @@ const PRIMARY_DEMO_ROLES: readonly DemoAccountCard[] = [
   {
     roleKey: "student_201",
     labelAr: "طالب الهندسة",
-    hintAr: "احجز حصصك بالاسم بضغطة واحدة",
+    hintAr: "حجز بالاسم ومتابعة البث",
     artwork: "/images/role-student-3d.webp",
-    accentClass: "border-blue-200 bg-[#EEF5FF]/65 hover:border-[#0B63CE] dark:border-blue-500/30 dark:bg-blue-500/12",
+    accentClass:
+      "border-[#2563EB]/25 bg-blue-50/60 hover:border-[#2563EB] dark:border-blue-500/30 dark:bg-blue-500/12",
   },
   {
     roleKey: "student_202",
     labelAr: "طالب الآداب",
-    hintAr: "طالب مسار الآداب واللغة الإيطالية",
+    hintAr: "مسار الآداب واللغة الثانية",
     artwork: "/images/track-arts.webp",
-    accentClass: "border-sky-200 bg-sky-50/75 hover:border-sky-600 dark:border-sky-500/30 dark:bg-sky-500/12",
+    accentClass:
+      "border-cyan-500/25 bg-cyan-50/60 hover:border-cyan-500 dark:border-cyan-500/30 dark:bg-cyan-500/12",
   },
   {
     roleKey: "teacher_101",
     labelAr: "معلم المادة",
-    hintAr: "افتح كشف الأسماء وسجّل الحضور ✓",
+    hintAr: "الحضور، المحاضرات، والمطبعة",
     artwork: "/images/role-teacher-3d.webp",
-    accentClass: "border-emerald-200 bg-emerald-50/75 hover:border-[#16A34A] dark:border-emerald-500/30 dark:bg-emerald-500/12",
+    accentClass:
+      "border-emerald-500/25 bg-emerald-50/60 hover:border-emerald-600 dark:border-emerald-500/30 dark:bg-emerald-500/12",
   },
   {
     roleKey: "school_admin",
     labelAr: "إدارة المدرسة",
-    hintAr: "القاعات والمناهج والتقارير اليومية",
+    hintAr: "القاعات، المناهج، وعرض الوزارة",
     artwork: "/images/role-admin-3d.webp",
-    accentClass: "border-amber-200 bg-amber-50/75 hover:border-amber-600 dark:border-amber-500/30 dark:bg-amber-500/12",
+    accentClass:
+      "border-amber-500/25 bg-amber-50/60 hover:border-amber-600 dark:border-amber-500/30 dark:bg-amber-500/12",
   },
 ] as const;
 
@@ -118,10 +119,7 @@ export function LoginClient({
         return;
       }
 
-      toast({
-        title: "أهلاً بك في مُدَرَّج",
-        variant: "success",
-      });
+      toast({ title: "أهلاً بك في مُدَرَّج", variant: "success" });
       router.push(result.data.redirectTo);
       router.refresh();
     } catch {
@@ -148,10 +146,7 @@ export function LoginClient({
         return;
       }
 
-      toast({
-        title: `مرحباً بك — ${labelAr}`,
-        variant: "success",
-      });
+      toast({ title: `مرحباً بك — ${labelAr}`, variant: "success" });
       router.push(result.data.redirectTo);
       router.refresh();
     } catch {
@@ -162,84 +157,92 @@ export function LoginClient({
   };
 
   return (
-    <MotionReveal className="mx-auto flex w-full max-w-2xl flex-col gap-6">
-      {/* 1-Tap Friendly Demo Section with 3D Role Art */}
-      <Card className="rounded-3xl">
-        <CardHeader className="pb-3">
-          <CardTitle className="text-xl">تجربة فورية بضغطة واحدة</CardTitle>
-          <p className="text-base text-[var(--text-secondary)]">
-            اختَر دورك لتدخل مباشرةً بدون كتابة كلمة مرور
-          </p>
-        </CardHeader>
+    <MotionReveal className="mx-auto w-full max-w-5xl">
+      <div className="grid grid-cols-1 overflow-hidden rounded-[2rem] border border-[var(--border-hairline)] bg-[var(--bg-surface)] shadow-[0_24px_60px_-22px_rgba(10,31,68,0.16)] lg:grid-cols-12">
+        {/* Right Column (RTL first): Instant Role Switcher */}
+        <div className="flex flex-col justify-between gap-6 border-b border-[var(--border-hairline)] bg-[#0A1F44]/[0.025] p-6 sm:p-8 lg:col-span-6 lg:border-b-0 lg:border-e dark:bg-white/[0.02]">
+          <div>
+            <Badge variant="info" size="md">
+              <Sparkles className="h-3.5 w-3.5" />
+              <span>دخول تجريبي فوري</span>
+            </Badge>
+            <h1 className="mt-3 text-2xl font-extrabold text-[var(--text-primary)]">
+              تجربة بضغطة واحدة
+            </h1>
+            <p className="mt-1 text-sm text-[var(--text-secondary)]">
+              اختر الدور الوظيفي للدخول مباشرةً بدون كتابة كلمة مرور
+            </p>
 
-        <CardContent className="flex flex-col gap-4">
-          <MotionStaggerGrid className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-            {PRIMARY_DEMO_ROLES.map((item) => {
-              const isBusy = loadingRole === item.roleKey;
-              return (
-                <MotionStaggerCard key={item.roleKey}>
+            <div className="mt-5 grid grid-cols-1 gap-3 sm:grid-cols-2">
+              {PRIMARY_DEMO_ROLES.map((item) => {
+                const isBusy = loadingRole === item.roleKey;
+                return (
                   <button
+                    key={item.roleKey}
                     type="button"
                     disabled={loadingRole !== null || submitting}
                     onClick={() => handleDemoSignIn(item.roleKey, item.labelAr)}
                     className={cn(
-                      "group hover-lift-card flex min-h-[84px] w-full items-center gap-3.5 rounded-2xl border p-3.5 text-start cursor-pointer",
+                      "group hover-lift-card flex min-h-[82px] w-full items-center gap-3 rounded-2xl border p-3.5 text-start cursor-pointer",
                       "active:scale-[0.98] disabled:opacity-60",
                       item.accentClass
                     )}
                   >
-                    <span className="art-pedestal h-14 w-14 shrink-0 overflow-hidden rounded-xl p-1">
+                    <span className="art-pedestal h-12 w-12 shrink-0 overflow-hidden rounded-xl p-1">
                       <Image
                         src={item.artwork}
                         alt={item.labelAr}
-                        width={56}
-                        height={56}
-                        className="h-full w-full rounded-lg object-cover transition-transform duration-300 group-hover:scale-105"
+                        width={48}
+                        height={48}
+                        className="h-full w-full rounded-lg object-cover transition-transform duration-200 group-hover:scale-105"
                       />
                     </span>
                     <div className="min-w-0 flex-1">
-                      <p className="text-base font-bold text-[var(--text-primary)]">
+                      <p className="text-sm font-bold text-[var(--text-primary)]">
                         {isBusy ? "جاري الدخول..." : item.labelAr}
                       </p>
-                      <p className="mt-0.5 text-sm text-[var(--text-secondary)]">
+                      <p className="mt-0.5 text-xs text-[var(--text-secondary)]">
                         {item.hintAr}
                       </p>
                     </div>
                   </button>
-                </MotionStaggerCard>
-              );
-            })}
-          </MotionStaggerGrid>
+                );
+              })}
+            </div>
+          </div>
 
-          <div className="flex items-center justify-between border-t border-[var(--border-hairline)] pt-3">
-            <span className="text-sm text-[var(--text-muted)]">
-              لإدارة المدارس على مستوى المحافظة:
+          <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-[var(--border-hairline)] bg-[var(--bg-surface)] px-4 py-3">
+            <span className="text-xs font-semibold text-[var(--text-secondary)]">
+              إدارة المنصة على مستوى الجمهورية
             </span>
             <button
               type="button"
               disabled={loadingRole !== null || submitting}
-              onClick={() => handleDemoSignIn("super_admin", "مشرف المنصة العام")}
-              className="inline-flex min-h-[44px] items-center gap-1.5 rounded-xl border border-[var(--border-hairline)] bg-[var(--bg-sunken)] px-3.5 text-sm font-semibold text-[var(--text-primary)] hover:border-[var(--border-strong)] cursor-pointer disabled:opacity-60"
+              onClick={() => handleDemoSignIn("super_admin", "مشرف المنصة")}
+              className="inline-flex min-h-[40px] items-center gap-2 rounded-xl bg-[#0A1F44] px-4 text-xs font-bold text-white hover:bg-[#132E5C] cursor-pointer disabled:opacity-60 dark:bg-blue-600 dark:hover:bg-blue-500"
             >
-              <Shield className="h-4 w-4 text-[#0B63CE] dark:text-blue-400" />
+              <Shield className="h-4 w-4 text-cyan-300" />
               <span>
                 {loadingRole === "super_admin" ? "جاري الدخول..." : "مشرف المنصة"}
               </span>
             </button>
           </div>
-        </CardContent>
-      </Card>
+        </div>
 
-      {/* Standard Google OAuth & Email / Password Sign-In */}
-      <Card>
-        <CardHeader className="pb-3">
-          <CardTitle className="text-xl">أو ادخل بحسابك الشخصي</CardTitle>
-        </CardHeader>
+        {/* Left Column: Standard Google OAuth & Email/Password */}
+        <div className="flex flex-col justify-center gap-5 p-6 sm:p-8 lg:col-span-6">
+          <div>
+            <h2 className="text-xl font-extrabold text-[var(--text-primary)]">
+              تسجيل الدخول بحسابك
+            </h2>
+            <p className="mt-1 text-sm text-[var(--text-secondary)]">
+              ادخل بالبريد الإلكتروني أو حساب Google الرسمي
+            </p>
+          </div>
 
-        <CardContent className="flex flex-col gap-4">
           <GoogleSignInButton initialGoogleEnabled={initialGoogleEnabled} />
 
-          <div className="relative flex items-center py-1">
+          <div className="relative flex items-center py-0.5">
             <div className="flex-grow border-t border-[var(--border-hairline)]" />
             <span className="mx-3 shrink-0 text-xs font-semibold text-[var(--text-muted)]">
               أو بالبريد الإلكتروني
@@ -287,7 +290,7 @@ export function LoginClient({
                 <button
                   type="button"
                   onClick={() => setShowPassword((prev) => !prev)}
-                  className="inline-flex h-11 w-11 items-center justify-center rounded-xl text-[var(--text-muted)] hover:text-[var(--text-primary)] cursor-pointer"
+                  className="inline-flex h-10 w-10 items-center justify-center rounded-xl text-[var(--text-muted)] hover:text-[var(--text-primary)] cursor-pointer"
                   aria-label={showPassword ? "إخفاء كلمة المرور" : "إظهار كلمة المرور"}
                 >
                   {showPassword ? (
@@ -301,27 +304,27 @@ export function LoginClient({
 
             <Button
               type="submit"
-              variant="emerald"
+              variant="primary"
               size="lg"
               fullWidth
               loading={submitting}
               disabled={loadingRole !== null}
             >
-              تسجيل الدخول
+              دخول
             </Button>
 
-            <p className="text-center text-base text-[var(--text-secondary)]">
+            <p className="text-center text-sm text-[var(--text-secondary)]">
               طالب جديد وليس لديك حساب؟{" "}
               <Link
                 href="/register"
-                className="font-bold text-[#0B63CE] hover:underline dark:text-blue-400"
+                className="font-bold text-[#2563EB] hover:underline dark:text-cyan-300"
               >
-                أنشئ حسابك هنا
+                إنشاء حساب طالب
               </Link>
             </p>
           </form>
-        </CardContent>
-      </Card>
+        </div>
+      </div>
     </MotionReveal>
   );
 }

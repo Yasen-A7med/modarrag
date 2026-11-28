@@ -168,7 +168,16 @@ export const DialogContent = React.forwardRef<HTMLDialogElement, DialogContentPr
 
     // Universal outside-click fallback for browsers without native `closedby="any"` support.
     const handleDialogClick = (event: React.MouseEvent<HTMLDialogElement>) => {
-      if (event.target === localRef.current) {
+      const dialog = localRef.current;
+      if (!dialog) return;
+      if (event.clientX === 0 && event.clientY === 0) return;
+      const rect = dialog.getBoundingClientRect();
+      const clickedOutside =
+        event.clientX < rect.left ||
+        event.clientX > rect.right ||
+        event.clientY < rect.top ||
+        event.clientY > rect.bottom;
+      if (clickedOutside) {
         ctx?.onOpenChange?.(false);
       }
     };

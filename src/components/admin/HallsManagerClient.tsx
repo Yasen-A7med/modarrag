@@ -5,7 +5,6 @@ import { useRouter } from "next/navigation";
 import {
   AlertTriangle,
   ArrowLeftRight,
-  Building2,
   MapPin,
   Pencil,
   Plus,
@@ -33,11 +32,7 @@ import { Input, SelectInput } from "@/components/ui/Input";
 import { useToast } from "@/components/ui/Toast";
 import type { HallStatus } from "@/infrastructure/supabase/database.types";
 import { HALL_STATUS_TONES, type BadgeTone } from "@/lib/design-tokens";
-import {
-  formatArabicNumber,
-  formatCairoDate,
-  formatCairoTimeRange,
-} from "@/lib/formatters";
+import { formatArabicNumber, formatCairoDate, formatCairoTimeRange } from "@/lib/formatters";
 import { cn } from "@/lib/utils";
 
 const HALL_STATUS_OPTIONS: ReadonlyArray<{
@@ -82,8 +77,8 @@ export interface HallsManagerClientProps {
 }
 
 /**
- * School Admin Halls Manager: radial occupancy rings, create/edit hall dialog,
- * status switching, and emergency hall reallocation panel.
+ * Slide 8 Blueprint: Halls grid with Maintenance Glow + Automatic Centered
+ * Emergency Reallocation Modal when switching an occupied hall to maintenance.
  */
 export function HallsManagerClient({
   schoolSlug,
@@ -102,16 +97,12 @@ export function HallsManagerClient({
   const [floorLabelAr, setFloorLabelAr] = React.useState("");
   const [maxCapacity, setMaxCapacity] = React.useState("60");
   const [hallStatus, setHallStatus] = React.useState<HallStatus>("active");
-  const [hasProjector, setHasProjector] = React.useState(true);
-  const [hasAc, setHasAc] = React.useState(true);
   const [savingHall, setSavingHall] = React.useState(false);
 
-  // Status update tracking
-  const [updatingStatusHallId, setUpdatingStatusHallId] = React.useState<string | null>(
-    null
-  );
+  const [updatingStatusHallId, setUpdatingStatusHallId] = React.useState<string | null>(null);
 
-  // Emergency reallocation state
+  // Slide 8 Centered Emergency Reallocation Modal (triggered automatically on maintenance switch if sessions exist)
+  const [emergencyModalOpen, setEmergencyModalOpen] = React.useState(false);
   const firstSession = activeSessions[0];
   const [selectedSessionId, setSelectedSessionId] = React.useState<string>(
     firstSession?.id ?? ""
@@ -146,8 +137,6 @@ export function HallsManagerClient({
     setFloorLabelAr("");
     setMaxCapacity("60");
     setHallStatus("active");
-    setHasProjector(true);
-    setHasAc(true);
     setModalOpen(true);
   };
 
@@ -165,10 +154,10 @@ export function HallsManagerClient({
   const handleSaveHall = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     const parsedCap = Number.parseInt(maxCapacity, 10);
-    if (Number.isNaN(parsedCap) || parsedCap < 1 || parsedCap > 2000) {
+    if (Number.isNaN(parsedCap) || parsedCap < 10 || parsedCap > 500) {
       toast({
         title: "سعة القاعة غير صالحة",
-        description: "يرجى إدخال سعة بين ١ و ٢٠٠٠ مقعد.",
+        description: "يرجى إدخال سعة بين ١٠ و ٥٠٠ مقعد.",
         variant: "error",
       });
       return;
@@ -185,15 +174,12 @@ export function HallsManagerClient({
         ...(floorLabelAr.trim() ? { floorLabelAr: floorLabelAr.trim() } : {}),
         maxCapacity: parsedCap,
         status: hallStatus,
-        amenities: {
-          projector: hasProjector,
-          airConditioning: hasAc,
-        },
+        amenities: { projector: true, airConditioning: true },
       });
 
       if (!result.ok) {
         toast({
-          title: "تعذر حفظ بيانات القاعة",
+          title: "تعذر حفظ القاعة",
           description: result.error.message,
           variant: "error",
         });
@@ -201,7 +187,7 @@ export function HallsManagerClient({
       }
 
       toast({
-        title: editId ? "تم تحديث بيانات القاعة" : "تم إضافة القاعة الجديدة",
+        title: editId ? "تم تحديث القاعة ✓" : "تمت إضافة القاعة ✓",
         variant: "success",
       });
       setModalOpen(false);
@@ -230,9 +216,20 @@ export function HallsManagerClient({
       }
 
       toast({
-        title: `تم تحديث حالة القاعة إلى "${HALL_STATUS_LABELS_AR[nextStatus]}"`,
-        variant: "success",
+        title: `تم تحويل الحالة إلى "${HALL_STATUS_LABELS_AR[nextStatus]}"`,
+        variant: nextStatus === "maintenance" ? "warning" : "success",
       });
+
+      // Slide 8 interactive flow: if switched to maintenance and active sessions use this hall,
+      // automatically pop open the Emergency Reallocation Modal pre-targeted to that session.
+      if (nextStatus === "maintenance") {
+        const affectedSession = activeSessions.find((s) => s.hallId === hallId);
+        if (affectedSession) {
+          setSelectedSessionId(affectedSession.id);
+          setReallocationError(null);
+          setEmergencyModalOpen(true);
+        }
+      }
       router.refresh();
     } finally {
       setUpdatingStatusHallId(null);
@@ -266,53 +263,70 @@ export function HallsManagerClient({
       }
 
       toast({
-        title: "تم نقل الحصة إلى القاعة البديلة بنجاح",
+        title: "تم نقل الحصة وتوجيه الطلاب ✓",
         variant: "success",
       });
+      setEmergencyModalOpen(false);
       router.refresh();
     } finally {
       setReallocating(false);
     }
   };
 
-  const selectedTargetHall = halls.find((h) => h.id === effectiveTargetHallId);
-  const capacityMismatch =
-    Boolean(selectedSession && selectedTargetHall) &&
-    (selectedTargetHall?.maxCapacity ?? 0) < (selectedSession?.bookedSeatsCount ?? 0);
-
   return (
     <div className="flex flex-col gap-6">
-      {/* Header Bar */}
-      <Card>
-        <div className="flex flex-col gap-4 p-4 sm:flex-row sm:items-center sm:justify-between sm:p-5">
+      <Card className="rounded-[2rem]">
+        <div className="flex flex-col gap-4 p-5 sm:flex-row sm:items-center sm:justify-between sm:p-6">
           <div>
-            <h1 className="text-xl font-bold text-[var(--text-primary)] sm:text-2xl">
-              إدارة القاعات والمدرجات
+            <Badge variant="info" size="md">
+              المدرجات والقاعات
+            </Badge>
+            <h1 className="mt-2 text-2xl font-extrabold text-[var(--text-primary)]">
+              إدارة القاعات والإشغال
             </h1>
-            <p className="mt-0.5 text-xs sm:text-sm text-[var(--text-muted)]">
-              مراقبة الإشغال اللحظي، تعديل السعات وحالات الصيانة، ونقل الحصص عند الطوارئ
+            <p className="mt-0.5 text-sm text-[var(--text-secondary)]">
+              مراقبة لحظية، تحويل لصيانة الطوارئ، وتوجيه تلقائي للحصص
             </p>
           </div>
-          <Button
-            variant="primary"
-            size="md"
-            className="min-h-[44px]"
-            onClick={openCreateModal}
-            leftIcon={<Plus className="h-4 w-4" />}
-          >
-            إضافة قاعة / مدرج
-          </Button>
+          <div className="flex flex-wrap gap-2">
+            {activeSessions.length > 0 && (
+              <Button
+                variant="outline"
+                size="md"
+                onClick={() => setEmergencyModalOpen(true)}
+                leftIcon={<ArrowLeftRight className="h-4 w-4 text-amber-600" />}
+              >
+                نقل حصة طارئ
+              </Button>
+            )}
+            <Button
+              variant="primary"
+              size="md"
+              onClick={openCreateModal}
+              leftIcon={<Plus className="h-4 w-4" />}
+            >
+              إضافة قاعة
+            </Button>
+          </div>
         </div>
       </Card>
 
-      {/* Halls Cards with Radial Occupancy Rings & Status Controls */}
+      {/* Halls Cards */}
       <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
         {halls.map((hall) => {
           const statusMeta = resolveHallBadge(hall.status);
+          const isMaintenance = hall.status === "maintenance";
           const busyStatus = updatingStatusHallId === hall.id;
 
           return (
-            <Card key={hall.id} className="flex flex-col justify-between gap-4 p-4 sm:p-5">
+            <Card
+              key={hall.id}
+              className={cn(
+                "flex flex-col justify-between gap-4 p-5 transition-all",
+                isMaintenance &&
+                  "border-amber-400 bg-amber-50/35 ring-2 ring-amber-400/20 dark:border-amber-500/45 dark:bg-amber-950/15"
+              )}
+            >
               <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0">
                   <div className="flex flex-wrap items-center gap-1.5">
@@ -323,7 +337,7 @@ export function HallsManagerClient({
                       {statusMeta.label}
                     </Badge>
                   </div>
-                  <h2 className="mt-2 text-base font-bold text-[var(--text-primary)]">
+                  <h2 className="mt-2 text-lg font-extrabold text-[var(--text-primary)]">
                     {hall.nameAr}
                   </h2>
                   {(hall.buildingAr || hall.floorLabelAr) && (
@@ -344,10 +358,10 @@ export function HallsManagerClient({
                 />
               </div>
 
-              <div className="rounded-lg border border-[var(--border-hairline)] bg-[var(--bg-sunken)] px-3 py-2.5 text-xs">
+              <div className="rounded-xl border border-[var(--border-hairline)] bg-[var(--bg-sunken)] px-3.5 py-2.5 text-xs">
                 <div className="flex items-center justify-between">
-                  <span className="text-[var(--text-muted)]">السعة والإشغال الحالي</span>
-                  <span className="font-mono font-semibold text-[var(--text-primary)] tabular-nums">
+                  <span className="text-[var(--text-muted)]">السعة والإشغال</span>
+                  <span className="font-bold text-[var(--text-primary)] tabular-nums">
                     {formatArabicNumber(hall.currentBookedCount)} /{" "}
                     {formatArabicNumber(hall.maxCapacity)} مقعد
                   </span>
@@ -355,17 +369,12 @@ export function HallsManagerClient({
                 <p className="mt-1 truncate text-[11px] text-[var(--text-secondary)]">
                   {hall.currentSessionTitleAr
                     ? `جاري الآن: ${hall.currentSessionTitleAr}`
-                    : "لا توجد حصة جارية في هذا التوقيت"}
+                    : "متاحة للحجز"}
                 </p>
               </div>
 
-              {/* Status Switcher + Edit Button */}
               <div className="flex flex-wrap items-center justify-between gap-2 border-t border-[var(--border-hairline)] pt-3">
-                <div
-                  className="inline-flex rounded-lg border border-[var(--border-hairline)] bg-[var(--bg-sunken)] p-1"
-                  role="group"
-                  aria-label={`تغيير حالة ${hall.nameAr}`}
-                >
+                <div className="inline-flex rounded-xl border border-[var(--border-hairline)] bg-[var(--bg-sunken)] p-1">
                   {HALL_STATUS_OPTIONS.map((opt) => {
                     const active = hall.status === opt.value;
                     return (
@@ -375,9 +384,11 @@ export function HallsManagerClient({
                         disabled={busyStatus || active}
                         onClick={() => handleStatusChange(hall.id, opt.value)}
                         className={cn(
-                          "min-h-[36px] rounded-md px-2.5 text-xs font-semibold transition-colors cursor-pointer",
+                          "min-h-[36px] rounded-lg px-2.5 text-xs font-bold transition-colors cursor-pointer",
                           active
-                            ? "bg-[var(--bg-surface)] text-[var(--text-primary)] shadow-xs"
+                            ? opt.value === "maintenance"
+                              ? "bg-amber-500 text-white"
+                              : "bg-[var(--bg-surface)] text-[var(--text-primary)] shadow-xs"
                             : "text-[var(--text-muted)] hover:text-[var(--text-primary)]"
                         )}
                       >
@@ -390,7 +401,6 @@ export function HallsManagerClient({
                 <Button
                   variant="outline"
                   size="sm"
-                  className="min-h-[40px]"
                   onClick={() => openEditModal(hall)}
                   leftIcon={<Pencil className="h-3.5 w-3.5" />}
                 >
@@ -402,222 +412,178 @@ export function HallsManagerClient({
         })}
       </div>
 
-      {/* Emergency Hall Reallocation Panel */}
-      <Card>
-        <CardHeader className="border-b border-[var(--border-hairline)] pb-3">
-          <div className="flex items-center gap-2">
-            <Wrench className="h-4 w-4 text-amber-600 dark:text-amber-400" />
-            <CardTitle className="text-base">
-              لوحة إعادة تخصيص القاعات عند الطوارئ والصيانة
-            </CardTitle>
-          </div>
-          <p className="text-xs text-[var(--text-muted)]">
-            نقل أي حصة مجدولة فوراً إلى قاعة نشطة بديلة مع التحقق التلقائي من عدم تداخل الجدول
-          </p>
-        </CardHeader>
-        <CardContent className="pt-4">
-          {activeSessions.length === 0 ? (
-            <div className="flex flex-col items-center justify-center gap-1.5 py-6 text-center text-xs text-[var(--text-muted)]">
-              <Building2 className="h-6 w-6" />
-              <span>لا توجد حصص مجدولة حالياً لنقلها.</span>
-            </div>
-          ) : (
-            <form onSubmit={handleReallocate} className="flex flex-col gap-4">
-              {reallocationError && (
-                <div
-                  role="alert"
-                  className="flex items-start gap-2 rounded-lg border border-red-300 bg-red-50 px-3 py-2 text-xs text-red-800 dark:border-red-500/40 dark:bg-red-500/10 dark:text-red-300"
-                >
-                  <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
-                  <span>{reallocationError}</span>
-                </div>
-              )}
-
-              <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-                <SelectInput
-                  label="١ · اختيار الحصة المجدولة"
-                  value={selectedSession?.id ?? ""}
-                  onChange={(e) => {
-                    setSelectedSessionId(e.target.value);
-                    setReallocationError(null);
-                  }}
-                >
-                  {activeSessions.map((s) => (
-                    <option key={s.id} value={s.id}>
-                      {s.titleAr} — ({s.hallCode}) · {formatCairoDate(s.startsAt)}{" "}
-                      {formatCairoTimeRange(s.startsAt, s.endsAt)}
-                    </option>
-                  ))}
-                </SelectInput>
-
-                <SelectInput
-                  label="٢ · القاعة البديلة المستهدفة"
-                  value={effectiveTargetHallId}
-                  onChange={(e) => {
-                    setTargetHallId(e.target.value);
-                    setReallocationError(null);
-                  }}
-                >
-                  {candidateTargetHalls.length === 0 ? (
-                    <option value="">لا توجد قاعات نشطة بديلة</option>
-                  ) : (
-                    candidateTargetHalls.map((h) => (
-                      <option key={h.id} value={h.id}>
-                        {h.nameAr} ({h.code}) — السعة: {formatArabicNumber(h.maxCapacity)} مقعد
-                      </option>
-                    ))
-                  )}
-                </SelectInput>
-              </div>
-
-              {selectedSession && (
-                <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-[var(--border-hairline)] bg-[var(--bg-sunken)] px-3.5 py-2.5 text-xs">
-                  <span className="text-[var(--text-secondary)]">
-                    الطلاب المحجوزون حالياً:{" "}
-                    <strong className="font-mono text-[var(--text-primary)] tabular-nums">
-                      {formatArabicNumber(selectedSession.bookedSeatsCount)} طالب
-                    </strong>
-                  </span>
-                  {capacityMismatch && (
-                    <span className="font-semibold text-amber-700 dark:text-amber-300">
-                      تنبيه: سعة القاعة المختارة أقل من عدد الطلاب المحجوزين!
-                    </span>
-                  )}
-                </div>
-              )}
-
-              <div>
-                <Button
-                  type="submit"
-                  variant="primary"
-                  size="md"
-                  loading={reallocating}
-                  disabled={candidateTargetHalls.length === 0 || !effectiveTargetHallId}
-                  className="min-h-[44px]"
-                  leftIcon={<ArrowLeftRight className="h-4 w-4" />}
-                >
-                  نقل الحصة للقاعة البديلة
-                </Button>
-              </div>
-            </form>
-          )}
-        </CardContent>
-      </Card>
-
-      {/* Create / Edit Hall Dialog */}
+      {/* Add / Edit Hall Modal */}
       <Dialog open={modalOpen} onOpenChange={setModalOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>
-              {editId ? "تعديل بيانات القاعة" : "إضافة قاعة أو مدرج جديد"}
-            </DialogTitle>
-            <DialogDescription>
-              حدد كود القاعة والسعة القصوى المسموح بحجزها لضمان عدم التكدس.
-            </DialogDescription>
+            <DialogTitle>{editId ? "تعديل بيانات القاعة" : "إضافة قاعة جديدة"}</DialogTitle>
           </DialogHeader>
-          <form onSubmit={handleSaveHall} className="mt-4 flex flex-col gap-3">
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+          <form onSubmit={handleSaveHall} className="mt-4 flex flex-col gap-4">
+            <div className="grid grid-cols-2 gap-3">
               <Input
                 label="كود القاعة"
-                dir="ltr"
                 required
-                maxLength={20}
-                placeholder="HALL-01"
+                dir="ltr"
+                placeholder="HALL-3"
                 value={code}
                 onChange={(e) => setCode(e.target.value)}
               />
               <Input
-                label="اسم القاعة بالعربية"
+                label="السعة (مقاعد)"
+                type="number"
                 required
-                maxLength={120}
-                placeholder="مدرج ١"
-                value={nameAr}
-                onChange={(e) => setNameAr(e.target.value)}
+                min={10}
+                max={500}
+                dir="ltr"
+                value={maxCapacity}
+                onChange={(e) => setMaxCapacity(e.target.value)}
               />
             </div>
-
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            <Input
+              label="اسم القاعة"
+              required
+              placeholder="مثال: مدرج العلوم الرئيسي"
+              value={nameAr}
+              onChange={(e) => setNameAr(e.target.value)}
+            />
+            <div className="grid grid-cols-2 gap-3">
               <Input
                 label="المبنى (اختياري)"
-                maxLength={80}
-                placeholder="المبنى الرئيسي"
                 value={buildingAr}
                 onChange={(e) => setBuildingAr(e.target.value)}
               />
               <Input
                 label="الدور (اختياري)"
-                maxLength={40}
-                placeholder="الدور الأرضي"
                 value={floorLabelAr}
                 onChange={(e) => setFloorLabelAr(e.target.value)}
               />
             </div>
-
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-              <Input
-                label="السعة القصوى (مقعد)"
-                type="number"
-                required
-                min={1}
-                max={2000}
-                value={maxCapacity}
-                onChange={(e) => setMaxCapacity(e.target.value)}
-              />
-              <SelectInput
-                label="الحالة التشغيلية"
-                value={hallStatus}
-                onChange={(e) => setHallStatus(e.target.value as HallStatus)}
-              >
-                {HALL_STATUS_OPTIONS.map((opt) => (
-                  <option key={opt.value} value={opt.value}>
-                    {opt.label}
-                  </option>
-                ))}
-              </SelectInput>
-            </div>
-
-            <div className="flex flex-wrap gap-4 pt-1">
-              <label className="flex min-h-[40px] items-center gap-2 text-xs font-medium cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={hasProjector}
-                  onChange={(e) => setHasProjector(e.target.checked)}
-                  className="h-4 w-4 rounded"
-                />
-                <span>جهاز عرض (بروجيكتور)</span>
-              </label>
-              <label className="flex min-h-[40px] items-center gap-2 text-xs font-medium cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={hasAc}
-                  onChange={(e) => setHasAc(e.target.checked)}
-                  className="h-4 w-4 rounded"
-                />
-                <span>تهوية وتكييف</span>
-              </label>
-            </div>
-
             <DialogFooter>
-              <Button
-                type="button"
-                variant="outline"
-                className="min-h-[44px]"
-                onClick={() => setModalOpen(false)}
-              >
+              <Button type="button" variant="outline" onClick={() => setModalOpen(false)}>
                 إلغاء
               </Button>
-              <Button
-                type="submit"
-                variant="primary"
-                loading={savingHall}
-                className="min-h-[44px]"
-              >
-                حفظ القاعة
+              <Button type="submit" variant="primary" loading={savingHall}>
+                حفظ
               </Button>
             </DialogFooter>
           </form>
         </DialogContent>
       </Dialog>
+
+      {/* Slide 8: Centered Emergency Reallocation Modal */}
+      <Dialog open={emergencyModalOpen} onOpenChange={setEmergencyModalOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-amber-700 dark:text-amber-300">
+              <Wrench className="h-5 w-5" />
+              <span>نقل حصة لقاعة بديلة (طوارئ)</span>
+            </DialogTitle>
+            <DialogDescription>
+              اختر الحصة المتأثرة والقاعة البديلة المتاحة ليتم تحديث الجدول وإخطار الجميع تلقائياً.
+            </DialogDescription>
+          </DialogHeader>
+
+          <form onSubmit={handleReallocate} className="mt-4 flex flex-col gap-4">
+            {reallocationError && (
+              <div
+                role="alert"
+                className="flex items-start gap-2 rounded-xl border border-red-300 bg-red-50 px-3 py-2 text-xs font-semibold text-red-800 dark:bg-red-500/10 dark:text-red-300"
+              >
+                <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+                <span>{reallocationError}</span>
+              </div>
+            )}
+
+            <SelectInput
+              label="الحصة الحالية"
+              value={selectedSessionId}
+              onChange={(e) => setSelectedSessionId(e.target.value)}
+            >
+              {activeSessions.map((s) => (
+                <option key={s.id} value={s.id}>
+                  {s.titleAr} — ({s.hallCode}) · {formatArabicNumber(s.bookedSeatsCount)} طالب
+                </option>
+              ))}
+            </SelectInput>
+
+            {selectedSession && (
+              <p className="rounded-xl bg-[var(--bg-sunken)] px-3 py-2 text-xs text-[var(--text-secondary)] tabular-nums">
+                {formatCairoDate(selectedSession.startsAt)} ·{" "}
+                {formatCairoTimeRange(selectedSession.startsAt, selectedSession.endsAt)}
+              </p>
+            )}
+
+            <SelectInput
+              label="القاعة البديلة المتاحة"
+              value={effectiveTargetHallId}
+              onChange={(e) => setTargetHallId(e.target.value)}
+            >
+              {candidateTargetHalls.map((h) => (
+                <option key={h.id} value={h.id}>
+                  {h.nameAr} ({formatArabicNumber(h.maxCapacity)} مقعد)
+                </option>
+              ))}
+            </SelectInput>
+
+            <DialogFooter>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setEmergencyModalOpen(false)}
+              >
+                إغلاق
+              </Button>
+              <Button type="submit" variant="primary" loading={reallocating}>
+                توجيه وإخطار الجميع
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* Also keep quick card access to Emergency Reallocation */}
+      <Card>
+        <CardHeader className="pb-2">
+          <CardTitle className="flex items-center gap-2 text-base">
+            <ArrowLeftRight className="h-4 w-4 text-[#2563EB]" />
+            <span>الحصص القادمة القابلة للنقل ({formatArabicNumber(activeSessions.length)})</span>
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          {activeSessions.length === 0 ? (
+            <p className="text-xs text-[var(--text-muted)]">
+              لا توجد حصص حضورية قادمة حالياً.
+            </p>
+          ) : (
+            <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+              {activeSessions.slice(0, 6).map((s) => (
+                <div
+                  key={s.id}
+                  className="flex items-center justify-between gap-2 rounded-xl border border-[var(--border-hairline)] bg-[var(--bg-sunken)] px-3 py-2.5 text-xs"
+                >
+                  <div className="min-w-0">
+                    <p className="truncate font-bold text-[var(--text-primary)]">{s.titleAr}</p>
+                    <p className="text-[11px] text-[var(--text-muted)]">
+                      {s.hallCode} · {formatArabicNumber(s.bookedSeatsCount)} طالب
+                    </p>
+                  </div>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => {
+                      setSelectedSessionId(s.id);
+                      setReallocationError(null);
+                      setEmergencyModalOpen(true);
+                    }}
+                  >
+                    نقل
+                  </Button>
+                </div>
+              ))}
+            </div>
+          )}
+        </CardContent>
+      </Card>
     </div>
   );
 }

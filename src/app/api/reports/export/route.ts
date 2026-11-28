@@ -123,7 +123,7 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
         session?.subjects?.name_ar ?? "",
         session?.title_ar ?? "",
         session?.starts_at ?? "",
-        session?.halls?.name_ar ?? "",
+        session?.halls?.name_ar ?? "بث أونلاين",
         session?.teacher_profiles?.specialty_ar ?? "",
         b.booked_at,
         b.checked_in_at ?? "",

@@ -1,4 +1,5 @@
 import { getSchoolAdminDashboardData } from "@/application/academic/actions";
+import { computeSchoolFinancialSummary } from "@/application/finance/actions";
 import { getHallOccupancyData } from "@/application/halls/actions";
 import {
   AdminAccessNotice,
@@ -30,7 +31,12 @@ export default async function SchoolAdminOverviewPage({
     );
   }
 
-  const occupancy = occupancyResult.ok ? occupancyResult.data : { halls: [] };
+  const [occupancy, financialSummary] = await Promise.all([
+    Promise.resolve(occupancyResult.ok ? occupancyResult.data : { halls: [] }),
+    computeSchoolFinancialSummary({
+      schoolId: dashboardResult.data.school.id,
+    }).catch(() => undefined),
+  ]);
 
   return (
     <div>
@@ -42,6 +48,7 @@ export default async function SchoolAdminOverviewPage({
         schoolSlug={schoolSlug}
         dashboard={dashboardResult.data}
         occupancy={occupancy}
+        financialSummary={financialSummary}
       />
     </div>
   );

@@ -13,19 +13,69 @@ import { ok, err, type ActionResult } from "@/domain/common/result";
 // Input schemas
 // ---------------------------------------------------------------------------
 
-const createSessionSchema = z.object({
+const baseSessionSchemaFields = {
   schoolSlug: z.string().min(1),
-  hallId: z.string().uuid("Invalid hall ID"),
+  hallId: z.string().uuid("Invalid hall ID").nullable().optional(),
   subjectId: z.string().uuid("Invalid subject ID"),
   titleAr: z.string().trim().min(1, "Session title is required").max(160),
   startsAtIso: z.string().datetime({ offset: true, message: "Invalid start time" }),
   durationMinutes: z.number().int().min(15).max(480),
-  maxCapacity: z.number().int().min(1).max(2000).optional(),
-});
+  maxCapacity: z.number().int().min(10).max(500).optional(),
+  deliveryMode: z.enum(["in_person", "online"]).default("in_person"),
+  meetingUrl: z.string().trim().max(500).nullable().optional(),
+  priceEgp: z.number().int().min(0).max(10000).default(0),
+};
 
-const createSessionSeriesSchema = createSessionSchema.extend({
-  recurrenceWeeks: z.number().int().min(1).max(52),
-});
+const createSessionSchema = z
+  .object(baseSessionSchemaFields)
+  .superRefine((data, ctx) => {
+    if (data.deliveryMode === "in_person" && !data.hallId) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "يرجى اختيار القاعة للحصة الحضورية.",
+        path: ["hallId"],
+      });
+    }
+    if (
+      data.deliveryMode === "online" &&
+      data.meetingUrl &&
+      data.meetingUrl.trim().length > 0 &&
+      !data.meetingUrl.trim().startsWith("https://")
+    ) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "رابط البث الأونلاين يجب أن يبدأ بـ https://",
+        path: ["meetingUrl"],
+      });
+    }
+  });
+
+const createSessionSeriesSchema = z
+  .object({
+    ...baseSessionSchemaFields,
+    recurrenceWeeks: z.number().int().min(1).max(52),
+  })
+  .superRefine((data, ctx) => {
+    if (data.deliveryMode === "in_person" && !data.hallId) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "يرجى اختيار القاعة للحصص الحضورية.",
+        path: ["hallId"],
+      });
+    }
+    if (
+      data.deliveryMode === "online" &&
+      data.meetingUrl &&
+      data.meetingUrl.trim().length > 0 &&
+      !data.meetingUrl.trim().startsWith("https://")
+    ) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "رابط البث الأونلاين يجب أن يبدأ بـ https://",
+        path: ["meetingUrl"],
+      });
+    }
+  });
 
 const cancelSessionSchema = z.object({
   schoolSlug: z.string().min(1),
@@ -96,6 +146,13 @@ export interface TeacherConsoleData {
   readonly teacherCode: string;
   readonly specialtyAr: string;
   readonly isApproved: boolean;
+  readonly complianceScore: number;
+  readonly totalDeductionsEgp: number;
+  readonly financialPolicy: {
+    readonly teacherSharePct: number;
+    readonly platformFeePct: number;
+    readonly vatRatePct: number;
+  };
   readonly subjects: readonly {
     readonly id: string;
     readonly nameAr: string;
@@ -110,7 +167,7 @@ export interface TeacherConsoleData {
   }[];
   readonly sessions: readonly {
     readonly id: string;
-    readonly hallId: string;
+    readonly hallId: string | null;
     readonly subjectId: string;
     readonly teacherId: string;
     readonly teacherCode: string;
@@ -124,6 +181,9 @@ export interface TeacherConsoleData {
     readonly bookedSeatsCount: number;
     readonly checkedInCount: number;
     readonly status: string;
+    readonly deliveryMode: "in_person" | "online";
+    readonly meetingUrl: string | null;
+    readonly priceEgp: number;
     readonly hallCode: string;
     readonly hallNameAr: string;
     readonly subjectCode: string;
@@ -150,13 +210,20 @@ export async function getTeacherConsoleData(
     return teacherResult;
   }
 
-  // Fetch teacher profile
-  const { data: teacherProfile } = await supabase
-    .from("teacher_profiles")
-    .select("teacher_code, specialty_ar, is_approved")
-    .eq("id", user.id)
-    .eq("school_id", schoolId)
-    .single();
+  // Fetch teacher profile + school financial policy
+  const [{ data: teacherProfile }, { data: schoolFinance }] = await Promise.all([
+    supabase
+      .from("teacher_profiles")
+      .select("teacher_code, specialty_ar, is_approved, compliance_score, total_deductions_egp")
+      .eq("id", user.id)
+      .eq("school_id", schoolId)
+      .single(),
+    supabase
+      .from("schools")
+      .select("teacher_share_pct, platform_fee_pct, vat_rate_pct")
+      .eq("id", schoolId)
+      .single(),
+  ]);
 
   if (!teacherProfile) {
     return err("NOT_FOUND", "Teacher profile not found");
@@ -202,6 +269,7 @@ export async function getTeacherConsoleData(
     .from("sessions")
     .select(`
       id, hall_id, subject_id, teacher_id, title_ar, starts_at, ends_at, buffer_minutes, max_capacity, booked_seats_count, status,
+      delivery_mode, meeting_url, price_egp,
       halls!sessions_hall_id_fkey ( code, name_ar ),
       subjects!sessions_subject_id_fkey ( code, name_ar ),
       teacher_profiles!sessions_teacher_id_fkey ( teacher_code, specialty_ar )
@@ -237,6 +305,7 @@ export async function getTeacherConsoleData(
       teacher_code: string;
       specialty_ar: string;
     } | null;
+    const deliveryMode = s.delivery_mode ?? "in_person";
     return {
       id: s.id,
       hallId: s.hall_id,
@@ -253,8 +322,11 @@ export async function getTeacherConsoleData(
       bookedSeatsCount: s.booked_seats_count,
       checkedInCount: checkedInCountBySession.get(s.id) ?? 0,
       status: s.status,
-      hallCode: hall?.code ?? "",
-      hallNameAr: hall?.name_ar ?? "",
+      deliveryMode,
+      meetingUrl: s.meeting_url ?? null,
+      priceEgp: s.price_egp ?? 0,
+      hallCode: deliveryMode === "online" ? "ONLINE" : (hall?.code ?? ""),
+      hallNameAr: deliveryMode === "online" ? "بث مباشر أونلاين" : (hall?.name_ar ?? ""),
       subjectCode: subject?.code ?? "",
       subjectNameAr: subject?.name_ar ?? "",
     };
@@ -264,6 +336,13 @@ export async function getTeacherConsoleData(
     teacherCode: teacherProfile.teacher_code,
     specialtyAr: teacherProfile.specialty_ar,
     isApproved: teacherProfile.is_approved,
+    complianceScore: teacherProfile.compliance_score ?? 100,
+    totalDeductionsEgp: teacherProfile.total_deductions_egp ?? 0,
+    financialPolicy: {
+      teacherSharePct: schoolFinance?.teacher_share_pct ?? 70,
+      platformFeePct: schoolFinance?.platform_fee_pct ?? 30,
+      vatRatePct: schoolFinance?.vat_rate_pct ?? 14,
+    },
     subjects,
     halls,
     sessions,
@@ -356,12 +435,15 @@ export async function getTeacherSessionRoster(
 export async function createSessionAction(
   input: {
     schoolSlug: string;
-    hallId: string;
+    hallId?: string | null;
     subjectId: string;
     titleAr: string;
     startsAtIso: string;
     durationMinutes: number;
     maxCapacity?: number;
+    deliveryMode?: "in_person" | "online";
+    meetingUrl?: string | null;
+    priceEgp?: number;
   }
 ): Promise<ActionResult<{ sessionId: string }>> {
   const parsed = createSessionSchema.safeParse(input);
@@ -372,7 +454,7 @@ export async function createSessionAction(
       const existing = fieldErrors[key];
       fieldErrors[key] = existing ? [...existing, issue.message] : [issue.message];
     }
-    return err("VALIDATION_ERROR", "Invalid session input", { fieldErrors });
+    return err("VALIDATION_ERROR", parsed.error.issues[0]?.message ?? "Invalid session input", { fieldErrors });
   }
 
   const user = await getAuthenticatedUser();
@@ -391,16 +473,23 @@ export async function createSessionAction(
     return teacherResult;
   }
 
-  // Resolve max capacity: use provided or fall back to hall capacity
+  const isOnline = parsed.data.deliveryMode === "online";
+  const resolvedHallId = isOnline ? null : (parsed.data.hallId ?? null);
+
+  // Resolve max capacity: use provided or fall back to hall capacity (150 default for online)
   let maxCapacity = parsed.data.maxCapacity;
   if (maxCapacity === undefined) {
-    const { data: hall } = await supabase
-      .from("halls")
-      .select("max_capacity")
-      .eq("id", parsed.data.hallId)
-      .eq("school_id", schoolId)
-      .single();
-    maxCapacity = hall?.max_capacity ?? 30;
+    if (resolvedHallId) {
+      const { data: hall } = await supabase
+        .from("halls")
+        .select("max_capacity")
+        .eq("id", resolvedHallId)
+        .eq("school_id", schoolId)
+        .single();
+      maxCapacity = hall?.max_capacity ?? 30;
+    } else {
+      maxCapacity = 150;
+    }
   }
 
   const endsAt = computeEndsAtIso(parsed.data.startsAtIso, parsed.data.durationMinutes);
@@ -413,11 +502,16 @@ export async function createSessionAction(
     .single();
   const bufferMinutes = school?.default_buffer_minutes ?? 15;
 
+  const cleanMeetingUrl =
+    isOnline && parsed.data.meetingUrl && parsed.data.meetingUrl.trim().length > 0
+      ? parsed.data.meetingUrl.trim()
+      : null;
+
   const { data: sessionRow, error: insertError } = await supabase
     .from("sessions")
     .insert({
       school_id: schoolId,
-      hall_id: parsed.data.hallId,
+      hall_id: resolvedHallId,
       teacher_id: user.id,
       subject_id: parsed.data.subjectId,
       title_ar: parsed.data.titleAr,
@@ -425,6 +519,9 @@ export async function createSessionAction(
       ends_at: endsAt,
       buffer_minutes: bufferMinutes,
       max_capacity: maxCapacity,
+      delivery_mode: parsed.data.deliveryMode,
+      meeting_url: cleanMeetingUrl,
+      price_egp: parsed.data.priceEgp,
       created_by: user.id,
     })
     .select("id")
@@ -454,7 +551,9 @@ export async function createSessionAction(
           .eq("status", "active"),
       ]);
 
-      const hallSessions = (nearbySessions ?? []).filter((s) => s.hall_id === parsed.data.hallId);
+      const hallSessions = resolvedHallId
+        ? (nearbySessions ?? []).filter((s) => s.hall_id === resolvedHallId)
+        : [];
       const teacherSessions = (nearbySessions ?? []).filter((s) => s.teacher_id === user.id);
 
       let nextFreeSlotIso: string | null = null;
@@ -549,17 +648,21 @@ export async function createSessionAction(
 export async function createSessionSeriesAction(
   input: {
     schoolSlug: string;
-    hallId: string;
+    hallId?: string | null;
     subjectId: string;
     titleAr: string;
     startsAtIso: string;
     durationMinutes: number;
     recurrenceWeeks: number;
+    maxCapacity?: number;
+    deliveryMode?: "in_person" | "online";
+    meetingUrl?: string | null;
+    priceEgp?: number;
   }
 ): Promise<ActionResult<{ createdCount: number; conflictDates: string[] }>> {
   const parsed = createSessionSeriesSchema.safeParse(input);
   if (!parsed.success) {
-    return err("VALIDATION_ERROR", "Invalid session series input");
+    return err("VALIDATION_ERROR", parsed.error.issues[0]?.message ?? "Invalid session series input");
   }
 
   const user = await getAuthenticatedUser();
@@ -578,16 +681,20 @@ export async function createSessionSeriesAction(
     return teacherResult;
   }
 
-  // Resolve capacity from hall
-  const { data: hall } = await supabase
-    .from("halls")
-    .select("max_capacity")
-    .eq("id", parsed.data.hallId)
-    .eq("school_id", schoolId)
-    .single();
-  const maxCapacity = hall?.max_capacity ?? 30;
+  const isOnline = parsed.data.deliveryMode === "online";
+  const resolvedHallId = isOnline ? null : (parsed.data.hallId ?? null);
 
-  // Fetch school default buffer
+  let maxCapacity = parsed.data.maxCapacity ?? 150;
+  if (resolvedHallId && parsed.data.maxCapacity === undefined) {
+    const { data: hall } = await supabase
+      .from("halls")
+      .select("max_capacity")
+      .eq("id", resolvedHallId)
+      .eq("school_id", schoolId)
+      .single();
+    maxCapacity = hall?.max_capacity ?? 30;
+  }
+
   const { data: school } = await supabase
     .from("schools")
     .select("default_buffer_minutes")
@@ -595,10 +702,14 @@ export async function createSessionSeriesAction(
     .single();
   const bufferMinutes = school?.default_buffer_minutes ?? 15;
 
-  // Create a session series record
+  const cleanMeetingUrl =
+    isOnline && parsed.data.meetingUrl && parsed.data.meetingUrl.trim().length > 0
+      ? parsed.data.meetingUrl.trim()
+      : null;
+
   const startDate = new Date(parsed.data.startsAtIso);
   const dayOfWeek = startDate.getUTCDay();
-  const startTime = startDate.toISOString().slice(11, 19); // HH:MM:SS
+  const startTime = startDate.toISOString().slice(11, 19);
   const endsOnDate = new Date(
     startDate.getTime() + parsed.data.recurrenceWeeks * 7 * 86_400_000
   );
@@ -609,7 +720,7 @@ export async function createSessionSeriesAction(
       school_id: schoolId,
       teacher_id: user.id,
       subject_id: parsed.data.subjectId,
-      hall_id: parsed.data.hallId,
+      hall_id: resolvedHallId,
       title_ar: parsed.data.titleAr,
       day_of_week: dayOfWeek,
       start_time: startTime,
@@ -617,6 +728,9 @@ export async function createSessionSeriesAction(
       recurrence_weeks: parsed.data.recurrenceWeeks,
       starts_on: startDate.toISOString().slice(0, 10),
       ends_on: endsOnDate.toISOString().slice(0, 10),
+      delivery_mode: parsed.data.deliveryMode,
+      meeting_url: cleanMeetingUrl,
+      price_egp: parsed.data.priceEgp,
     })
     .select("id")
     .single();
@@ -625,7 +739,6 @@ export async function createSessionSeriesAction(
     return err("INTERNAL_ERROR", seriesError?.message ?? "Failed to create session series");
   }
 
-  // Create individual sessions for each week
   let createdCount = 0;
   const conflictDates: string[] = [];
 
@@ -639,7 +752,7 @@ export async function createSessionSeriesAction(
       .insert({
         school_id: schoolId,
         series_id: seriesRow.id,
-        hall_id: parsed.data.hallId,
+        hall_id: resolvedHallId,
         teacher_id: user.id,
         subject_id: parsed.data.subjectId,
         title_ar: parsed.data.titleAr,
@@ -647,6 +760,9 @@ export async function createSessionSeriesAction(
         ends_at: weekEndIso,
         buffer_minutes: bufferMinutes,
         max_capacity: maxCapacity,
+        delivery_mode: parsed.data.deliveryMode,
+        meeting_url: cleanMeetingUrl,
+        price_egp: parsed.data.priceEgp,
         created_by: user.id,
       });
 

@@ -27,6 +27,12 @@ import { Button, buttonVariants } from "@/components/ui/Button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/Card";
 import { Input, SelectInput } from "@/components/ui/Input";
 import { useToast } from "@/components/ui/Toast";
+import {
+  classifyGradeStage,
+  EDUCATION_STAGES,
+  pickPreferredDefaultGradeId,
+  type EducationStageKey,
+} from "@/domain/academic/k12";
 import type { SchoolCatalogBundle } from "@/infrastructure/supabase/catalog";
 import { cn } from "@/lib/utils";
 
@@ -37,7 +43,8 @@ export interface OnboardingWizardProps {
 }
 
 /**
- * Dead-simple 2-step onboarding: (1) Student Name + Phone + School, (2) Baccalaureate Track.
+ * Clean 2-step onboarding covering ALL Egyptian K-12 grades (Primary 1 to Secondary 3 +
+ * Baccalaureate) with inline Second Language selection.
  */
 export function OnboardingWizard({
   catalogs,
@@ -54,9 +61,13 @@ export function OnboardingWizard({
   const activeBundle =
     catalogs.find((b) => b.school.id === selectedSchoolId) ?? catalogs[0];
 
-  const [selectedGradeId, setSelectedGradeId] = React.useState<string>(
-    activeBundle?.grades[0]?.id ?? ""
+  const defaultGradeId = pickPreferredDefaultGradeId(activeBundle?.grades ?? []);
+  const defaultGradeObj = activeBundle?.grades.find((g) => g.id === defaultGradeId);
+
+  const [selectedStage, setSelectedStage] = React.useState<EducationStageKey>(
+    defaultGradeObj ? classifyGradeStage(defaultGradeObj.code) : "baccalaureate"
   );
+  const [selectedGradeId, setSelectedGradeId] = React.useState<string>(defaultGradeId);
   const [fullName, setFullName] = React.useState<string>(initialFullName);
   const [phone, setPhone] = React.useState<string>("");
   const [selectedTrackId, setSelectedTrackId] = React.useState<string>("");
@@ -65,7 +76,20 @@ export function OnboardingWizard({
   const [errorMsg, setErrorMsg] = React.useState<string | null>(null);
   const [submitting, setSubmitting] = React.useState<boolean>(false);
 
-  const availableGrades = activeBundle?.grades ?? [];
+  const availableGrades = React.useMemo(
+    () => activeBundle?.grades ?? [],
+    [activeBundle]
+  );
+  const stageGrades = React.useMemo(
+    () =>
+      availableGrades.filter(
+        (g) => classifyGradeStage(g.code) === selectedStage
+      ),
+    [availableGrades, selectedStage]
+  );
+
+  const visibleGrades = stageGrades.length > 0 ? stageGrades : availableGrades;
+
   const availableTracks = React.useMemo(
     () =>
       (activeBundle?.tracks ?? []).filter(
@@ -110,10 +134,25 @@ export function OnboardingWizard({
   const handleSchoolSelect = (schoolId: string) => {
     setSelectedSchoolId(schoolId);
     const nextBundle = catalogs.find((b) => b.school.id === schoolId);
-    setSelectedGradeId(nextBundle?.grades[0]?.id ?? "");
+    const prefId = pickPreferredDefaultGradeId(nextBundle?.grades ?? []);
+    const prefObj = nextBundle?.grades.find((g) => g.id === prefId);
+    setSelectedStage(prefObj ? classifyGradeStage(prefObj.code) : "baccalaureate");
+    setSelectedGradeId(prefId);
     setSelectedTrackId("");
     setSelectedElectiveSubjectId("");
     setErrorMsg(null);
+  };
+
+  const handleStageSelect = (stage: EducationStageKey) => {
+    setSelectedStage(stage);
+    const firstInStage = availableGrades.find(
+      (g) => classifyGradeStage(g.code) === stage
+    );
+    if (firstInStage) {
+      setSelectedGradeId(firstInStage.id);
+    }
+    setSelectedTrackId("");
+    setSelectedElectiveSubjectId("");
   };
 
   const handleTrackSelect = (trackId: string) => {
@@ -139,13 +178,21 @@ export function OnboardingWizard({
       setErrorMsg("يرجى كتابة رقم موبايل صحيح من ١١ رقماً يبدأ بـ 01.");
       return;
     }
+
+    // Auto-select track if grade has exactly 1 general track (e.g. Primary/Prep)
+    const gradeTracks = (activeBundle?.tracks ?? []).filter(
+      (t) => t.grade_id === selectedGradeId
+    );
+    if (gradeTracks.length === 1 && !selectedTrackId) {
+      setSelectedTrackId(gradeTracks[0]?.id ?? "");
+    }
     setStep(2);
   };
 
   const handleComplete = async () => {
     setErrorMsg(null);
     if (!activeBundle || !selectedGradeId || !selectedTrackId) {
-      setErrorMsg("يرجى اختيار مسارك الدراسي أولاً.");
+      setErrorMsg("يرجى اختيار المسار أو الشعبة أولاً.");
       return;
     }
     if (requiresElective && !selectedElectiveSubjectId) {
@@ -177,8 +224,8 @@ export function OnboardingWizard({
       }
 
       toast({
-        title: "تم حفظ مسارك بنجاح",
-        description: "جاري فتح صفحة الحصص المتاحة لك.",
+        title: "تم حفظ صفك ومسارك بنجاح",
+        description: "جاري فتح صفحة الحصص المتاحة.",
         variant: "success",
       });
       router.push(`/s/${result.data.schoolSlug}/student`);
@@ -204,13 +251,13 @@ export function OnboardingWizard({
                 className="h-full w-full rounded-xl object-cover"
               />
             </div>
-            <CardTitle className="text-2xl">سجّل دخولك أولاً لتحديد مسارك</CardTitle>
-            <p className="text-base text-[var(--text-secondary)]">
-              يلزم الدخول بحساب الطالب أو إنشاء حساب جديد قبل اختيار المسار الدراسي.
+            <CardTitle className="text-2xl">سجّل دخولك أولاً لتحديد صفك</CardTitle>
+            <p className="text-sm text-[var(--text-secondary)]">
+              يلزم الدخول بحساب الطالب أو إنشاء حساب جديد قبل اختيار المرحلة والمسار.
             </p>
           </CardHeader>
           <CardContent className="flex flex-col gap-3 sm:flex-row sm:justify-center">
-            <Link href="/login" className={buttonVariants({ variant: "emerald", size: "lg" })}>
+            <Link href="/login" className={buttonVariants({ variant: "primary", size: "lg" })}>
               تسجيل الدخول
             </Link>
             <Link href="/register" className={buttonVariants({ variant: "outline", size: "lg" })}>
@@ -224,20 +271,22 @@ export function OnboardingWizard({
 
   return (
     <MotionReveal className="flex flex-col gap-5">
-      {/* Animated 2-Step Progress Header */}
+      {/* Slide 6 Step Progress Bar */}
       <div className="rounded-3xl border border-[var(--border-hairline)] bg-[var(--bg-surface)] p-5 hairline-lift">
-        <div className="flex items-center justify-between gap-2 text-base font-bold">
+        <div className="flex items-center justify-between gap-2 text-sm sm:text-base font-bold">
           <span>
-            {step === 1 ? "الخطوة ١ من ٢: بياناتك والمدرسة" : "الخطوة ٢ من ٢: اختر مسارك الدراسي"}
+            {step === 1
+              ? "الخطوة ١ من ٢: المدرسة والصف والبيانات"
+              : "الخطوة ٢ من ٢: اختر المسار والشعبة"}
           </span>
-          <span className="text-[#0B63CE] dark:text-blue-400 tabular-nums">
+          <span className="text-[#2563EB] dark:text-cyan-300 tabular-nums">
             {step === 1 ? "50%" : "100%"}
           </span>
         </div>
         <MotionMetricBar
           percentage={step === 1 ? 50 : 100}
           trackClassName="mt-3 h-2.5"
-          barClassName="bg-gradient-to-l from-[#254EDB] to-[#16A34A]"
+          barClassName="bg-gradient-to-l from-[#2563EB] to-[#22D3EE]"
         />
       </div>
 
@@ -246,7 +295,7 @@ export function OnboardingWizard({
           initial={{ opacity: 0, y: -6 }}
           animate={{ opacity: 1, y: 0 }}
           role="alert"
-          className="flex items-start gap-2.5 rounded-2xl border border-red-300 bg-red-50 px-4 py-3.5 text-base font-medium text-red-800 dark:border-red-500/40 dark:bg-red-500/10 dark:text-red-300"
+          className="flex items-start gap-2.5 rounded-2xl border border-red-300 bg-red-50 px-4 py-3.5 text-sm font-medium text-red-800 dark:border-red-500/40 dark:bg-red-500/10 dark:text-red-300"
         >
           <AlertCircle className="mt-0.5 h-5 w-5 shrink-0" />
           <span>{errorMsg}</span>
@@ -260,7 +309,7 @@ export function OnboardingWizard({
             initial={{ opacity: 0, x: 18 }}
             animate={{ opacity: 1, x: 0 }}
             exit={{ opacity: 0, x: -18 }}
-            transition={{ duration: 0.28, ease: SPRING_EASE }}
+            transition={{ duration: 0.25, ease: SPRING_EASE }}
           >
             <Card className="rounded-3xl">
               <CardHeader>
@@ -275,9 +324,11 @@ export function OnboardingWizard({
                     />
                   </div>
                   <div>
-                    <CardTitle className="text-xl">أدخل اسمك ورقم موبايلك</CardTitle>
-                    <p className="mt-1 text-base text-[var(--text-secondary)]">
-                      سيظهر اسمك في كشف الحضور لدى معلمي المدرسة
+                    <CardTitle className="text-xl font-extrabold">
+                      اختر مدرستك وصفك الدراسي
+                    </CardTitle>
+                    <p className="mt-1 text-sm text-[var(--text-secondary)]">
+                      ندعم كافة الصفوف من الأول الابتدائي حتى الثالث الثانوي والبكالوريا
                     </p>
                   </div>
                 </div>
@@ -286,7 +337,7 @@ export function OnboardingWizard({
               <CardContent className="flex flex-col gap-5">
                 {catalogs.length > 1 ? (
                   <SelectInput
-                    label="المدرسة"
+                    label="المدرسة / السنتر"
                     inputSize="lg"
                     value={selectedSchoolId}
                     onChange={(e) => handleSchoolSelect(e.target.value)}
@@ -299,34 +350,65 @@ export function OnboardingWizard({
                   </SelectInput>
                 ) : activeBundle ? (
                   <div className="flex items-center gap-3 rounded-xl border border-[var(--border-hairline)] bg-[var(--bg-sunken)] p-4">
-                    <School className="h-6 w-6 shrink-0 text-[#0B63CE] dark:text-blue-400" />
+                    <School className="h-6 w-6 shrink-0 text-[#2563EB] dark:text-cyan-300" />
                     <div>
                       <p className="text-base font-bold text-[var(--text-primary)]">
                         {activeBundle.school.name_ar}
                       </p>
-                      <p className="text-sm text-[var(--text-secondary)]">
+                      <p className="text-xs text-[var(--text-secondary)]">
                         {activeBundle.school.governorate} — {activeBundle.school.directorate}
                       </p>
                     </div>
                   </div>
                 ) : null}
 
+                {/* K-12 Stage Filter Pills */}
                 {availableGrades.length > 1 && (
-                  <SelectInput
-                    label="الصف الدراسي"
-                    inputSize="lg"
-                    value={selectedGradeId}
-                    onChange={(e) => {
-                      setSelectedGradeId(e.target.value);
-                      setSelectedTrackId("");
-                    }}
-                  >
-                    {availableGrades.map((grade) => (
-                      <option key={grade.id} value={grade.id}>
-                        {grade.name_ar}
-                      </option>
-                    ))}
-                  </SelectInput>
+                  <div className="flex flex-col gap-3">
+                    <span className="text-sm font-bold text-[var(--text-primary)]">
+                      المرحلة التعليمية
+                    </span>
+                    <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+                      {EDUCATION_STAGES.map((stage) => {
+                        const hasAny = availableGrades.some(
+                          (g) => classifyGradeStage(g.code) === stage.key
+                        );
+                        if (!hasAny) return null;
+                        const active = selectedStage === stage.key;
+                        return (
+                          <button
+                            key={stage.key}
+                            type="button"
+                            onClick={() => handleStageSelect(stage.key)}
+                            className={cn(
+                              "min-h-[44px] rounded-xl border px-3 text-xs sm:text-sm font-bold transition-all cursor-pointer",
+                              active
+                                ? "border-[#2563EB] bg-[#2563EB] text-white shadow-xs"
+                                : "border-[var(--border-hairline)] bg-[var(--bg-sunken)] text-[var(--text-secondary)] hover:text-[var(--text-primary)]"
+                            )}
+                          >
+                            {stage.shortLabelAr}
+                          </button>
+                        );
+                      })}
+                    </div>
+
+                    <SelectInput
+                      label="الصف الدراسي"
+                      inputSize="lg"
+                      value={selectedGradeId}
+                      onChange={(e) => {
+                        setSelectedGradeId(e.target.value);
+                        setSelectedTrackId("");
+                      }}
+                    >
+                      {visibleGrades.map((grade) => (
+                        <option key={grade.id} value={grade.id}>
+                          {grade.name_ar}
+                        </option>
+                      ))}
+                    </SelectInput>
+                  </div>
                 )}
 
                 <Input
@@ -334,7 +416,7 @@ export function OnboardingWizard({
                   inputSize="lg"
                   required
                   minLength={3}
-                  placeholder="اكتب اسمك الثلاثي بوضوح"
+                  placeholder="الاسم الثلاثي كما بكشف المدرسة"
                   value={fullName}
                   onChange={(e) => setFullName(e.target.value)}
                   startAdornment={<UserCheck className="h-5 w-5" />}
@@ -353,13 +435,13 @@ export function OnboardingWizard({
                 />
 
                 <Button
-                  variant="emerald"
+                  variant="primary"
                   size="lg"
                   fullWidth
                   onClick={handleNextStep}
                   rightIcon={<ArrowLeft className="h-5 w-5" />}
                 >
-                  التالي: اختيار المسار الدراسي
+                  التالي: المسار والشعبة
                 </Button>
               </CardContent>
             </Card>
@@ -370,18 +452,20 @@ export function OnboardingWizard({
             initial={{ opacity: 0, x: -18 }}
             animate={{ opacity: 1, x: 0 }}
             exit={{ opacity: 0, x: 18 }}
-            transition={{ duration: 0.28, ease: SPRING_EASE }}
+            transition={{ duration: 0.25, ease: SPRING_EASE }}
           >
             <Card className="rounded-3xl">
               <CardHeader>
-                <CardTitle className="text-xl">اختر مسارك في البكالوريا</CardTitle>
-                <p className="text-base text-[var(--text-secondary)]">
-                  ستُفتح لك تلقائياً حصص المواد المشتركة مع مواد المسار الذي تختاره
+                <CardTitle className="text-xl font-extrabold">
+                  اختر مسارك أو شعبتك
+                </CardTitle>
+                <p className="text-sm text-[var(--text-secondary)]">
+                  ستُفتح لك تلقائياً حصص المواد الأساسية والمواد التخصصية المناسبة لك
                 </p>
               </CardHeader>
 
               <CardContent className="flex flex-col gap-5">
-                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
                   {availableTracks.map((track) => {
                     const selected = selectedTrackId === track.id;
                     const subs = getTrackSubjects(track.id);
@@ -390,13 +474,13 @@ export function OnboardingWizard({
                       <motion.button
                         key={track.id}
                         type="button"
-                        whileHover={{ y: -3 }}
+                        whileHover={{ y: -2 }}
                         whileTap={{ scale: 0.98 }}
                         onClick={() => handleTrackSelect(track.id)}
                         className={cn(
-                          "group flex flex-col items-start rounded-3xl border p-4 text-start transition-colors cursor-pointer",
+                          "group flex flex-col items-start rounded-2xl border p-4 text-start transition-colors cursor-pointer",
                           selected
-                            ? "border-[#0B63CE] bg-[#EEF5FF]/75 ring-2 ring-[#0B63CE]/20 shadow-sm dark:border-blue-400 dark:bg-blue-500/18"
+                            ? "border-[#2563EB] bg-blue-50/80 ring-2 ring-[#2563EB]/25 shadow-sm dark:border-cyan-400 dark:bg-blue-500/20"
                             : "border-[var(--border-hairline)] bg-[var(--bg-surface)] hover:border-[var(--border-strong)]"
                         )}
                       >
@@ -404,25 +488,27 @@ export function OnboardingWizard({
                           <TrackArtwork
                             trackCode={track.code}
                             iconKey={track.icon_key}
-                            size="md"
+                            size="sm"
                           />
                           {selected && (
                             <motion.span
                               initial={{ scale: 0 }}
                               animate={{ scale: 1 }}
                               transition={TACTILE_SPRING}
-                              className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-[#0B63CE] text-white shadow-xs"
+                              className="inline-flex h-7 w-7 items-center justify-center rounded-full bg-[#2563EB] text-white"
                             >
                               <Check className="h-4 w-4" />
                             </motion.span>
                           )}
                         </div>
 
-                        <p className="mt-3 text-lg font-bold text-[var(--text-primary)]">
+                        <p className="mt-3 text-base font-bold text-[var(--text-primary)]">
                           {track.name_ar}
                         </p>
-                        <p className="mt-1 text-sm text-[var(--text-secondary)]">
-                          {subs.core.map((s) => s.name_ar).join(" · ")}
+                        <p className="mt-1 text-xs text-[var(--text-secondary)]">
+                          {subs.core.length > 0
+                            ? subs.core.map((s) => s.name_ar).join(" · ")
+                            : "جميع المواد الأساسية للصف"}
                           {subs.electives.length > 0 ? " + لغة ثانية" : ""}
                         </p>
                       </motion.button>
@@ -434,9 +520,9 @@ export function OnboardingWizard({
                   <motion.div
                     initial={{ opacity: 0, y: 8 }}
                     animate={{ opacity: 1, y: 0 }}
-                    className="rounded-2xl border border-amber-200 bg-amber-50/75 p-4 dark:border-amber-500/30 dark:bg-amber-500/10"
+                    className="rounded-2xl border border-[#22D3EE]/40 bg-cyan-50/50 p-4 dark:border-cyan-500/35 dark:bg-cyan-950/20"
                   >
-                    <p className="mb-3 text-base font-bold text-[var(--text-primary)]">
+                    <p className="mb-3 text-sm font-bold text-[var(--text-primary)]">
                       اختر اللغة الأجنبية الثانية:
                     </p>
                     <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-3">
@@ -448,7 +534,7 @@ export function OnboardingWizard({
                             type="button"
                             onClick={() => setSelectedElectiveSubjectId(lang.id)}
                             className={cn(
-                              "min-h-[48px] rounded-xl border px-4 text-base font-semibold transition-all active:scale-[0.98] cursor-pointer",
+                              "min-h-[46px] rounded-xl border px-4 text-sm font-bold transition-all active:scale-[0.98] cursor-pointer",
                               active
                                 ? "border-[#16A34A] bg-[#16A34A] text-white shadow-xs"
                                 : "border-[var(--border-hairline)] bg-[var(--bg-surface)] text-[var(--text-primary)] hover:border-[var(--border-strong)]"
@@ -464,14 +550,14 @@ export function OnboardingWizard({
 
                 {commonSubjects.length > 0 && (
                   <div className="rounded-2xl border border-[var(--border-hairline)] bg-[var(--bg-sunken)] p-4">
-                    <p className="mb-2 text-sm font-bold text-[var(--text-primary)]">
-                      المواد المشتركة المضافة تلقائياً:
+                    <p className="mb-2 text-xs font-bold text-[var(--text-muted)]">
+                      المواد الأساسية المضافة تلقائياً:
                     </p>
                     <div className="flex flex-wrap gap-2">
                       {commonSubjects.map((s) => (
                         <span
                           key={s.id}
-                          className="rounded-lg border border-[var(--border-hairline)] bg-[var(--bg-surface)] px-3 py-1 text-sm font-medium text-[var(--text-primary)]"
+                          className="rounded-lg border border-[var(--border-hairline)] bg-[var(--bg-surface)] px-3 py-1 text-xs font-semibold text-[var(--text-primary)]"
                         >
                           {s.name_ar}
                         </span>
@@ -490,7 +576,7 @@ export function OnboardingWizard({
                     }}
                     leftIcon={<ArrowRight className="h-5 w-5" />}
                   >
-                    رجوع للبيانات
+                    رجوع
                   </Button>
 
                   <Button
@@ -500,7 +586,7 @@ export function OnboardingWizard({
                     onClick={handleComplete}
                     rightIcon={<CheckCircle2 className="h-5 w-5" />}
                   >
-                    حفظ وفتح صفحة الحجز
+                    حفظ وفتح الجدول
                   </Button>
                 </div>
               </CardContent>

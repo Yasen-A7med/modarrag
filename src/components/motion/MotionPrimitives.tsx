@@ -97,7 +97,7 @@ export function MotionStaggerCard({
     <motion.div
       variants={STAGGER_ITEM}
       whileHover={{ y: -4, transition: { duration: 0.22, ease: SPRING_EASE } }}
-      className={className}
+      className={cn("min-w-0", className)}
       {...props}
     >
       {children}

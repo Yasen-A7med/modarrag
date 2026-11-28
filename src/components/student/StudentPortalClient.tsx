@@ -1,29 +1,36 @@
 "use client";
 
 import * as React from "react";
-import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { motion } from "framer-motion";
+import { AnimatePresence, motion } from "framer-motion";
 import {
-  Calendar,
+  Bell,
+  BookOpen,
+  CalendarCheck,
   CheckCircle2,
   Clock,
+  ExternalLink,
+  Laptop,
   MapPin,
-  PlayCircle,
-  Trash2,
+  Sparkles,
+  Users,
+  Video,
+  Wallet,
+  XCircle,
 } from "lucide-react";
 import {
   bookStudentSeatAction,
   cancelStudentBookingAction,
+  markNotificationReadAction,
   type StudentPortalBooking,
   type StudentPortalData,
   type StudentPortalSession,
 } from "@/application/bookings/actions";
 import { TrackArtwork } from "@/components/brand/TrackIcon";
+import { RadialGauge } from "@/components/charts/RadialGauge";
 import {
   AnimatedFilterTabs,
-  MotionMetricBar,
   MotionReveal,
   MotionStaggerCard,
   MotionStaggerGrid,
@@ -31,7 +38,7 @@ import {
 } from "@/components/motion/MotionPrimitives";
 import { Badge } from "@/components/ui/Badge";
 import { Button, buttonVariants } from "@/components/ui/Button";
-import { Card, CardContent } from "@/components/ui/Card";
+import { Card } from "@/components/ui/Card";
 import {
   Dialog,
   DialogContent,
@@ -41,41 +48,30 @@ import {
   DialogTitle,
 } from "@/components/ui/Dialog";
 import { useToast } from "@/components/ui/Toast";
+import { calculateSessionRevenueBreakdown } from "@/domain/finance/revenue";
 import type { UserRole } from "@/infrastructure/supabase/database.types";
 import {
-  BOOKING_STATUS_LABELS,
   formatArabicNumber,
   formatCairoDate,
   formatCairoTimeRange,
-  formatSeatOccupancyAr,
 } from "@/lib/formatters";
-import { BOOKING_STATUS_TONES } from "@/lib/design-tokens";
 import { cn } from "@/lib/utils";
+
+type StudentTab = "book" | "my-bookings";
+type DeliveryFilter = "all" | "in_person" | "online";
 
 export interface StudentPortalClientProps {
   readonly schoolSlug: string;
   readonly schoolNameAr: string;
   readonly initialData: StudentPortalData;
-  readonly userRole: UserRole | null;
+  readonly userRole?: UserRole | null;
   readonly trackCode?: string | null;
 }
 
-interface BookingSuccessModal {
-  readonly status: "confirmed" | "waitlisted";
-  readonly sessionTitleAr: string;
-  readonly subjectNameAr: string;
-  readonly hallNameAr: string;
-  readonly startsAt: string;
-  readonly endsAt: string;
-  readonly seatNumber: string | null;
-  readonly waitlistPosition: number | null;
-}
-
 /**
- * Ultra-clear single-screen Student Portal:
- * (1) Greeting + next booked session reassurance banner ("أنت مسجل بالاسم ✓"),
- * (2) My Booked Sessions with 1-tap cancel dialog,
- * (3) Subject pill filters + large colorful Session Cards with 1-tap name-based reservation.
+ * Slide 8 Blueprint: Mobile-first Student Workspace with real Arabic name greeting,
+ * instant green confirmation banner, scrollable subject filter, live SVG occupancy donuts,
+ * dual in-person/online delivery badges, and transparent VAT pricing.
  */
 export function StudentPortalClient({
   schoolSlug,
@@ -87,81 +83,29 @@ export function StudentPortalClient({
   const router = useRouter();
   const { toast } = useToast();
 
-  const [optimisticBookings, setOptimisticBookings] = React.useState<
-    readonly StudentPortalBooking[]
-  >([]);
-  const [cancelledIds, setCancelledIds] = React.useState<readonly string[]>([]);
+  const [portalData, setPortalData] = React.useState<StudentPortalData>(initialData);
+  const [activeTab, setActiveTab] = React.useState<StudentTab>("book");
   const [selectedSubjectId, setSelectedSubjectId] = React.useState<string>("all");
-  const [bookingSessionId, setBookingSessionId] = React.useState<string | null>(null);
-  const [successModal, setSuccessModal] = React.useState<BookingSuccessModal | null>(null);
+  const [deliveryFilter, setDeliveryFilter] = React.useState<DeliveryFilter>("all");
+  const [busySessionId, setBusySessionId] = React.useState<string | null>(null);
   const [cancelTarget, setCancelTarget] = React.useState<StudentPortalBooking | null>(null);
   const [cancelling, setCancelling] = React.useState(false);
+  const [showNotifs, setShowNotifs] = React.useState(false);
 
-  const bookings = React.useMemo(() => {
-    const cancelledSet = new Set(cancelledIds);
-    const serverIds = new Set(initialData.bookings.map((b) => b.id));
-    const mergedExtra = optimisticBookings.filter(
-      (b) => !serverIds.has(b.id) && !cancelledSet.has(b.id)
-    );
-    const updatedServer = initialData.bookings.map((b) =>
-      cancelledSet.has(b.id)
-        ? { ...b, status: "cancelled_by_student" as const }
-        : b
-    );
-    return [...mergedExtra, ...updatedServer];
-  }, [cancelledIds, initialData.bookings, optimisticBookings]);
-
-  const sessions = React.useMemo(() => {
-    const serverBookedIds = new Set(
-      initialData.bookings
-        .filter((b) => b.status === "confirmed")
-        .map((b) => b.sessionId)
-    );
-    const addedConfirmedSessionIds = new Set(
-      optimisticBookings
-        .filter((b) => b.status === "confirmed" && !cancelledIds.includes(b.id))
-        .map((b) => b.sessionId)
-    );
-    const cancelledConfirmedSessionIds = new Set(
-      initialData.bookings
-        .filter((b) => b.status === "confirmed" && cancelledIds.includes(b.id))
-        .map((b) => b.sessionId)
-    );
-
-    return initialData.sessions.map((s) => {
-      let delta = 0;
-      if (addedConfirmedSessionIds.has(s.id) && !serverBookedIds.has(s.id)) {
-        delta += 1;
-      }
-      if (cancelledConfirmedSessionIds.has(s.id)) {
-        delta -= 1;
-      }
-      return delta === 0
-        ? s
-        : { ...s, bookedSeatsCount: Math.max(0, s.bookedSeatsCount + delta) };
-    });
-  }, [cancelledIds, initialData.bookings, initialData.sessions, optimisticBookings]);
-
-  const isStudentAccount = userRole === "student";
-  const hasEnrollment = initialData.enrollment !== null;
+  const isPrivilegedPreview =
+    userRole === "school_admin" ||
+    userRole === "super_admin" ||
+    userRole === "teacher";
 
   const activeBookings = React.useMemo(
     () =>
-      bookings.filter(
+      portalData.bookings.filter(
         (b) =>
           b.status === "confirmed" ||
           b.status === "waitlisted" ||
           b.status === "checked_in"
       ),
-    [bookings]
-  );
-
-  const nextUpcomingBooking = React.useMemo(
-    () =>
-      activeBookings.find(
-        (b) => b.status === "confirmed" || b.status === "checked_in"
-      ) ?? null,
-    [activeBookings]
+    [portalData.bookings]
   );
 
   const activeBookingBySessionId = React.useMemo(() => {
@@ -172,633 +116,701 @@ export function StudentPortalClient({
     return map;
   }, [activeBookings]);
 
-  const subjectFilterOptions = React.useMemo(() => {
-    const seen = new Map<string, string>();
-    for (const s of sessions) {
-      if (s.isEligible && s.subjectNameAr && !seen.has(s.subjectId)) {
-        seen.set(s.subjectId, s.subjectNameAr);
-      }
+  const eligibleSessions = React.useMemo(
+    () => portalData.sessions.filter((s) => s.isEligible),
+    [portalData.sessions]
+  );
+
+  const subjectsForFilter = React.useMemo(() => {
+    const map = new Map<string, string>();
+    for (const s of eligibleSessions) {
+      map.set(s.subjectId, s.subjectNameAr);
     }
-    return Array.from(seen.entries()).map(([id, nameAr]) => ({ id, nameAr }));
-  }, [sessions]);
+    return Array.from(map.entries()).map(([id, nameAr]) => ({ id, nameAr }));
+  }, [eligibleSessions]);
 
-  const visibleSessions = React.useMemo(() => {
-    const eligible = hasEnrollment ? sessions.filter((s) => s.isEligible) : sessions;
-    if (selectedSubjectId === "all") {
-      return eligible;
+  const filteredSessions = React.useMemo(
+    () =>
+      eligibleSessions.filter((s) => {
+        if (selectedSubjectId !== "all" && s.subjectId !== selectedSubjectId) {
+          return false;
+        }
+        if (deliveryFilter !== "all" && s.deliveryMode !== deliveryFilter) {
+          return false;
+        }
+        return true;
+      }),
+    [eligibleSessions, selectedSubjectId, deliveryFilter]
+  );
+
+  const unreadNotifsCount = portalData.notifications.filter((n) => !n.isRead).length;
+
+  const handleBookSeat = async (session: StudentPortalSession) => {
+    if (userRole && userRole !== "student") {
+      toast({
+        title: "وضع المعاينة",
+        description: "الحجز متاح لحسابات الطلاب فقط — يمكنك تجربة حساب طالب من صفحة الدخول.",
+        variant: "info",
+      });
+      return;
     }
-    return eligible.filter((s) => s.subjectId === selectedSubjectId);
-  }, [hasEnrollment, selectedSubjectId, sessions]);
 
-  const handleReserve = async (session: StudentPortalSession) => {
-    if (!isStudentAccount || !hasEnrollment) return;
-
-    setBookingSessionId(session.id);
+    setBusySessionId(session.id);
     try {
-      const result = await bookStudentSeatAction({
+      const res = await bookStudentSeatAction({
         sessionId: session.id,
         schoolSlug,
       });
 
-      if (!result.ok) {
+      if (!res.ok) {
         toast({
           title: "تعذر إتمام الحجز",
-          description: result.error.message,
+          description: res.error.message,
           variant: "error",
         });
         return;
       }
 
+      const bookingStatus = res.data.status;
       const newBooking: StudentPortalBooking = {
-        id: result.data.bookingId,
+        id: res.data.bookingId,
         sessionId: session.id,
-        status: result.data.status,
-        seatNumber: result.data.seatNumber,
-        waitlistPosition: result.data.waitlistPosition,
+        status: bookingStatus,
+        attendanceFlag: "on_time",
+        lateMinutes: 0,
+        deductionEgp: 0,
+        seatNumber: res.data.seatNumber,
+        waitlistPosition: res.data.waitlistPosition,
         bookedAt: new Date().toISOString(),
         sessionTitleAr: session.titleAr,
         sessionStartsAt: session.startsAt,
         sessionEndsAt: session.endsAt,
+        deliveryMode: session.deliveryMode,
+        meetingUrl: session.meetingUrl,
+        priceEgp: session.priceEgp,
         hallNameAr: session.hallNameAr,
         subjectNameAr: session.subjectNameAr,
         teacherSpecialtyAr: session.teacherSpecialtyAr,
       };
 
-      setOptimisticBookings((prev) => [newBooking, ...prev]);
+      setPortalData((prev) => ({
+        ...prev,
+        sessions: prev.sessions.map((s) => {
+          if (s.id !== session.id) return s;
+          const nextCount =
+            bookingStatus === "confirmed"
+              ? Math.min(s.maxCapacity, s.bookedSeatsCount + 1)
+              : s.bookedSeatsCount;
+          return {
+            ...s,
+            bookedSeatsCount: nextCount,
+            status: nextCount >= s.maxCapacity ? "full" : s.status,
+          };
+        }),
+        bookings: [newBooking, ...prev.bookings],
+      }));
 
-      setSuccessModal({
-        status: result.data.status,
-        sessionTitleAr: session.titleAr,
-        subjectNameAr: session.subjectNameAr,
-        hallNameAr: session.hallNameAr,
-        startsAt: session.startsAt,
-        endsAt: session.endsAt,
-        seatNumber: result.data.seatNumber,
-        waitlistPosition: result.data.waitlistPosition,
-      });
-
-      router.refresh();
-    } catch {
       toast({
-        title: "خطأ غير متوقع",
-        description: "تعذر الاتصال بالخادم الآن. يرجى المحاولة مرة أخرى.",
-        variant: "error",
+        title:
+          bookingStatus === "confirmed"
+            ? "تم تأكيد مقعدك ✓"
+            : "تم إدراجك في قائمة الانتظار",
+        description: `${session.subjectNameAr} — ${session.hallNameAr}`,
+        variant: bookingStatus === "confirmed" ? "success" : "warning",
       });
+      router.refresh();
     } finally {
-      setBookingSessionId(null);
+      setBusySessionId(null);
     }
   };
 
   const handleConfirmCancel = async () => {
     if (!cancelTarget) return;
     setCancelling(true);
-
     try {
-      const result = await cancelStudentBookingAction({
+      const res = await cancelStudentBookingAction({
         bookingId: cancelTarget.id,
         schoolSlug,
       });
 
-      if (!result.ok) {
+      if (!res.ok) {
         toast({
           title: "تعذر إلغاء الحجز",
-          description: result.error.message,
+          description: res.error.message,
           variant: "error",
         });
         return;
       }
 
-      setCancelledIds((prev) => [...prev, cancelTarget.id]);
+      setPortalData((prev) => ({
+        ...prev,
+        bookings: prev.bookings.map((b) =>
+          b.id === cancelTarget.id
+            ? { ...b, status: "cancelled_by_student" }
+            : b
+        ),
+        sessions: prev.sessions.map((s) =>
+          s.id === cancelTarget.sessionId && cancelTarget.status === "confirmed"
+            ? {
+                ...s,
+                bookedSeatsCount: Math.max(0, s.bookedSeatsCount - 1),
+                status: s.status === "full" ? "scheduled" : s.status,
+              }
+            : s
+        ),
+      }));
 
-      toast({
-        title: "تم إلغاء حجزك",
-        description: "تم فتح المقعد لطالب آخر في قائمة المدرسة.",
-        variant: "info",
-      });
-
+      toast({ title: "تم إلغاء حجزك", variant: "info" });
       setCancelTarget(null);
       router.refresh();
-    } catch {
-      toast({
-        title: "خطأ أثناء الإلغاء",
-        description: "يرجى المحاولة مرة أخرى.",
-        variant: "error",
-      });
     } finally {
       setCancelling(false);
     }
   };
 
-  return (
-    <div className="flex flex-col gap-6">
-      {/* Greeting Header Card with Track 3D Art */}
-      <MotionReveal className="ambient-mesh rounded-3xl border border-[var(--border-hairline)] p-5 sm:p-6 hairline-lift">
-        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-          <div className="flex items-center gap-4 min-w-0">
-            {trackCode ? (
-              <TrackArtwork trackCode={trackCode} size="md" />
-            ) : (
-              <div className="art-pedestal h-16 w-16 shrink-0 overflow-hidden rounded-2xl p-1">
-                <Image
-                  src="/images/role-student-3d.webp"
-                  alt="بوابة الطالب"
-                  width={64}
-                  height={64}
-                  className="h-full w-full rounded-xl object-cover"
-                />
-              </div>
-            )}
-            <div className="min-w-0">
-              <p className="text-sm font-semibold text-[#0B63CE] dark:text-blue-300">
-                {schoolNameAr}
-              </p>
-              <h1 className="mt-1 text-2xl font-bold text-[var(--text-primary)]">
-                أهلاً، {initialData.studentName}
-              </h1>
-              {initialData.enrollment && (
-                <p className="mt-1 text-base text-[var(--text-secondary)]">
-                  مسارك المسجل:{" "}
-                  <strong className="font-bold text-[var(--text-primary)]">
-                    {initialData.enrollment.trackNameAr}
-                  </strong>
-                </p>
-              )}
-            </div>
-          </div>
+  const handleMarkNotifRead = async (notificationId: string) => {
+    setPortalData((prev) => ({
+      ...prev,
+      notifications: prev.notifications.map((n) =>
+        n.id === notificationId ? { ...n, isRead: true } : n
+      ),
+    }));
+    await markNotificationReadAction(notificationId);
+  };
 
-          <div className="flex flex-wrap items-center gap-2.5">
+  if (!portalData.enrollment && !isPrivilegedPreview) {
+    return (
+      <MotionReveal>
+        <Card className="mx-auto max-w-lg rounded-3xl p-8 text-center">
+          <BookOpen className="mx-auto h-10 w-10 text-[#2563EB] dark:text-cyan-400" />
+          <h1 className="mt-3 text-xl font-extrabold text-[var(--text-primary)]">
+            أكمل اختيار صفك ومسارك أولاً
+          </h1>
+          <p className="mt-1.5 text-sm text-[var(--text-secondary)]">
+            حدد مدرستك وصفك الدراسي لتظهر لك الحصص المناسبة مباشرةً.
+          </p>
+          <div className="mt-5">
             <Link
-              href={`/s/${schoolSlug}/lectures`}
-              className={buttonVariants({
-                variant: "primary",
-                size: "md",
-                className: "gap-2",
-              })}
+              href="/onboarding"
+              className={buttonVariants({ variant: "primary", size: "lg" })}
             >
-              <PlayCircle className="h-4 w-4" />
-              <span>المحاضرات المسجلة</span>
+              تحديد المسار الدراسي
             </Link>
-            {initialData.enrollment ? (
-              <Link
-                href="/onboarding"
-                className={buttonVariants({
-                  variant: "outline",
-                  size: "md",
-                  className: "bg-[var(--bg-surface)]/90",
-                })}
-              >
-                تغيير المسار أو البيانات
-              </Link>
-            ) : isStudentAccount ? (
-              <Link
-                href="/onboarding"
-                className={buttonVariants({ variant: "emerald", size: "lg" })}
-              >
-                اختر مسارك الدراسي أولاً
-              </Link>
-            ) : null}
           </div>
-        </div>
-
-        {!isStudentAccount && (
-          <div className="mt-4 rounded-xl border border-amber-200 bg-amber-50/90 px-4 py-3 text-base text-amber-900 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-200">
-            أنت تتصفح الجدول للمعاينة فقط. الحجز الفعلي متاح لحسابات الطلاب.
-          </div>
-        )}
+        </Card>
       </MotionReveal>
+    );
+  }
 
-      {/* Prominent Next Booking Banner ("أنت مسجل بالاسم ✓") */}
-      {nextUpcomingBooking && (
-        <MotionReveal className="hover-lift-card rounded-3xl border-2 border-[#16A34A]/40 bg-emerald-50/80 p-5 sm:p-6 dark:border-emerald-500/40 dark:bg-emerald-500/12">
-          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-            <div className="flex items-start gap-3.5">
-              <div className="art-pedestal h-14 w-14 shrink-0 overflow-hidden rounded-2xl p-1">
-                <Image
-                  src="/images/step-seat-3d.webp"
-                  alt="مقعدك المؤكد"
-                  width={56}
-                  height={56}
-                  className="h-full w-full rounded-xl object-cover"
-                />
-              </div>
-              <div>
-                <p className="text-base font-bold text-emerald-900 dark:text-emerald-200">
-                  أنت مسجل بالاسم ✓ — {nextUpcomingBooking.subjectNameAr}
-                </p>
-                <p className="mt-1 text-base text-emerald-900/90 dark:text-emerald-100">
-                  {nextUpcomingBooking.hallNameAr} ·{" "}
-                  {formatCairoDate(nextUpcomingBooking.sessionStartsAt, {
-                    includeWeekday: true,
-                  })}{" "}
-                  {" · "}
-                  <span className="whitespace-nowrap tabular-nums">
-                    {formatCairoTimeRange(
-                      nextUpcomingBooking.sessionStartsAt,
-                      nextUpcomingBooking.sessionEndsAt
-                    )}
-                  </span>
-                </p>
-                <p className="mt-1 text-sm font-medium text-emerald-800 dark:text-emerald-300">
-                  لا تحتاج تذكرة أو باركود — اذكر اسمك فقط للمعلم عند دخول القاعة.
-                </p>
-              </div>
-            </div>
+  const latestConfirmed = activeBookings.find((b) => b.status === "confirmed");
 
-            {nextUpcomingBooking.seatNumber && (
-              <div className="shrink-0 rounded-2xl border border-emerald-300 bg-white px-4 py-2 text-center shadow-xs dark:border-emerald-500/40 dark:bg-emerald-950/60">
-                <p className="text-xs font-semibold text-emerald-700 dark:text-emerald-300">
-                  رقم المقعد
-                </p>
-                <p className="font-mono text-lg font-bold text-emerald-900 dark:text-white tabular-nums" dir="ltr">
-                  {nextUpcomingBooking.seatNumber}
-                </p>
-              </div>
-            )}
-          </div>
-        </MotionReveal>
-      )}
-
-      {/* Section 1: Student's Active Bookings */}
-      {activeBookings.length > 0 && (
-        <section aria-labelledby="my-bookings-heading" className="flex flex-col gap-3">
-          <h2 id="my-bookings-heading" className="text-xl font-bold text-[var(--text-primary)]">
-            حصصي المحجوزة ({formatArabicNumber(activeBookings.length)})
-          </h2>
-
-          <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
-            {activeBookings.map((booking) => {
-              const statusInfo = BOOKING_STATUS_LABELS[booking.status];
-              const tone = BOOKING_STATUS_TONES[booking.status];
-              return (
-                <Card key={booking.id}>
-                  <CardContent className="flex flex-col gap-3 pt-5">
-                    <div className="flex items-start justify-between gap-3">
-                      <div>
-                        <p className="text-sm font-bold text-[#0B63CE] dark:text-blue-400">
-                          {booking.subjectNameAr}
-                        </p>
-                        <h3 className="mt-0.5 text-lg font-bold text-[var(--text-primary)]">
-                          {booking.sessionTitleAr}
-                        </h3>
-                      </div>
-                      <Badge variant={tone} size="md">
-                        {booking.status === "confirmed"
-                          ? "مسجل بالاسم ✓"
-                          : booking.status === "waitlisted"
-                            ? `انتظار (${formatArabicNumber(booking.waitlistPosition ?? 1)})`
-                            : statusInfo.ar}
-                      </Badge>
-                    </div>
-
-                    <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 text-sm text-[var(--text-secondary)]">
-                      <span className="inline-flex items-center gap-1.5">
-                        <MapPin className="h-4 w-4 text-[var(--text-muted)]" />
-                        {booking.hallNameAr}
-                      </span>
-                      <span className="inline-flex items-center gap-1.5">
-                        <Calendar className="h-4 w-4 text-[var(--text-muted)]" />
-                        {formatCairoDate(booking.sessionStartsAt, {
-                          includeWeekday: true,
-                        })}
-                      </span>
-                      <span className="inline-flex items-center gap-1.5 tabular-nums">
-                        <Clock className="h-4 w-4 text-[var(--text-muted)]" />
-                        {formatCairoTimeRange(
-                          booking.sessionStartsAt,
-                          booking.sessionEndsAt
-                        )}
-                      </span>
-                    </div>
-
-                    {(booking.status === "confirmed" ||
-                      booking.status === "waitlisted") && (
-                      <div className="flex justify-end border-t border-[var(--border-hairline)] pt-3">
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => setCancelTarget(booking)}
-                          leftIcon={<Trash2 className="h-4 w-4 text-red-600" />}
-                        >
-                          إلغاء الحجز
-                        </Button>
-                      </div>
-                    )}
-                  </CardContent>
-                </Card>
-              );
-            })}
-          </div>
-        </section>
-      )}
-
-      {/* Section 2: Available Sessions */}
-      <section aria-labelledby="available-sessions-heading" className="flex flex-col gap-4">
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <h2 id="available-sessions-heading" className="text-xl font-bold text-[var(--text-primary)]">
-            الحصص المتاحة للحجز
-          </h2>
-          <span className="text-sm font-medium text-[var(--text-muted)]">
-            اضغط «احجز مكانك الآن» فيسجل اسمك فوراً عند المعلم
-          </span>
-        </div>
-
-        {/* Big Animated Subject Filter Pills */}
-        {subjectFilterOptions.length > 1 && (
-          <AnimatedFilterTabs
-            layoutId="student-subject-pill"
-            ariaLabel="تصفية حسب المادة"
-            value={selectedSubjectId}
-            onChange={setSelectedSubjectId}
-            options={[
-              { id: "all", label: "كل المواد" },
-              ...subjectFilterOptions.map((s) => ({ id: s.id, label: s.nameAr })),
-            ]}
-          />
-        )}
-
-        {visibleSessions.length === 0 ? (
-          <Card className="rounded-3xl">
-            <CardContent className="flex flex-col items-center gap-4 py-12 text-center">
-              <div className="art-pedestal h-24 w-24 overflow-hidden rounded-2xl p-1.5">
-                <Image
-                  src="/images/empty-calm-3d.webp"
-                  alt="لا توجد حصص متاحة"
-                  width={96}
-                  height={96}
-                  className="h-full w-full rounded-xl object-cover"
-                />
-              </div>
-              <p className="text-lg font-bold text-[var(--text-primary)]">
-                لا توجد حصص متاحة في هذه المادة حالياً
-              </p>
-              <p className="text-base text-[var(--text-secondary)]">
-                جرّب اختيار «كل المواد» أو راجع الصفحة لاحقاً عند إضافة مواعيد جديدة.
-              </p>
-            </CardContent>
-          </Card>
-        ) : (
-          <MotionStaggerGrid className="grid grid-cols-1 gap-4 md:grid-cols-2">
-            {visibleSessions.map((session) => {
-              const existingBooking = activeBookingBySessionId.get(session.id);
-              const sessionStartMs = Date.parse(session.startsAt);
-              const sessionEndMs = Date.parse(session.endsAt);
-              const conflictingBooking = !existingBooking
-                ? activeBookings.find(
-                    (b) =>
-                      b.sessionId !== session.id &&
-                      (b.status === "confirmed" || b.status === "checked_in") &&
-                      Date.parse(b.sessionStartsAt) < sessionEndMs &&
-                      Date.parse(b.sessionEndsAt) > sessionStartMs
-                  )
-                : undefined;
-              const isFull =
-                session.bookedSeatsCount >= session.maxCapacity ||
-                session.status === "full";
-              const remainingSeats = Math.max(
-                0,
-                session.maxCapacity - session.bookedSeatsCount
-              );
-              const fillPct =
-                session.maxCapacity > 0
-                  ? Math.min(
-                      100,
-                      Math.round((session.bookedSeatsCount / session.maxCapacity) * 100)
-                    )
-                  : 0;
-              const isBusy = bookingSessionId === session.id;
-
-              return (
-                <MotionStaggerCard
-                  key={session.id}
-                  className={cn(
-                    "hover-lift-card flex flex-col justify-between rounded-3xl border border-[var(--border-hairline)] bg-[var(--bg-surface)] p-5 hairline-lift",
-                    existingBooking
-                      ? "border-t-4 border-t-[#16A34A]"
-                      : conflictingBooking
-                        ? "border-t-4 border-t-slate-400"
-                        : isFull
-                          ? "border-t-4 border-t-[#D97706]"
-                          : "border-t-4 border-t-[#0B63CE]"
-                  )}
-                >
-                  <div>
-                    <div className="flex items-start justify-between gap-3">
-                      <div>
-                        <span className="inline-block rounded-lg bg-[#EEF5FF] px-3 py-1 text-sm font-bold text-[#0B63CE] dark:bg-blue-500/15 dark:text-blue-300">
-                          {session.subjectNameAr}
-                        </span>
-                        <h3 className="mt-2.5 text-lg font-bold text-[var(--text-primary)]">
-                          {session.titleAr}
-                        </h3>
-                        <p className="mt-0.5 text-sm text-[var(--text-muted)]">
-                          {session.teacherSpecialtyAr}
-                        </p>
-                      </div>
-                    </div>
-
-                    <div className="mt-4 flex flex-col gap-2 text-base text-[var(--text-secondary)]">
-                      <div className="flex items-center gap-2">
-                        <MapPin className="h-4 w-4 shrink-0 text-[var(--text-muted)]" />
-                        <span className="font-semibold text-[var(--text-primary)]">
-                          {session.hallNameAr}
-                        </span>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <Calendar className="h-4 w-4 shrink-0 text-[var(--text-muted)]" />
-                        <span>
-                          {formatCairoDate(session.startsAt, { includeWeekday: true })}
-                        </span>
-                      </div>
-                      <div className="flex items-center gap-2 whitespace-nowrap tabular-nums">
-                        <Clock className="h-4 w-4 shrink-0 text-[var(--text-muted)]" />
-                        <span>
-                          {formatCairoTimeRange(session.startsAt, session.endsAt)}
-                        </span>
-                      </div>
-                    </div>
-
-                    {/* Clear Animated Remaining Seats Bar */}
-                    <div className="mt-4 rounded-xl bg-[var(--bg-sunken)] p-3">
-                      <div className="mb-2 flex items-center justify-between text-sm font-semibold">
-                        <span
-                          className={
-                            remainingSeats === 0
-                              ? "text-amber-700 dark:text-amber-300"
-                              : "text-[var(--text-primary)]"
-                          }
-                        >
-                          {formatSeatOccupancyAr(
-                            session.bookedSeatsCount,
-                            session.maxCapacity
-                          )}
-                        </span>
-                        <span className="text-[var(--text-muted)] tabular-nums">
-                          {formatArabicNumber(fillPct)}%
-                        </span>
-                      </div>
-                      <MotionMetricBar
-                        percentage={fillPct}
-                        trackClassName="h-2"
-                        barClassName={
-                          remainingSeats === 0 || fillPct >= 80
-                            ? "bg-amber-500"
-                            : "bg-[#16A34A]"
-                        }
-                      />
-                    </div>
-                  </div>
-
-                  {/* Single Unambiguous Primary Action */}
-                  <div className="mt-5">
-                    {existingBooking ? (
-                      <div className="flex min-h-[50px] items-center justify-center gap-2 rounded-xl border border-emerald-200 bg-emerald-50 px-4 text-base font-bold text-emerald-800 dark:border-emerald-500/30 dark:bg-emerald-500/15 dark:text-emerald-200">
-                        <CheckCircle2 className="h-5 w-5" />
-                        <span>
-                          {existingBooking.status === "waitlisted"
-                            ? `أنت في قائمة الانتظار (رقم ${formatArabicNumber(
-                                existingBooking.waitlistPosition ?? 1
-                              )})`
-                            : "أنت مسجل بالاسم في هذه الحصة ✓"}
-                        </span>
-                      </div>
-                    ) : conflictingBooking ? (
-                      <div className="flex min-h-[50px] items-center justify-center rounded-xl border border-[var(--border-hairline)] bg-[var(--bg-sunken)] px-4 text-center text-sm font-semibold text-[var(--text-secondary)]">
-                        نفس موعد حجزك في «{conflictingBooking.subjectNameAr}»
-                      </div>
-                    ) : (
-                      <Button
-                        variant={isFull ? "secondary" : "emerald"}
-                        size="lg"
-                        fullWidth
-                        loading={isBusy}
-                        disabled={!isStudentAccount || !hasEnrollment || bookingSessionId !== null}
-                        onClick={() => handleReserve(session)}
-                      >
-                        {!isStudentAccount
-                          ? "متاح لحسابات الطلاب"
-                          : !hasEnrollment
-                            ? "اختر مسارك أولاً للحجز"
-                            : isFull
-                              ? "انضم لقائمة الانتظار"
-                              : "احجز مكانك الآن"}
-                      </Button>
-                    )}
-                  </div>
-                </MotionStaggerCard>
-              );
-            })}
-          </MotionStaggerGrid>
-        )}
-      </section>
-
-      {/* Booking Success Confirmation Modal (Native <dialog closedby="any">) */}
-      <Dialog
-        open={successModal !== null}
-        onOpenChange={(open) => {
-          if (!open) setSuccessModal(null);
-        }}
-      >
-        <DialogContent>
-          {successModal && (
-            <>
-              <DialogHeader>
-                <motion.div
-                  initial={{ scale: 0.72, opacity: 0 }}
-                  animate={{ scale: 1, opacity: 1 }}
-                  transition={TACTILE_SPRING}
-                  className="art-pedestal mb-3 h-20 w-20 overflow-hidden rounded-2xl p-1.5"
-                >
-                  <Image
-                    src="/images/success-seat-3d.webp"
-                    alt="تم تسجيل مقعدك بنجاح"
-                    width={80}
-                    height={80}
-                    className="h-full w-full rounded-xl object-cover"
-                  />
-                </motion.div>
-                <DialogTitle>
-                  {successModal.status === "confirmed"
-                    ? "تم تسجيل اسمك في الحصة بنجاح!"
-                    : "تم تسجيلك في قائمة الانتظار"}
-                </DialogTitle>
-                <DialogDescription>
-                  {successModal.status === "confirmed"
-                    ? `اسمك مسجل الآن باسم «${initialData.studentName}» لدى المعلم. لا تحتاج لأي تذكرة أو باركود.`
-                    : `ترتيبك في قائمة الانتظار هو رقم ${formatArabicNumber(
-                        successModal.waitlistPosition ?? 1
-                      )} وسيتم تثبيت مقعدك تلقائياً فور توفر مكان.`}
-                </DialogDescription>
-              </DialogHeader>
-
-              <div className="mt-4 flex flex-col gap-2 rounded-xl border border-[var(--border-hairline)] bg-[var(--bg-sunken)] p-4 text-base">
-                <p className="font-bold text-[var(--text-primary)]">
-                  {successModal.subjectNameAr} — {successModal.sessionTitleAr}
-                </p>
-                <p className="text-[var(--text-secondary)]">{successModal.hallNameAr}</p>
-                <p className="text-[var(--text-secondary)] tabular-nums">
-                  {formatCairoDate(successModal.startsAt, { includeWeekday: true })} ·{" "}
-                  {formatCairoTimeRange(successModal.startsAt, successModal.endsAt)}
-                </p>
-                {successModal.seatNumber && (
-                  <p className="font-semibold text-[#16A34A] dark:text-emerald-400">
-                    رقم المقعد: {successModal.seatNumber}
-                  </p>
+  return (
+    <div className="flex flex-col gap-5">
+      {/* Slide 8 Top Greeting Header */}
+      <MotionReveal className="rounded-[2rem] border border-[var(--border-hairline)] bg-[var(--bg-surface)] p-5 sm:p-6 hairline-lift">
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex items-center gap-3.5 min-w-0">
+            <TrackArtwork trackCode={trackCode} size="md" />
+            <div className="min-w-0">
+              <div className="flex flex-wrap items-center gap-2">
+                <Badge variant="primary" size="sm">
+                  {portalData.enrollment
+                    ? `${portalData.enrollment.gradeNameAr} · ${portalData.enrollment.trackNameAr}`
+                    : `${schoolNameAr} · معاينة`}
+                </Badge>
+                {portalData.notifications.length > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => setShowNotifs((v) => !v)}
+                    className="inline-flex min-h-[30px] items-center gap-1 rounded-full border border-[var(--border-hairline)] bg-[var(--bg-sunken)] px-2.5 text-xs font-semibold text-[var(--text-secondary)] hover:text-[var(--text-primary)] cursor-pointer"
+                  >
+                    <Bell className="h-3.5 w-3.5 text-[#2563EB] dark:text-cyan-300" />
+                    <span className="tabular-nums">
+                      {unreadNotifsCount > 0
+                        ? `${formatArabicNumber(unreadNotifsCount)} إشعار جديد`
+                        : "الإشعارات"}
+                    </span>
+                  </button>
                 )}
               </div>
 
-              <DialogFooter>
-                <Button
-                  variant="emerald"
-                  size="lg"
-                  fullWidth
-                  onClick={() => setSuccessModal(null)}
-                >
-                  حسناً، فهمت
-                </Button>
-              </DialogFooter>
-            </>
-          )}
-        </DialogContent>
-      </Dialog>
+              <h1 className="mt-1.5 text-xl font-extrabold text-[var(--text-primary)] sm:text-2xl">
+                أهلاً، {portalData.studentName}
+              </h1>
+              <p className="text-xs sm:text-sm text-[var(--text-secondary)]">
+                احجز حصتك بالاسم داخل المدرج أو أونلاين بضغطة واحدة
+              </p>
+            </div>
+          </div>
 
-      {/* Cancel Booking Confirmation Modal */}
+          <Link
+            href={`/s/${schoolSlug}/lectures`}
+            className={buttonVariants({
+              variant: "outline",
+              size: "md",
+              className: "shrink-0",
+            })}
+          >
+            <Video className="h-4 w-4 text-[#2563EB] dark:text-cyan-300" />
+            <span>المحاضرات المسجلة</span>
+          </Link>
+        </div>
+
+        {/* Collapsible Notifications Drawer */}
+        <AnimatePresence initial={false}>
+          {showNotifs && portalData.notifications.length > 0 && (
+            <motion.div
+              initial={{ height: 0, opacity: 0 }}
+              animate={{ height: "auto", opacity: 1 }}
+              exit={{ height: 0, opacity: 0 }}
+              className="mt-4 overflow-hidden border-t border-[var(--border-hairline)] pt-3"
+            >
+              <div className="flex flex-col gap-2">
+                {portalData.notifications.slice(0, 4).map((notif) => (
+                  <button
+                    key={notif.id}
+                    type="button"
+                    onClick={() => handleMarkNotifRead(notif.id)}
+                    className={cn(
+                      "flex items-start justify-between gap-2 rounded-xl border px-3 py-2 text-start text-xs transition-colors cursor-pointer",
+                      notif.isRead
+                        ? "border-[var(--border-hairline)] bg-[var(--bg-sunken)] text-[var(--text-muted)]"
+                        : "border-[#2563EB]/30 bg-blue-50/70 text-[var(--text-primary)] dark:bg-blue-500/15"
+                    )}
+                  >
+                    <div>
+                      <p className="font-bold">{notif.titleAr}</p>
+                      <p className="mt-0.5 text-[var(--text-secondary)]">{notif.bodyAr}</p>
+                    </div>
+                    {!notif.isRead && (
+                      <span className="mt-1 h-2 w-2 shrink-0 rounded-full bg-[#2563EB]" />
+                    )}
+                  </button>
+                ))}
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+      </MotionReveal>
+
+      {/* Slide 8 Instant Green Confirmation Banner */}
+      {latestConfirmed && (
+        <motion.div
+          initial={{ opacity: 0, y: 6 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-emerald-300 bg-emerald-50/90 px-4 py-3.5 text-emerald-950 dark:border-emerald-500/35 dark:bg-emerald-500/15 dark:text-emerald-100"
+        >
+          <div className="flex min-w-0 flex-1 items-center gap-3">
+            <span className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[#16A34A] text-white shadow-xs">
+              <CheckCircle2 className="h-5 w-5" />
+            </span>
+            <div className="min-w-0 flex-1">
+              <p className="text-sm font-extrabold">
+                تم تأكيد مقعدك ✓ — {latestConfirmed.subjectNameAr}
+              </p>
+              <p className="mt-0.5 truncate text-xs text-emerald-800 dark:text-emerald-200">
+                {latestConfirmed.sessionTitleAr} · {latestConfirmed.hallNameAr} ·{" "}
+                {formatCairoTimeRange(
+                  latestConfirmed.sessionStartsAt,
+                  latestConfirmed.sessionEndsAt
+                )}
+              </p>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2">
+            {latestConfirmed.deliveryMode === "online" && latestConfirmed.meetingUrl && (
+              <a
+                href={latestConfirmed.meetingUrl}
+                target="_blank"
+                rel="noreferrer"
+                className={buttonVariants({ variant: "primary", size: "sm" })}
+              >
+                <Laptop className="h-4 w-4" />
+                <span>دخول البث</span>
+              </a>
+            )}
+            <Button
+              variant="outline"
+              size="sm"
+              className="border-emerald-300 bg-white/80 text-emerald-900 dark:bg-emerald-950/60 dark:text-emerald-100"
+              onClick={() => setActiveTab("my-bookings")}
+            >
+              حجوزاتي ({formatArabicNumber(activeBookings.length)})
+            </Button>
+          </div>
+        </motion.div>
+      )}
+
+      {/* Primary Section Tabs */}
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="inline-flex max-w-full overflow-x-auto no-scrollbar rounded-2xl border border-[var(--border-hairline)] bg-[var(--bg-surface)] p-1 shadow-xs">
+          <button
+            type="button"
+            onClick={() => setActiveTab("book")}
+            className={cn(
+              "relative min-h-[44px] rounded-xl px-4 text-sm font-bold transition-colors cursor-pointer",
+              activeTab === "book"
+                ? "text-white"
+                : "text-[var(--text-secondary)] hover:text-[var(--text-primary)]"
+            )}
+          >
+            {activeTab === "book" && (
+              <motion.span
+                layoutId="student-main-tab-pill"
+                transition={TACTILE_SPRING}
+                className="absolute inset-0 rounded-xl bg-[#0A1F44] dark:bg-blue-600"
+              />
+            )}
+            <span className="relative z-10 inline-flex items-center gap-1.5">
+              <Sparkles className="h-4 w-4" />
+              <span>الحصص المتاحة ({formatArabicNumber(eligibleSessions.length)})</span>
+            </span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setActiveTab("my-bookings")}
+            className={cn(
+              "relative min-h-[44px] rounded-xl px-4 text-sm font-bold transition-colors cursor-pointer",
+              activeTab === "my-bookings"
+                ? "text-white"
+                : "text-[var(--text-secondary)] hover:text-[var(--text-primary)]"
+            )}
+          >
+            {activeTab === "my-bookings" && (
+              <motion.span
+                layoutId="student-main-tab-pill"
+                transition={TACTILE_SPRING}
+                className="absolute inset-0 rounded-xl bg-[#0A1F44] dark:bg-blue-600"
+              />
+            )}
+            <span className="relative z-10 inline-flex items-center gap-1.5">
+              <CalendarCheck className="h-4 w-4" />
+              <span>جدولي ({formatArabicNumber(activeBookings.length)})</span>
+            </span>
+          </button>
+        </div>
+
+        {activeTab === "book" && (
+          <div className="inline-flex rounded-xl border border-[var(--border-hairline)] bg-[var(--bg-surface)] p-1 text-xs">
+            {(
+              [
+                { id: "all", label: "الكل" },
+                { id: "in_person", label: "في المدرسة" },
+                { id: "online", label: "أونلاين" },
+              ] as const
+            ).map((opt) => (
+              <button
+                key={opt.id}
+                type="button"
+                onClick={() => setDeliveryFilter(opt.id)}
+                className={cn(
+                  "min-h-[36px] rounded-lg px-3 font-bold transition-colors cursor-pointer",
+                  deliveryFilter === opt.id
+                    ? "bg-[#2563EB] text-white"
+                    : "text-[var(--text-secondary)] hover:text-[var(--text-primary)]"
+                )}
+              >
+                {opt.label}
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {activeTab === "book" ? (
+        <div className="flex flex-col gap-4">
+          {subjectsForFilter.length > 1 && (
+            <AnimatedFilterTabs
+              layoutId="student-subject-filter"
+              ariaLabel="تصفية الحصص حسب المادة"
+              value={selectedSubjectId}
+              onChange={setSelectedSubjectId}
+              options={[
+                { id: "all", label: "كل المواد" },
+                ...subjectsForFilter.map((s) => ({ id: s.id, label: s.nameAr })),
+              ]}
+            />
+          )}
+
+          {filteredSessions.length === 0 ? (
+            <Card className="rounded-3xl p-10 text-center">
+              <Users className="mx-auto h-10 w-10 text-[var(--text-muted)]" />
+              <h2 className="mt-3 text-lg font-bold text-[var(--text-primary)]">
+                لا توجد حصص متاحة في هذا التصنيف حالياً
+              </h2>
+              <p className="mt-1 text-sm text-[var(--text-secondary)]">
+                جرّب اختيار «الكل» أو تصفح المحاضرات المسجلة للمدرسة.
+              </p>
+            </Card>
+          ) : (
+            <MotionStaggerGrid className="grid grid-cols-1 gap-4 md:grid-cols-2">
+              {filteredSessions.map((session) => {
+                const existingBooking = activeBookingBySessionId.get(session.id);
+                const isFull =
+                  session.bookedSeatsCount >= session.maxCapacity ||
+                  session.status === "full";
+                const isOnline = session.deliveryMode === "online";
+                const priceInfo =
+                  session.priceEgp > 0
+                    ? calculateSessionRevenueBreakdown({
+                        priceEgp: session.priceEgp,
+                        seatCount: 1,
+                        vatRatePct: portalData.vatRatePct,
+                      })
+                    : null;
+
+                return (
+                  <MotionStaggerCard key={session.id}>
+                    <Card
+                      variant="interactive"
+                      className={cn(
+                        "flex h-full flex-col justify-between gap-4 p-5",
+                        existingBooking?.status === "confirmed" &&
+                          "border-emerald-300 dark:border-emerald-500/40"
+                      )}
+                    >
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="min-w-0 flex-1">
+                          <div className="flex flex-wrap items-center gap-1.5">
+                            <Badge variant="primary" size="sm">
+                              {session.subjectNameAr}
+                            </Badge>
+                            <Badge
+                              variant={isOnline ? "info" : "neutral"}
+                              size="sm"
+                            >
+                              {isOnline ? (
+                                <span className="inline-flex items-center gap-1">
+                                  <Laptop className="h-3 w-3" /> أونلاين
+                                </span>
+                              ) : (
+                                <span className="inline-flex items-center gap-1">
+                                  <MapPin className="h-3 w-3" /> {session.hallNameAr}
+                                </span>
+                              )}
+                            </Badge>
+                            {priceInfo ? (
+                              <Badge variant="warning" size="sm">
+                                <Wallet className="h-3 w-3" />
+                                <span className="tabular-nums">
+                                  {formatArabicNumber(priceInfo.studentPayablePerSeatEgp)} ج.م
+                                </span>
+                              </Badge>
+                            ) : (
+                              <Badge variant="success" size="sm">
+                                مجانية
+                              </Badge>
+                            )}
+                          </div>
+
+                          <h2 className="mt-2.5 text-lg font-extrabold text-[var(--text-primary)] leading-snug">
+                            {session.titleAr}
+                          </h2>
+                          <p className="mt-0.5 text-xs font-semibold text-[var(--text-secondary)]">
+                            {session.teacherSpecialtyAr}
+                          </p>
+                        </div>
+
+                        {/* Live Radial Seat Occupancy Ring (Slide 8: 5/40, 38/40) */}
+                        <RadialGauge
+                          value={session.bookedSeatsCount}
+                          max={session.maxCapacity}
+                          size={60}
+                          strokeWidth={5}
+                          mode="ratio"
+                          tone={isOnline ? "cyan" : "auto"}
+                        />
+                      </div>
+
+                      <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-[var(--border-hairline)] bg-[var(--bg-sunken)] px-3.5 py-2.5 text-xs text-[var(--text-secondary)] tabular-nums">
+                        <span className="inline-flex items-center gap-1.5 font-semibold">
+                          <Clock className="h-3.5 w-3.5 text-[#2563EB] dark:text-cyan-300" />
+                          {formatCairoDate(session.startsAt)}
+                        </span>
+                        <span className="font-bold text-[var(--text-primary)]">
+                          {formatCairoTimeRange(session.startsAt, session.endsAt)}
+                        </span>
+                      </div>
+
+                      <div className="flex flex-col gap-2">
+                        {existingBooking ? (
+                          <div className="flex items-center justify-between gap-2">
+                            <span
+                              className={cn(
+                                "inline-flex min-h-[44px] flex-1 items-center justify-center gap-2 rounded-xl px-4 text-sm font-bold",
+                                existingBooking.status === "waitlisted"
+                                  ? "bg-amber-100 text-amber-900 dark:bg-amber-500/20 dark:text-amber-200"
+                                  : "bg-emerald-600 text-white"
+                              )}
+                            >
+                              <CheckCircle2 className="h-4 w-4" />
+                              <span>
+                                {existingBooking.status === "waitlisted"
+                                  ? `قائمة الانتظار (#${formatArabicNumber(existingBooking.waitlistPosition ?? 1)})`
+                                  : "مقعدك مؤكد ✓"}
+                              </span>
+                            </span>
+
+                            {existingBooking.deliveryMode === "online" &&
+                              existingBooking.meetingUrl && (
+                                <a
+                                  href={existingBooking.meetingUrl}
+                                  target="_blank"
+                                  rel="noreferrer"
+                                  className={buttonVariants({
+                                    variant: "primary",
+                                    size: "md",
+                                  })}
+                                >
+                                  <ExternalLink className="h-4 w-4" />
+                                  <span>دخول البث</span>
+                                </a>
+                              )}
+                          </div>
+                        ) : (
+                          <Button
+                            variant={isFull ? "secondary" : "primary"}
+                            size="lg"
+                            fullWidth
+                            loading={busySessionId === session.id}
+                            onClick={() => handleBookSeat(session)}
+                          >
+                            {isFull ? "انضمام لقائمة الانتظار" : "احجز مقعدك"}
+                          </Button>
+                        )}
+                      </div>
+                    </Card>
+                  </MotionStaggerCard>
+                );
+              })}
+            </MotionStaggerGrid>
+          )}
+        </div>
+      ) : (
+        <div className="flex flex-col gap-3">
+          {activeBookings.length === 0 ? (
+            <Card className="rounded-3xl p-10 text-center">
+              <CalendarCheck className="mx-auto h-10 w-10 text-[var(--text-muted)]" />
+              <h2 className="mt-3 text-lg font-bold text-[var(--text-primary)]">
+                لم تحجز أي حصة بعد
+              </h2>
+              <div className="mt-4">
+                <Button
+                  variant="primary"
+                  onClick={() => setActiveTab("book")}
+                >
+                  استعرض الحصص المتاحة
+                </Button>
+              </div>
+            </Card>
+          ) : (
+            activeBookings.map((booking) => (
+              <Card key={booking.id} className="p-4 sm:p-5">
+                <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+                  <div className="min-w-0">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <Badge
+                        variant={
+                          booking.status === "checked_in" || booking.status === "confirmed"
+                            ? "success"
+                            : "warning"
+                        }
+                        dot
+                      >
+                        {booking.status === "checked_in"
+                          ? "تم الحضور ✓"
+                          : booking.status === "confirmed"
+                            ? "حجز مؤكد ✓"
+                            : `انتظار #${formatArabicNumber(booking.waitlistPosition ?? 1)}`}
+                      </Badge>
+                      <Badge variant="primary">{booking.subjectNameAr}</Badge>
+                      {booking.seatNumber && (
+                        <Badge variant="mono" dir="ltr">
+                          {booking.seatNumber}
+                        </Badge>
+                      )}
+                      {booking.deductionEgp > 0 && (
+                        <Badge variant="danger">
+                          خصم تأخير/التزام: {formatArabicNumber(booking.deductionEgp)} ج.م
+                        </Badge>
+                      )}
+                    </div>
+
+                    <h3 className="mt-2 text-base font-extrabold text-[var(--text-primary)]">
+                      {booking.sessionTitleAr}
+                    </h3>
+                    <p className="mt-1 text-xs text-[var(--text-secondary)] tabular-nums">
+                      {booking.hallNameAr} · {formatCairoDate(booking.sessionStartsAt)} ·{" "}
+                      {formatCairoTimeRange(
+                        booking.sessionStartsAt,
+                        booking.sessionEndsAt
+                      )}
+                    </p>
+                  </div>
+
+                  <div className="flex flex-wrap items-center gap-2">
+                    {booking.deliveryMode === "online" && booking.meetingUrl && (
+                      <a
+                        href={booking.meetingUrl}
+                        target="_blank"
+                        rel="noreferrer"
+                        className={buttonVariants({ variant: "primary", size: "sm" })}
+                      >
+                        <Laptop className="h-4 w-4" />
+                        <span>فتح البث الأونلاين</span>
+                      </a>
+                    )}
+                    {booking.status !== "checked_in" && (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setCancelTarget(booking)}
+                        leftIcon={<XCircle className="h-4 w-4 text-red-500" />}
+                      >
+                        إلغاء الحجز
+                      </Button>
+                    )}
+                  </div>
+                </div>
+              </Card>
+            ))
+          )}
+        </div>
+      )}
+
+      {/* Cancel Booking Confirmation Dialog */}
       <Dialog
         open={cancelTarget !== null}
         onOpenChange={(open) => {
-          if (!open && !cancelling) setCancelTarget(null);
+          if (!open) setCancelTarget(null);
         }}
       >
         <DialogContent>
-          {cancelTarget && (
-            <>
-              <DialogHeader>
-                <DialogTitle>هل تريد إلغاء حجزك؟</DialogTitle>
-                <DialogDescription>
-                  سيتم إلغاء حجزك في «{cancelTarget.subjectNameAr} —{" "}
-                  {cancelTarget.sessionTitleAr}» وإتاحة المقعد لزميل آخر بالمدرسة.
-                </DialogDescription>
-              </DialogHeader>
-
-              <DialogFooter>
-                <Button
-                  variant="outline"
-                  size="md"
-                  disabled={cancelling}
-                  onClick={() => setCancelTarget(null)}
-                >
-                  تراجع، سأحضر
-                </Button>
-                <Button
-                  variant="danger"
-                  size="md"
-                  loading={cancelling}
-                  onClick={handleConfirmCancel}
-                >
-                  تأكيد إلغاء الحجز
-                </Button>
-              </DialogFooter>
-            </>
-          )}
+          <DialogHeader>
+            <DialogTitle>تأكيد إلغاء الحجز</DialogTitle>
+            <DialogDescription>
+              هل تريد إلغاء مقعدك في «{cancelTarget?.sessionTitleAr}»؟ سيتم ترقية أول طالب
+              في قائمة الانتظار تلقائياً.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setCancelTarget(null)}
+              disabled={cancelling}
+            >
+              تراجع
+            </Button>
+            <Button
+              variant="danger"
+              loading={cancelling}
+              onClick={handleConfirmCancel}
+            >
+              نعم، إلغاء الحجز
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
     </div>

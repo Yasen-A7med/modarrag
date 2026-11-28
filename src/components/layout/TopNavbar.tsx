@@ -34,19 +34,23 @@ export interface TopNavbarProps {
   } | null;
   readonly links?: readonly TopNavbarLink[];
   readonly user?: TopNavbarUser | null;
+  readonly ctaHref?: string;
+  readonly ctaLabel?: string;
   readonly onSignOut?: () => void | Promise<void>;
   readonly className?: string;
 }
 
 /**
- * Friendly floating pill navbar inspired by Bassthalk:
- * effortless contrast, zero noise, accessible 44-48px targets on desktop and mobile.
+ * Floating frosted-glass navbar matching Modarrag design guidelines:
+ * effortless contrast, zero clutter, >= 44px touch targets on desktop and mobile.
  */
 export function TopNavbar({
   brandHref = "/",
   school,
   links = [],
   user,
+  ctaHref = "/register",
+  ctaLabel = "ابدأ الآن",
   onSignOut,
   className,
 }: TopNavbarProps) {
@@ -72,7 +76,7 @@ export function TopNavbar({
 
   return (
     <header className={cn("sticky top-0 z-40 px-3 pt-3 sm:px-6", className)}>
-      <div className="mx-auto max-w-6xl glass-bar rounded-2xl px-4 sm:px-5">
+      <div className="mx-auto max-w-6xl rounded-2xl border border-[var(--border-hairline)] bg-[var(--bg-glass)] px-4 shadow-xs backdrop-blur-xl sm:px-5">
         <div className="flex h-16 items-center justify-between gap-3">
           {/* Brand + School Name */}
           <div className="flex min-w-0 items-center gap-3">
@@ -169,10 +173,10 @@ export function TopNavbar({
                   دخول
                 </Link>
                 <Link
-                  href="/register"
-                  className={buttonVariants({ variant: "emerald", size: "sm" })}
+                  href={ctaHref}
+                  className={buttonVariants({ variant: "primary", size: "sm" })}
                 >
-                  ابدأ الآن
+                  {ctaLabel}
                 </Link>
               </div>
             )}

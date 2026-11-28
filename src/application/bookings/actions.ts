@@ -59,6 +59,9 @@ export interface StudentPortalSession {
   readonly maxCapacity: number;
   readonly bookedSeatsCount: number;
   readonly status: SessionStatus;
+  readonly deliveryMode: "in_person" | "online";
+  readonly meetingUrl: string | null;
+  readonly priceEgp: number;
   readonly hallNameAr: string;
   readonly subjectNameAr: string;
   readonly teacherSpecialtyAr: string;
@@ -68,12 +71,18 @@ export interface StudentPortalBooking {
   readonly id: string;
   readonly sessionId: string;
   readonly status: BookingStatus;
+  readonly attendanceFlag: "on_time" | "late" | "absent_deducted";
+  readonly lateMinutes: number;
+  readonly deductionEgp: number;
   readonly seatNumber: string | null;
   readonly waitlistPosition: number | null;
   readonly bookedAt: string;
   readonly sessionTitleAr: string;
   readonly sessionStartsAt: string;
   readonly sessionEndsAt: string;
+  readonly deliveryMode: "in_person" | "online";
+  readonly meetingUrl: string | null;
+  readonly priceEgp: number;
   readonly hallNameAr: string;
   readonly subjectNameAr: string;
   readonly teacherSpecialtyAr: string;
@@ -90,6 +99,7 @@ export interface StudentPortalNotification {
 
 export interface StudentPortalData {
   readonly studentName: string;
+  readonly vatRatePct: number;
   readonly enrollment: StudentPortalEnrollment | null;
   readonly eligibleSubjectIds: readonly string[];
   readonly sessions: readonly StudentPortalSession[];
@@ -119,7 +129,7 @@ export async function getStudentPortalData(
   const [{ data: school }, { data: profile }] = await Promise.all([
     supabase
       .from("schools")
-      .select("id, slug, is_active")
+      .select("id, slug, is_active, vat_rate_pct")
       .eq("slug", parsedSlug.data.toLowerCase())
       .eq("is_active", true)
       .maybeSingle(),
@@ -204,6 +214,7 @@ export async function getStudentPortalData(
       .from("sessions")
       .select(`
         id, subject_id, title_ar, starts_at, ends_at, max_capacity, booked_seats_count, status,
+        delivery_mode, meeting_url, price_egp,
         halls!sessions_hall_id_fkey ( name_ar ),
         subjects!sessions_subject_id_fkey ( name_ar ),
         teacher_profiles!sessions_teacher_id_fkey ( specialty_ar )
@@ -217,9 +228,9 @@ export async function getStudentPortalData(
       ? supabase
           .from("bookings")
           .select(`
-            id, session_id, status, seat_number, waitlist_position, booked_at,
+            id, session_id, status, attendance_flag, late_minutes, deduction_egp, seat_number, waitlist_position, booked_at,
             sessions!bookings_session_id_fkey (
-              title_ar, starts_at, ends_at,
+              title_ar, starts_at, ends_at, delivery_mode, meeting_url, price_egp,
               halls!sessions_hall_id_fkey ( name_ar ),
               subjects!sessions_subject_id_fkey ( name_ar ),
               teacher_profiles!sessions_teacher_id_fkey ( specialty_ar )
@@ -325,10 +336,18 @@ export async function getStudentPortalData(
     eligibleSet = new Set((subjectRows ?? []).map((s) => s.id));
   }
 
+  const confirmedSessionIds = new Set(
+    (bookingRows ?? [])
+      .filter((b) => b.status === "confirmed" || b.status === "checked_in")
+      .map((b) => b.session_id)
+  );
+
   const sessions: StudentPortalSession[] = (sessionRows ?? []).map((row) => {
     const hall = row.halls as unknown as { name_ar: string } | null;
     const subject = row.subjects as unknown as { name_ar: string } | null;
     const teacher = row.teacher_profiles as unknown as { specialty_ar: string } | null;
+    const deliveryMode = row.delivery_mode ?? "in_person";
+    const canSeeMeetingUrl = isPrivilegedViewer || confirmedSessionIds.has(row.id);
 
     return {
       id: row.id,
@@ -340,7 +359,13 @@ export async function getStudentPortalData(
       maxCapacity: row.max_capacity,
       bookedSeatsCount: row.booked_seats_count,
       status: row.status,
-      hallNameAr: hall?.name_ar ?? "",
+      deliveryMode,
+      meetingUrl: deliveryMode === "online" && canSeeMeetingUrl ? row.meeting_url : null,
+      priceEgp: row.price_egp ?? 0,
+      hallNameAr:
+        deliveryMode === "online"
+          ? "بث مباشر أونلاين"
+          : (hall?.name_ar ?? ""),
       subjectNameAr: subject?.name_ar ?? "",
       teacherSpecialtyAr: teacher?.specialty_ar ?? "معلم المادة",
     };
@@ -351,22 +376,36 @@ export async function getStudentPortalData(
       title_ar: string;
       starts_at: string;
       ends_at: string;
+      delivery_mode: "in_person" | "online";
+      meeting_url: string | null;
+      price_egp: number;
       halls: { name_ar: string } | null;
       subjects: { name_ar: string } | null;
       teacher_profiles: { specialty_ar: string } | null;
     } | null;
+    const deliveryMode = sess?.delivery_mode ?? "in_person";
+    const isAdmitted = b.status === "confirmed" || b.status === "checked_in";
 
     return {
       id: b.id,
       sessionId: b.session_id,
       status: b.status,
+      attendanceFlag: b.attendance_flag ?? "on_time",
+      lateMinutes: b.late_minutes ?? 0,
+      deductionEgp: b.deduction_egp ?? 0,
       seatNumber: b.seat_number,
       waitlistPosition: b.waitlist_position,
       bookedAt: b.booked_at,
       sessionTitleAr: sess?.title_ar ?? "",
       sessionStartsAt: sess?.starts_at ?? b.booked_at,
       sessionEndsAt: sess?.ends_at ?? b.booked_at,
-      hallNameAr: sess?.halls?.name_ar ?? "",
+      deliveryMode,
+      meetingUrl: deliveryMode === "online" && isAdmitted ? (sess?.meeting_url ?? null) : null,
+      priceEgp: sess?.price_egp ?? 0,
+      hallNameAr:
+        deliveryMode === "online"
+          ? "بث مباشر أونلاين"
+          : (sess?.halls?.name_ar ?? ""),
       subjectNameAr: sess?.subjects?.name_ar ?? "",
       teacherSpecialtyAr: sess?.teacher_profiles?.specialty_ar ?? "معلم المادة",
     };
@@ -383,6 +422,7 @@ export async function getStudentPortalData(
 
   return ok({
     studentName: profile.full_name,
+    vatRatePct: school.vat_rate_pct ?? 14,
     enrollment,
     eligibleSubjectIds: Array.from(eligibleSet),
     sessions,
@@ -546,4 +586,34 @@ export async function cancelStudentBookingAction(input: {
     cancelledBookingId: rpcResult.cancelled_booking_id,
     promotedBookingId: rpcResult.promoted_booking_id,
   });
+}
+
+/**
+ * Marks a single student notification as read under owner-scoped RLS.
+ */
+export async function markNotificationReadAction(
+  notificationId: string
+): Promise<ActionResult<{ readonly read: true }>> {
+  const parsed = z.string().uuid().safeParse(notificationId);
+  if (!parsed.success) {
+    return err("VALIDATION_ERROR", "معرف الإشعار غير صالح.");
+  }
+
+  const user = await getAuthenticatedUser();
+  if (!user) {
+    return err("UNAUTHORIZED", "يرجى تسجيل الدخول أولاً.");
+  }
+
+  const supabase = await createSupabaseServerClient();
+  const { error } = await supabase
+    .from("notifications")
+    .update({ is_read: true })
+    .eq("id", parsed.data)
+    .eq("recipient_id", user.id);
+
+  if (error) {
+    return err("INTERNAL_ERROR", error.message);
+  }
+
+  return ok({ read: true });
 }

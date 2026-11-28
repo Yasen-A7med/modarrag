@@ -40,9 +40,28 @@ export type NotificationType =
   | "session_reminder"
   | "checkin_confirmed"
   | "teacher_approved"
+  | "hall_reallocated"
+  | "print_order_updated"
+  | "compliance_notice"
   | "system";
 
+export type DeliveryMode = "in_person" | "online";
+export type TenantType = "school" | "center";
+export type TeacherApprovalStatus = "pending" | "approved" | "rejected";
+export type BookingAttendanceFlag = "on_time" | "late" | "absent_deducted";
+export type PrintSpec = "bw_single" | "bw_double" | "color";
+export type PrintBindingType = "none" | "staple" | "spiral";
+export type PrintOrderStatus = "pending" | "printing" | "ready" | "delivered" | "cancelled";
+
 export type LectureVisibility = "public" | "attendees_only" | "secret";
+
+export type RecordBookingComplianceRpcResult =
+  | { readonly ok: true; readonly flag: BookingAttendanceFlag; readonly deduction_egp: number }
+  | {
+      readonly ok: false;
+      readonly code: "unauthenticated" | "validation_error" | "forbidden" | "not_found";
+      readonly message_ar: string;
+    };
 
 export interface SetLectureSecretPasswordRpcResult {
   readonly ok: boolean;
@@ -189,6 +208,11 @@ export interface Database {
           logo_url: string | null;
           brand_color_hex: string;
           default_buffer_minutes: number;
+          tenant_type: TenantType;
+          teacher_share_pct: number;
+          platform_fee_pct: number;
+          school_share_pct: number;
+          vat_rate_pct: number;
           is_active: boolean;
           created_at: string;
           updated_at: string;
@@ -203,6 +227,11 @@ export interface Database {
           logo_url?: string | null;
           brand_color_hex?: string;
           default_buffer_minutes?: number;
+          tenant_type?: TenantType;
+          teacher_share_pct?: number;
+          platform_fee_pct?: number;
+          school_share_pct?: number;
+          vat_rate_pct?: number;
           is_active?: boolean;
           created_at?: string;
           updated_at?: string;
@@ -217,6 +246,11 @@ export interface Database {
           logo_url?: string | null;
           brand_color_hex?: string;
           default_buffer_minutes?: number;
+          tenant_type?: TenantType;
+          teacher_share_pct?: number;
+          platform_fee_pct?: number;
+          school_share_pct?: number;
+          vat_rate_pct?: number;
           is_active?: boolean;
           created_at?: string;
           updated_at?: string;
@@ -568,6 +602,12 @@ export interface Database {
           teacher_code: string;
           specialty_ar: string;
           bio_ar: string | null;
+          qualifications_ar: string | null;
+          experience_years: number;
+          approval_status: TeacherApprovalStatus;
+          rejection_reason_ar: string | null;
+          compliance_score: number;
+          total_deductions_egp: number;
           is_approved: boolean;
           approved_by: string | null;
           approved_at: string | null;
@@ -580,6 +620,12 @@ export interface Database {
           teacher_code: string;
           specialty_ar: string;
           bio_ar?: string | null;
+          qualifications_ar?: string | null;
+          experience_years?: number;
+          approval_status?: TeacherApprovalStatus;
+          rejection_reason_ar?: string | null;
+          compliance_score?: number;
+          total_deductions_egp?: number;
           is_approved?: boolean;
           approved_by?: string | null;
           approved_at?: string | null;
@@ -592,6 +638,12 @@ export interface Database {
           teacher_code?: string;
           specialty_ar?: string;
           bio_ar?: string | null;
+          qualifications_ar?: string | null;
+          experience_years?: number;
+          approval_status?: TeacherApprovalStatus;
+          rejection_reason_ar?: string | null;
+          compliance_score?: number;
+          total_deductions_egp?: number;
           is_approved?: boolean;
           approved_by?: string | null;
           approved_at?: string | null;
@@ -724,7 +776,7 @@ export interface Database {
           school_id: string;
           teacher_id: string;
           subject_id: string;
-          hall_id: string;
+          hall_id: string | null;
           title_ar: string;
           day_of_week: number;
           start_time: string;
@@ -732,6 +784,9 @@ export interface Database {
           recurrence_weeks: number;
           starts_on: string;
           ends_on: string;
+          delivery_mode: DeliveryMode;
+          meeting_url: string | null;
+          price_egp: number;
           is_active: boolean;
           created_at: string;
           updated_at: string;
@@ -741,7 +796,7 @@ export interface Database {
           school_id: string;
           teacher_id: string;
           subject_id: string;
-          hall_id: string;
+          hall_id?: string | null;
           title_ar: string;
           day_of_week: number;
           start_time: string;
@@ -749,6 +804,9 @@ export interface Database {
           recurrence_weeks?: number;
           starts_on: string;
           ends_on: string;
+          delivery_mode?: DeliveryMode;
+          meeting_url?: string | null;
+          price_egp?: number;
           is_active?: boolean;
           created_at?: string;
           updated_at?: string;
@@ -758,7 +816,7 @@ export interface Database {
           school_id?: string;
           teacher_id?: string;
           subject_id?: string;
-          hall_id?: string;
+          hall_id?: string | null;
           title_ar?: string;
           day_of_week?: number;
           start_time?: string;
@@ -766,6 +824,9 @@ export interface Database {
           recurrence_weeks?: number;
           starts_on?: string;
           ends_on?: string;
+          delivery_mode?: DeliveryMode;
+          meeting_url?: string | null;
+          price_egp?: number;
           is_active?: boolean;
           created_at?: string;
           updated_at?: string;
@@ -806,7 +867,7 @@ export interface Database {
           id: string;
           school_id: string;
           series_id: string | null;
-          hall_id: string;
+          hall_id: string | null;
           teacher_id: string;
           subject_id: string;
           title_ar: string;
@@ -817,6 +878,11 @@ export interface Database {
           max_capacity: number;
           booked_seats_count: number;
           status: SessionStatus;
+          delivery_mode: DeliveryMode;
+          meeting_url: string | null;
+          price_egp: number;
+          teacher_compliance_status: "scheduled" | "on_time" | "late" | "no_show";
+          teacher_deduction_egp: number;
           cancellation_reason: string | null;
           created_by: string | null;
           created_at: string;
@@ -826,7 +892,7 @@ export interface Database {
           id?: string;
           school_id: string;
           series_id?: string | null;
-          hall_id: string;
+          hall_id?: string | null;
           teacher_id: string;
           subject_id: string;
           title_ar: string;
@@ -836,6 +902,11 @@ export interface Database {
           max_capacity: number;
           booked_seats_count?: number;
           status?: SessionStatus;
+          delivery_mode?: DeliveryMode;
+          meeting_url?: string | null;
+          price_egp?: number;
+          teacher_compliance_status?: "scheduled" | "on_time" | "late" | "no_show";
+          teacher_deduction_egp?: number;
           cancellation_reason?: string | null;
           created_by?: string | null;
           created_at?: string;
@@ -845,7 +916,7 @@ export interface Database {
           id?: string;
           school_id?: string;
           series_id?: string | null;
-          hall_id?: string;
+          hall_id?: string | null;
           teacher_id?: string;
           subject_id?: string;
           title_ar?: string;
@@ -855,6 +926,11 @@ export interface Database {
           max_capacity?: number;
           booked_seats_count?: number;
           status?: SessionStatus;
+          delivery_mode?: DeliveryMode;
+          meeting_url?: string | null;
+          price_egp?: number;
+          teacher_compliance_status?: "scheduled" | "on_time" | "late" | "no_show";
+          teacher_deduction_egp?: number;
           cancellation_reason?: string | null;
           created_by?: string | null;
           created_at?: string;
@@ -912,6 +988,10 @@ export interface Database {
           session_id: string;
           student_id: string;
           status: BookingStatus;
+          attendance_flag: BookingAttendanceFlag;
+          late_minutes: number;
+          deduction_egp: number;
+          payment_amount_egp: number;
           waitlist_position: number | null;
           seat_number: string | null;
           qr_token_hash: string | null;
@@ -930,6 +1010,10 @@ export interface Database {
           session_id: string;
           student_id: string;
           status?: BookingStatus;
+          attendance_flag?: BookingAttendanceFlag;
+          late_minutes?: number;
+          deduction_egp?: number;
+          payment_amount_egp?: number;
           waitlist_position?: number | null;
           seat_number?: string | null;
           qr_token_hash?: string | null;
@@ -948,6 +1032,10 @@ export interface Database {
           session_id?: string;
           student_id?: string;
           status?: BookingStatus;
+          attendance_flag?: BookingAttendanceFlag;
+          late_minutes?: number;
+          deduction_egp?: number;
+          payment_amount_egp?: number;
           waitlist_position?: number | null;
           seat_number?: string | null;
           qr_token_hash?: string | null;
@@ -1103,6 +1191,7 @@ export interface Database {
           title_ar: string;
           description_ar: string | null;
           visibility: LectureVisibility;
+          price_egp: number;
           file_size_bytes: number | null;
           mime_type: string | null;
           duration_minutes: number | null;
@@ -1120,6 +1209,7 @@ export interface Database {
           title_ar: string;
           description_ar?: string | null;
           visibility?: LectureVisibility;
+          price_egp?: number;
           file_size_bytes?: number | null;
           mime_type?: string | null;
           duration_minutes?: number | null;
@@ -1137,6 +1227,7 @@ export interface Database {
           title_ar?: string;
           description_ar?: string | null;
           visibility?: LectureVisibility;
+          price_egp?: number;
           file_size_bytes?: number | null;
           mime_type?: string | null;
           duration_minutes?: number | null;
@@ -1273,9 +1364,129 @@ export interface Database {
           },
         ];
       };
+      print_partners: {
+        Row: {
+          id: string;
+          school_id: string | null;
+          name_ar: string;
+          phone: string;
+          whatsapp_number: string | null;
+          address_ar: string | null;
+          commission_pct: number;
+          base_page_piasters: number;
+          is_active: boolean;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          school_id?: string | null;
+          name_ar: string;
+          phone: string;
+          whatsapp_number?: string | null;
+          address_ar?: string | null;
+          commission_pct?: number;
+          base_page_piasters?: number;
+          is_active?: boolean;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          school_id?: string | null;
+          name_ar?: string;
+          phone?: string;
+          whatsapp_number?: string | null;
+          address_ar?: string | null;
+          commission_pct?: number;
+          base_page_piasters?: number;
+          is_active?: boolean;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
+      print_orders: {
+        Row: {
+          id: string;
+          school_id: string;
+          partner_id: string;
+          teacher_id: string;
+          session_id: string | null;
+          title_ar: string;
+          file_storage_path: string | null;
+          external_file_url: string | null;
+          copies_count: number;
+          pages_count: number;
+          print_specs: PrintSpec;
+          binding_type: PrintBindingType;
+          subtotal_egp: number;
+          vat_egp: number;
+          total_egp: number;
+          platform_commission_egp: number;
+          status: PrintOrderStatus;
+          notes_ar: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          school_id: string;
+          partner_id: string;
+          teacher_id: string;
+          session_id?: string | null;
+          title_ar: string;
+          file_storage_path?: string | null;
+          external_file_url?: string | null;
+          copies_count: number;
+          pages_count: number;
+          print_specs?: PrintSpec;
+          binding_type?: PrintBindingType;
+          subtotal_egp?: number;
+          vat_egp?: number;
+          total_egp?: number;
+          platform_commission_egp?: number;
+          status?: PrintOrderStatus;
+          notes_ar?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          school_id?: string;
+          partner_id?: string;
+          teacher_id?: string;
+          session_id?: string | null;
+          title_ar?: string;
+          file_storage_path?: string | null;
+          external_file_url?: string | null;
+          copies_count?: number;
+          pages_count?: number;
+          print_specs?: PrintSpec;
+          binding_type?: PrintBindingType;
+          subtotal_egp?: number;
+          vat_egp?: number;
+          total_egp?: number;
+          platform_commission_egp?: number;
+          status?: PrintOrderStatus;
+          notes_ar?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
     };
     Views: Record<string, never>;
     Functions: {
+      record_booking_compliance: {
+        Args: {
+          p_booking_id: string;
+          p_attendance_flag: BookingAttendanceFlag;
+          p_late_minutes?: number;
+          p_deduction_egp?: number;
+        };
+        Returns: RecordBookingComplianceRpcResult;
+      };
       reserve_student_seat: {
         Args: {
           p_session_id: string;

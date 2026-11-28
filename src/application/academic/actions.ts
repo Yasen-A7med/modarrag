@@ -98,6 +98,7 @@ export interface SchoolAdminDashboardData {
     readonly nameAr: string;
     readonly slug: string;
     readonly isActive: boolean;
+    readonly tenantType: "school" | "center";
   };
   readonly grades: readonly {
     readonly id: string;
@@ -133,6 +134,10 @@ export interface SchoolAdminDashboardData {
     readonly id: string;
     readonly teacherCode: string;
     readonly specialtyAr: string;
+    readonly qualificationsAr: string | null;
+    readonly experienceYears: number;
+    readonly bioAr: string | null;
+    readonly approvalStatus: string;
   }[];
   readonly stats: {
     readonly totalStudents: number;
@@ -164,7 +169,7 @@ export async function getSchoolAdminDashboardData(
   // Fetch school details
   const { data: schoolData } = await supabase
     .from("schools")
-    .select("id, name_ar, slug, is_active")
+    .select("id, name_ar, slug, is_active, tenant_type")
     .eq("id", schoolId)
     .single();
 
@@ -196,9 +201,10 @@ export async function getSchoolAdminDashboardData(
         .eq("school_id", schoolId),
       supabase
         .from("teacher_profiles")
-        .select("id, teacher_code, specialty_ar")
+        .select("id, teacher_code, specialty_ar, qualifications_ar, experience_years, bio_ar, approval_status")
         .eq("school_id", schoolId)
-        .eq("is_approved", false),
+        .eq("is_approved", false)
+        .neq("approval_status", "rejected"),
     ]);
 
   // Stats via count queries
@@ -234,6 +240,7 @@ export async function getSchoolAdminDashboardData(
       nameAr: schoolData.name_ar,
       slug: schoolData.slug,
       isActive: schoolData.is_active,
+      tenantType: schoolData.tenant_type ?? "school",
     },
     grades: (gradesResult.data ?? []).map((g) => ({
       id: g.id,
@@ -269,6 +276,10 @@ export async function getSchoolAdminDashboardData(
       id: t.id,
       teacherCode: t.teacher_code,
       specialtyAr: t.specialty_ar,
+      qualificationsAr: t.qualifications_ar,
+      experienceYears: t.experience_years ?? 0,
+      bioAr: t.bio_ar,
+      approvalStatus: t.approval_status,
     })),
     stats: {
       totalStudents: studentsCount.count ?? 0,

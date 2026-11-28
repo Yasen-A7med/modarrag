@@ -64,8 +64,8 @@ export function RegisterClient({
       }
 
       toast({
-        title: "تم إنشاء حسابك بنجاح",
-        description: "اختر مدرستك ومسارك الدراسي الآن.",
+        title: "تم إنشاء الحساب بنجاح",
+        description: "اختر مدرستك وصفك ومسارك الآن.",
         variant: "success",
       });
       router.push("/onboarding");
@@ -78,139 +78,139 @@ export function RegisterClient({
   };
 
   return (
-    <MotionReveal className="mx-auto w-full max-w-md">
-      <Card className="rounded-3xl">
-        <CardHeader>
-          <div className="flex items-center gap-3.5">
+    <MotionReveal className="mx-auto w-full max-w-lg">
+      <Card className="overflow-hidden rounded-[2rem] border-t-4 border-t-[#2563EB] shadow-[0_24px_60px_-22px_rgba(10,31,68,0.16)]">
+        <CardHeader className="pb-4">
+          <div className="flex items-center gap-4">
             <div className="art-pedestal h-16 w-16 shrink-0 overflow-hidden rounded-2xl p-1">
               <Image
                 src="/images/role-student-3d.webp"
-                alt="إنشاء حساب طالب"
+                alt="إنشاء حساب طالب جديد"
                 width={64}
                 height={64}
                 className="h-full w-full rounded-xl object-cover"
               />
             </div>
             <div>
-              <CardTitle className="text-2xl">سجّل حسابك في دقيقة</CardTitle>
-              <p className="mt-1 text-base text-[var(--text-secondary)]">
-                اكتب اسمك كما تحب أن يظهر للمعلم في كشف الحضور
+              <CardTitle className="text-2xl font-extrabold">
+                إنشاء حساب طالب
+              </CardTitle>
+              <p className="mt-1 text-sm text-[var(--text-secondary)]">
+                اكتب اسمك الثلاثي ليظهر للمعلم في كشف الحضور
               </p>
             </div>
           </div>
         </CardHeader>
 
-      <CardContent className="flex flex-col gap-4">
-        <GoogleSignInButton
-          label="التسجيل السريع باستخدام Google"
-          initialGoogleEnabled={initialGoogleEnabled}
-        />
+        <CardContent className="flex flex-col gap-4 pt-1">
+          <GoogleSignInButton initialGoogleEnabled={initialGoogleEnabled} />
 
-        <div className="relative flex items-center py-1">
-          <div className="flex-grow border-t border-[var(--border-hairline)]" />
-          <span className="mx-3 shrink-0 text-xs font-semibold text-[var(--text-muted)]">
-            أو املأ بياناتك يدوياً
-          </span>
-          <div className="flex-grow border-t border-[var(--border-hairline)]" />
-        </div>
+          <div className="relative flex items-center py-0.5">
+            <div className="flex-grow border-t border-[var(--border-hairline)]" />
+            <span className="mx-3 shrink-0 text-xs font-semibold text-[var(--text-muted)]">
+              أو بالتسجيل اليدوي
+            </span>
+            <div className="flex-grow border-t border-[var(--border-hairline)]" />
+          </div>
 
-        <form onSubmit={handleSubmit} className="flex flex-col gap-4">
-          {errorMsg && (
-            <div
-              role="alert"
-              className="flex items-start gap-2.5 rounded-xl border border-red-300 bg-red-50 px-4 py-3 text-sm font-medium text-red-800 dark:border-red-500/40 dark:bg-red-500/10 dark:text-red-300"
-            >
-              <AlertCircle className="mt-0.5 h-5 w-5 shrink-0" />
-              <span>{errorMsg}</span>
-            </div>
-          )}
-
-          <Input
-            label="الاسم الكامل للطالب"
-            inputSize="lg"
-            required
-            minLength={3}
-            placeholder="اكتب اسمك الثلاثي كما في المدرسة"
-            hint="سيظهر هذا الاسم في كشف حضور الحصة"
-            value={fullName}
-            onChange={(e) => setFullName(e.target.value)}
-            startAdornment={<UserCheck className="h-5 w-5" />}
-          />
-
-          <Input
-            label="رقم الموبايل"
-            type="tel"
-            inputSize="lg"
-            dir="ltr"
-            placeholder="01000000000"
-            value={phone}
-            onChange={(e) => setPhone(e.target.value)}
-            startAdornment={<Phone className="h-5 w-5" />}
-          />
-
-          <Input
-            label="البريد الإلكتروني"
-            type="email"
-            inputSize="lg"
-            required
-            autoComplete="email"
-            dir="ltr"
-            placeholder="student@example.com"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            startAdornment={<Mail className="h-5 w-5" />}
-          />
-
-          <Input
-            label="كلمة المرور"
-            type={showPassword ? "text" : "password"}
-            inputSize="lg"
-            required
-            minLength={8}
-            autoComplete="new-password"
-            dir="ltr"
-            placeholder="٨ أحرف أو أرقام على الأقل"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            startAdornment={<Lock className="h-5 w-5" />}
-            endAdornment={
-              <button
-                type="button"
-                onClick={() => setShowPassword((prev) => !prev)}
-                className="inline-flex h-11 w-11 items-center justify-center rounded-xl text-[var(--text-muted)] hover:text-[var(--text-primary)] cursor-pointer"
-                aria-label={showPassword ? "إخفاء كلمة المرور" : "إظهار كلمة المرور"}
+          <form onSubmit={handleSubmit} className="flex flex-col gap-4">
+            {errorMsg && (
+              <div
+                role="alert"
+                className="flex items-start gap-2.5 rounded-xl border border-red-300 bg-red-50 px-4 py-3 text-sm font-medium text-red-800 dark:border-red-500/40 dark:bg-red-500/10 dark:text-red-300"
               >
-                {showPassword ? (
-                  <EyeOff className="h-5 w-5" />
-                ) : (
-                  <Eye className="h-5 w-5" />
-                )}
-              </button>
-            }
-          />
+                <AlertCircle className="mt-0.5 h-5 w-5 shrink-0" />
+                <span>{errorMsg}</span>
+              </div>
+            )}
 
-          <Button
-            type="submit"
-            variant="emerald"
-            size="lg"
-            fullWidth
-            loading={submitting}
-            rightIcon={<ArrowLeft className="h-5 w-5" />}
-          >
-            إنشاء الحساب والمتابعة
-          </Button>
+            <Input
+              label="الاسم الثلاثي"
+              required
+              minLength={3}
+              inputSize="lg"
+              autoComplete="name"
+              placeholder="الاسم الكامل كما بكشف الفصل"
+              value={fullName}
+              onChange={(e) => setFullName(e.target.value)}
+              startAdornment={<UserCheck className="h-5 w-5" />}
+            />
 
-          <p className="text-center text-base text-[var(--text-secondary)]">
-            لديك حساب بالفعل؟{" "}
-            <Link
-              href="/login"
-              className="font-bold text-[#0B63CE] hover:underline dark:text-blue-400"
+            <Input
+              label="رقم الهاتف (اختياري)"
+              type="tel"
+              inputSize="lg"
+              autoComplete="tel"
+              dir="ltr"
+              placeholder="01000000000"
+              value={phone}
+              onChange={(e) => setPhone(e.target.value)}
+              startAdornment={<Phone className="h-5 w-5" />}
+            />
+
+            <Input
+              label="البريد الإلكتروني"
+              type="email"
+              inputSize="lg"
+              required
+              autoComplete="email"
+              dir="ltr"
+              placeholder="student@example.com"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              startAdornment={<Mail className="h-5 w-5" />}
+            />
+
+            <Input
+              label="كلمة المرور"
+              type={showPassword ? "text" : "password"}
+              inputSize="lg"
+              required
+              minLength={6}
+              autoComplete="new-password"
+              dir="ltr"
+              placeholder="٦ أحرف أو أرقام على الأقل"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              startAdornment={<Lock className="h-5 w-5" />}
+              endAdornment={
+                <button
+                  type="button"
+                  onClick={() => setShowPassword((prev) => !prev)}
+                  className="inline-flex h-10 w-10 items-center justify-center rounded-xl text-[var(--text-muted)] hover:text-[var(--text-primary)] cursor-pointer"
+                  aria-label={showPassword ? "إخفاء كلمة المرور" : "إظهار كلمة المرور"}
+                >
+                  {showPassword ? (
+                    <EyeOff className="h-5 w-5" />
+                  ) : (
+                    <Eye className="h-5 w-5" />
+                  )}
+                </button>
+              }
+            />
+
+            <Button
+              type="submit"
+              variant="emerald"
+              size="lg"
+              fullWidth
+              loading={submitting}
+              rightIcon={<ArrowLeft className="h-5 w-5" />}
             >
-              تسجيل الدخول
-            </Link>
-          </p>
-        </form>
-      </CardContent>
+              إنشاء حساب
+            </Button>
+
+            <p className="text-center text-sm text-[var(--text-secondary)]">
+              لديك حساب بالفعل؟{" "}
+              <Link
+                href="/login"
+                className="font-bold text-[#2563EB] hover:underline dark:text-cyan-300"
+              >
+                تسجيل الدخول
+              </Link>
+            </p>
+          </form>
+        </CardContent>
       </Card>
     </MotionReveal>
   );

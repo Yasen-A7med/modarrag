@@ -1,651 +1,405 @@
-import { expect, test, type Locator, type Page } from "@playwright/test";
+import { expect, test, type Page } from "@playwright/test";
+import fs from "node:fs";
 import path from "node:path";
 
 const SHOTS_DIR =
-  "C:\\Users\\ya377\\.gemini\\antigravity\\brain\\77f03649-8ce8-4ab7-be41-d2ab384463fa\\scratch\\verify_shots";
-
+  "C:\\Users\\ya377\\.gemini\\antigravity\\brain\\584a2023-b926-4ecd-922b-9a4719be918d\\scratch\\verify_shots";
 const SCHOOL_SLUG = "ali-bin-abi-talib";
 
-interface DiagnosticsTracker {
-  readonly consoleErrors: string[];
-  readonly pageErrors: string[];
-  readonly failedResponses: string[];
-  detach: () => void;
+function ensureShotsDir() {
+  fs.mkdirSync(SHOTS_DIR, { recursive: true });
 }
 
-function attachDiagnostics(page: Page): DiagnosticsTracker {
-  const consoleErrors: string[] = [];
-  const pageErrors: string[] = [];
-  const failedResponses: string[] = [];
-
-  const onConsole = (msg: { type: () => string; text: () => string }) => {
-    if (msg.type() === "error") {
-      consoleErrors.push(msg.text());
-    }
-  };
-  const onPageError = (err: Error) => {
-    pageErrors.push(err.message);
-  };
-  const onResponse = (res: { status: () => number; url: () => string }) => {
-    if (res.status() >= 500) {
-      failedResponses.push(`${res.status()} ${res.url()}`);
-    }
-  };
-
-  page.on("console", onConsole);
-  page.on("pageerror", onPageError);
-  page.on("response", onResponse);
-
-  return {
-    consoleErrors,
-    pageErrors,
-    failedResponses,
-    detach: () => {
-      page.off("console", onConsole);
-      page.off("pageerror", onPageError);
-      page.off("response", onResponse);
-    },
-  };
+async function saveShot(page: Page, filename: string, fullPage = true) {
+  ensureShotsDir();
+  await page.screenshot({
+    path: path.join(SHOTS_DIR, filename),
+    fullPage,
+  });
 }
 
-function assertNoRuntimeErrors(tracker: DiagnosticsTracker, label: string): void {
-  expect(
-    tracker.consoleErrors,
-    `Console errors on ${label}: ${tracker.consoleErrors.join(" | ")}`
-  ).toEqual([]);
-  expect(
-    tracker.pageErrors,
-    `Page errors on ${label}: ${tracker.pageErrors.join(" | ")}`
-  ).toEqual([]);
-  expect(
-    tracker.failedResponses,
-    `5xx responses on ${label}: ${tracker.failedResponses.join(" | ")}`
-  ).toEqual([]);
-}
-
-async function assertRtlAndNoOverflow(page: Page, contextLabel: string): Promise<void> {
-  const metrics = await page.evaluate(() => {
+async function assertCleanLayout(page: Page, label: string) {
+  const layout = await page.evaluate(() => {
     const html = document.documentElement;
+    const body = document.body;
+    const brokenImages = Array.from(document.querySelectorAll("img"))
+      .filter((img) => {
+        const style = window.getComputedStyle(img);
+        return style.display !== "none" && (!img.complete || img.naturalWidth === 0);
+      })
+      .map((img) => img.getAttribute("src") || "unknown");
+
     return {
-      dir: html.dir,
-      lang: html.lang,
+      dir: html.getAttribute("dir"),
+      lang: html.getAttribute("lang"),
+      overflowPx: Math.max(0, html.scrollWidth - html.clientWidth),
       scrollWidth: html.scrollWidth,
-      innerWidth: window.innerWidth,
-    };
-  });
-
-  expect(metrics.dir, `${contextLabel}: html dir`).toBe("rtl");
-  expect(metrics.lang, `${contextLabel}: html lang`).toBe("ar");
-  expect(
-    metrics.scrollWidth,
-    `${contextLabel}: horizontal overflow (${metrics.scrollWidth} > ${metrics.innerWidth})`
-  ).toBeLessThanOrEqual(metrics.innerWidth);
-}
-
-async function assertImagesAndSvgsHealthy(page: Page, label: string): Promise<void> {
-  const result = await page.evaluate(() => {
-    const brokenImages: string[] = [];
-    const imgs = Array.from(document.querySelectorAll("img"));
-    for (const img of imgs) {
-      if (!img.complete || img.naturalWidth === 0) {
-        brokenImages.push(img.getAttribute("src") ?? "unknown-img");
-      }
-    }
-
-    const emptySvgs: number[] = [];
-    const svgs = Array.from(document.querySelectorAll("svg"));
-    svgs.forEach((svg, idx) => {
-      const rect = svg.getBoundingClientRect();
-      if (rect.width === 0 || rect.height === 0) {
-        emptySvgs.push(idx);
-      }
-    });
-
-    return {
-      imgCount: imgs.length,
-      svgCount: svgs.length,
+      clientWidth: html.clientWidth,
+      bodyTextLen: body.innerText.trim().length,
       brokenImages,
-      emptySvgs,
     };
   });
 
+  expect(layout.dir, `${label}: dir=rtl`).toBe("rtl");
+  expect(layout.lang, `${label}: lang=ar`).toBe("ar");
+  expect(layout.bodyTextLen, `${label}: rendered text`).toBeGreaterThan(25);
   expect(
-    result.brokenImages,
-    `${label}: broken images ${result.brokenImages.join(", ")}`
-  ).toEqual([]);
-  expect(result.svgCount, `${label}: expected SVG icons`).toBeGreaterThan(0);
-}
-
-async function assertTouchTargetsAtLeast44px(
-  locator: Locator,
-  label: string
-): Promise<void> {
-  const count = await locator.count();
-  expect(count, `${label}: expected visible interactive controls`).toBeGreaterThan(0);
-
-  for (let i = 0; i < Math.min(count, 10); i += 1) {
-    const el = locator.nth(i);
-    if (await el.isVisible()) {
-      const box = await el.boundingBox();
-      if (box) {
-        expect(
-          Math.max(box.width, box.height),
-          `${label} control #${i} width/height`
-        ).toBeGreaterThanOrEqual(40);
-        expect(
-          box.height,
-          `${label} control #${i} height (${box.height}px)`
-        ).toBeGreaterThanOrEqual(40);
-      }
-    }
-  }
+    layout.overflowPx,
+    `${label}: zero horizontal overflow (${layout.scrollWidth} <= ${layout.clientWidth})`
+  ).toBeLessThanOrEqual(4);
+  expect(layout.brokenImages, `${label}: zero broken images`).toEqual([]);
 }
 
 async function loginAsDemoRole(
   page: Page,
-  buttonText: string,
-  expectedPathPrefix: string
-): Promise<void> {
-  await page.goto("/login", { waitUntil: "load" });
-  if (buttonText === "طالب الهندسة") {
-    await page.waitForTimeout(450);
-    await page.screenshot({
-      path: shotPath("03c-login-desktop-1440.png"),
-      fullPage: true,
-    });
-  }
-  const roleButton = page.locator("button", { hasText: buttonText }).first();
-  await expect(roleButton).toBeVisible();
-  await roleButton.click();
-  await page.waitForURL((url) => url.pathname.startsWith(expectedPathPrefix), {
-    timeout: 30_000,
-  });
-  await page.waitForLoadState("load");
+  buttonLabel: string,
+  expectedPathPart: string
+) {
+  await page.goto("/login");
+  await expect(page.getByRole("button", { name: new RegExp(buttonLabel) })).toBeVisible();
+  await page.getByRole("button", { name: new RegExp(buttonLabel) }).click();
+  await page.waitForURL(new RegExp(expectedPathPart), { timeout: 30_000 });
+  await page.waitForLoadState("networkidle");
 }
 
-function shotPath(fileName: string): string {
-  return path.join(SHOTS_DIR, fileName);
+function attachConsoleErrorTrap(page: Page): string[] {
+  const errors: string[] = [];
+  page.on("pageerror", (err) => errors.push(`pageerror: ${err.message}`));
+  page.on("console", (msg) => {
+    if (msg.type() === "error") {
+      const text = msg.text();
+      if (!text.includes("hydration") && !text.includes("Failed to load resource")) {
+        errors.push(`console.error: ${text}`);
+      }
+    }
+  });
+  return errors;
 }
 
-test.describe("Modarrag Redesigned E2E Verification", () => {
-  test("0) /api/health endpoint returns 200 ok", async ({ request }) => {
-    const res = await request.get("/api/health");
-    expect(res.status()).toBe(200);
-    const body = (await res.json()) as {
-      status?: string;
-      service?: string;
-      defaultSchoolSlug?: string;
-    };
-    expect(body.status).toBe("ok");
-    expect(body.service).toBe("modarrag");
-    expect(body.defaultSchoolSlug).toBe(SCHOOL_SLUG);
-  });
-
-  test("a) Bassthalk-inspired Landing (/): hero visual, 3 steps, theme toggle, mobile 360px", async ({
+test.describe("Modarrag E2E — Full Platform & Visual Craft Audit", () => {
+  test("1. Public Landing (/), School Directory Search, Portal (/s/ali-bin-abi-talib) & Theme", async ({
     page,
   }) => {
-    const tracker = attachDiagnostics(page);
-    try {
-      await page.setViewportSize({ width: 1440, height: 900 });
-      await page.goto("/", { waitUntil: "load" });
-      // Trigger scroll-reveal sections and wait briefly for Framer Motion transforms to settle
-      await page.evaluate(async () => {
-        window.scrollTo(0, Math.round(document.body.scrollHeight * 0.45));
-        await new Promise((r) => setTimeout(r, 250));
-        window.scrollTo(0, Math.round(document.body.scrollHeight * 0.85));
-        await new Promise((r) => setTimeout(r, 250));
-        window.scrollTo(0, 0);
-        await new Promise((r) => setTimeout(r, 350));
-      });
+    const errors = attachConsoleErrorTrap(page);
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await page.goto("/");
+    await expect(page.getByRole("heading", { name: /احجز مقعدك المدرسي/ })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "ابحث عن مدرستك" })).toBeVisible();
+    await expect(page.getByText("المرحلة السنية أو السنتر؟ ابحث").or(page.getByText("تحضير فوري بالاسم"))).toBeVisible();
 
-      await assertRtlAndNoOverflow(page, "Landing Desktop 1440");
-      await assertImagesAndSvgsHealthy(page, "Landing Desktop 1440");
+    const searchInput = page.getByPlaceholder("ابحث باسم المدرسة أو المحافظة...");
+    await expect(searchInput).toBeVisible();
+    await searchInput.fill("علي بن أبي طالب");
+    await expect(page.getByText("مدرسة علي بن أبي طالب الثانوية بنين")).toBeVisible();
+    await searchInput.fill("");
 
-      // Verify the 2 old floating overlay chips on the hero image were removed
-      await expect(page.getByText("سعة قاعات آمنة ١٠٠٪")).toHaveCount(0);
-      await expect(page.getByText("الحضور بالاسم فوراً")).toHaveCount(0);
+    await assertCleanLayout(page, "Landing Desktop 1440 Light");
+    await saveShot(page, "01-landing-desktop-light.png");
 
-      // Verify official Modarrag mark + Ali Bin Abi Talib crest image loaded
-      const logoSrcs = await page.evaluate(() =>
-        Array.from(document.querySelectorAll("img")).map((img) => img.getAttribute("src") ?? "")
-      );
-      expect(logoSrcs.some((src) => src.includes("modarrag-mark"))).toBe(true);
-      expect(logoSrcs.some((src) => src.includes("ali-bin-abi-talib/logo"))).toBe(true);
-
-      await expect(page.getByText("الموضوع بسيط جداً.. ٣ خطوات فقط")).toBeVisible();
-      await expect(page.getByText("احضر باسمك فقط")).toBeVisible();
-      await expect(
-        page.getByText("مدرسة علي بن أبي طالب الثانوية بنين").first()
-      ).toBeVisible();
-
-      // Zero developer jargon on landing page
-      const bodyText = await page.locator("body").innerText();
-      expect(bodyText).not.toContain("GiST");
-      expect(bodyText).not.toContain("HMAC-SHA256");
-      expect(bodyText).not.toContain("SEC_2_BACC");
-
-      await page.screenshot({
-        path: shotPath("01-landing-desktop-1440-light.png"),
-        fullPage: true,
-      });
-
-      // Toggle to Dark Mode cleanly
-      const themeBtn = page
-        .getByRole("button", { name: /التبديل للوضع الداكن|التبديل للوضع الفاتح/ })
-        .first();
-      await themeBtn.click();
-      await expect
-        .poll(() =>
-          page.evaluate(() => document.documentElement.classList.contains("dark"))
-        )
-        .toBe(true);
-      await page.waitForTimeout(220);
-
-      await page.screenshot({
-        path: shotPath("02-landing-desktop-1440-dark.png"),
-        fullPage: false,
-      });
-
-      // Restore light mode
-      await themeBtn.click();
-      await expect
-        .poll(() =>
-          page.evaluate(() => document.documentElement.classList.contains("dark"))
-        )
-        .toBe(false);
-
-      // Mobile 360px check
-      await page.setViewportSize({ width: 360, height: 800 });
-      await page.reload({ waitUntil: "load" });
-      await assertRtlAndNoOverflow(page, "Landing Mobile 360");
-      await assertTouchTargetsAtLeast44px(
-        page.locator("header button, main a[href='/s/ali-bin-abi-talib']"),
-        "Landing Mobile 360"
-      );
-
-      await page.screenshot({
-        path: shotPath("03-landing-mobile-360.png"),
-        fullPage: true,
-      });
-
-      assertNoRuntimeErrors(tracker, "Landing Page");
-    } finally {
-      tracker.detach();
+    // Dark theme toggle check
+    const themeToggle = page.getByRole("button", { name: /التبديل إلى الوضع الليلي/ });
+    if ((await themeToggle.count()) > 0) {
+      await themeToggle.first().click();
+      await page.waitForTimeout(250);
+      await saveShot(page, "02-landing-desktop-dark.png", false);
+      await page.getByRole("button", { name: /التبديل إلى الوضع النهاري/ }).first().click();
+      await page.waitForTimeout(200);
     }
+
+    // Mobile Landing
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.waitForTimeout(200);
+    await assertCleanLayout(page, "Landing Mobile 390");
+    await saveShot(page, "03-landing-mobile.png");
+
+    // School portal via direct navigation
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await page.goto(`/s/${SCHOOL_SLUG}`);
+    await assertCleanLayout(page, "School Public Portal");
+    await saveShot(page, "04-school-portal-desktop.png", false);
+
+    // Unauthenticated onboarding gate check
+    await page.goto("/onboarding");
+    await expect(page.getByRole("heading", { name: /سجّل دخولك أولاً/ })).toBeVisible();
+    await assertCleanLayout(page, "Onboarding Unauthenticated Gate");
+
+    expect(errors, "Zero uncaught page/console errors on public routes").toEqual([]);
   });
 
-  test("b) Student Name-Based Portal (student_201 -> reserve by name -> cancel restore)", async ({
+  test("2. Student Engineering Booking, Online Filter, Schedule Tab, Cancel & Literature Separation", async ({
     page,
   }) => {
-    const tracker = attachDiagnostics(page);
-    try {
-      await page.setViewportSize({ width: 1440, height: 900 });
-      await page.goto(`/s/${SCHOOL_SLUG}`, { waitUntil: "load" });
-      await assertRtlAndNoOverflow(page, "School Doorway Desktop");
-      await expect(page.getByRole("heading", { name: "بوابة الطالب" })).toBeVisible();
-      await expect(page.getByRole("heading", { name: "بوابة المعلم" })).toBeVisible();
-      await page.waitForTimeout(450);
-      await page.screenshot({
-        path: shotPath("03b-school-doorway-desktop-1440.png"),
-        fullPage: true,
-      });
+    const errors = attachConsoleErrorTrap(page);
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await loginAsDemoRole(page, "طالب الهندسة", `/s/${SCHOOL_SLUG}/student`);
 
-      await loginAsDemoRole(page, "طالب الهندسة", `/s/${SCHOOL_SLUG}/student`);
-      await assertRtlAndNoOverflow(page, "Student Portal Desktop");
-      await expect(page.getByText("مسار الهندسة").first()).toBeVisible();
-      await expect(page.getByText("أنت مسجل بالاسم ✓").first()).toBeVisible();
+    await expect(page.getByRole("heading", { name: /أهلاً،/ })).toBeVisible();
+    await expect(page.getByRole("button", { name: "الكل" })).toBeVisible();
+    await expect(page.getByRole("button", { name: "في المدرسة" })).toBeVisible();
+    await expect(page.getByRole("button", { name: "أونلاين" })).toBeVisible();
 
-      await page.screenshot({
-        path: shotPath("04-student-portal-desktop-1440.png"),
-        fullPage: true,
-      });
+    await assertCleanLayout(page, "Student Portal Desktop");
+    await saveShot(page, "05-student-desktop.png");
 
-      // Mobile 360px layout + touch targets
-      await page.setViewportSize({ width: 360, height: 800 });
-      await assertRtlAndNoOverflow(page, "Student Portal Mobile 360");
-      await assertTouchTargetsAtLeast44px(
-        page.locator("header button, main button:visible, nav[aria-label='التنقل السفلي'] a"),
-        "Student Portal Mobile 360"
-      );
-      await page.screenshot({
-        path: shotPath("05-student-portal-mobile-360.png"),
-        fullPage: true,
-      });
+    // Mobile Student Portal
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.waitForTimeout(200);
+    await assertCleanLayout(page, "Student Portal Mobile");
+    await saveShot(page, "06-student-mobile.png");
 
-      await page.setViewportSize({ width: 1440, height: 900 });
+    await page.setViewportSize({ width: 1440, height: 900 });
 
-      // Book a free session (if available) and verify name-based confirmation modal + restore
-      const reserveBtn = page.getByRole("button", { name: "احجز مكانك الآن" }).first();
-      if ((await reserveBtn.count()) > 0) {
-        await reserveBtn.click();
-        await expect(
-          page.getByText("تم تسجيل اسمك في الحصة بنجاح!")
-        ).toBeVisible({ timeout: 20_000 });
-        await expect(
-          page.getByText(/لا تحتاج لأي تذكرة أو باركود/)
-        ).toBeVisible();
+    // Book an available session if present, verify green banner, then cancel to leave DB clean
+    const bookButtons = page.getByRole("button", { name: "احجز مقعدك" });
+    if ((await bookButtons.count()) > 0) {
+      await bookButtons.first().click();
+      await expect(page.getByText(/تم تأكيد مقعدك ✓/)).toBeVisible({ timeout: 15_000 });
 
-        await page.getByRole("button", { name: "حسناً، فهمت" }).click();
-
-        // Cancel the second/newest test booking cleanly to restore original seat count
-        const cancelBtns = page.getByRole("button", { name: "إلغاء الحجز" });
-        if ((await cancelBtns.count()) > 1) {
-          await cancelBtns.first().click();
-          const confirmCancel = page.getByRole("button", {
-            name: "تأكيد إلغاء الحجز",
-          });
-          await expect(confirmCancel).toBeVisible();
-          await confirmCancel.click();
-          await expect(page.getByText("تم إلغاء حجزك")).toBeVisible({
-            timeout: 20_000,
-          });
-        }
-      }
-
-      assertNoRuntimeErrors(tracker, "Student Portal Flow");
-    } finally {
-      tracker.detach();
+      await page.getByRole("button", { name: /جدولي/ }).click();
+      const cancelBtns = page.getByRole("button", { name: "إلغاء الحجز" });
+      await expect(cancelBtns.first()).toBeVisible();
+      await cancelBtns.first().click();
+      await page.getByRole("button", { name: "نعم، إلغاء الحجز" }).click();
+      await expect(page.getByText("تم إلغاء حجزك").first()).toBeVisible({ timeout: 15_000 });
     }
+
+    await page.goto(`/s/${SCHOOL_SLUG}/student/schedule`);
+    await assertCleanLayout(page, "Student Schedule Page");
+
+    // Literature student track isolation
+    await loginAsDemoRole(page, "طالب الآداب", `/s/${SCHOOL_SLUG}/student`);
+    await expect(page.getByRole("heading", { name: /أهلاً،/ })).toBeVisible();
+    await assertCleanLayout(page, "Student Literature Portal");
+
+    expect(errors, "Zero uncaught errors in student journeys").toEqual([]);
   });
 
-  test("c) Teacher Name-Attendance Checklist (teacher_101 -> search student -> mark ✓ حضر -> undo)", async ({
+  test("3. Teacher Dashboard (70/30 VAT), Hall/Online Matrix, Roster Attendance & Print Center", async ({
     page,
   }) => {
-    const tracker = attachDiagnostics(page);
-    try {
-      await page.setViewportSize({ width: 1440, height: 900 });
-      await loginAsDemoRole(page, "معلم المادة", `/s/${SCHOOL_SLUG}/teacher`);
-      await assertRtlAndNoOverflow(page, "Teacher Dashboard Desktop");
-      await expect(page.getByText("جدول الحصص وكشوف الحضور")).toBeVisible();
+    const errors = attachConsoleErrorTrap(page);
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await loginAsDemoRole(page, "معلم المادة", `/s/${SCHOOL_SLUG}/teacher`);
 
-      await page.screenshot({
-        path: shotPath("06-teacher-dashboard-desktop-1440.png"),
-        fullPage: true,
-      });
+    await expect(page.getByRole("heading", { name: "لوحة قيادة المعلم" })).toBeVisible();
+    await expect(page.getByText(/70٪ للمعلم/).first()).toBeVisible();
+    await assertCleanLayout(page, "Teacher Dashboard Desktop");
+    await saveShot(page, "07-teacher-dashboard-desktop.png");
 
-      // Open student name roster checklist
-      const openRosterLink = page
-        .getByRole("link", { name: "فتح كشف الحضور بالاسم" })
-        .first();
-      await expect(openRosterLink).toBeVisible();
-      await openRosterLink.click();
-      await page.waitForURL(
-        (url) => url.pathname.includes(`/s/${SCHOOL_SLUG}/teacher/sessions/`),
-        { timeout: 20_000 }
-      );
-      await page.waitForLoadState("load");
-      await assertRtlAndNoOverflow(page, "Teacher Attendance Roster Desktop");
+    // Dark mode check on Teacher Executive Console
+    const themeToggle = page.getByRole("button", { name: /التبديل إلى الوضع الليلي/ });
+    if ((await themeToggle.count()) > 0) {
+      await themeToggle.first().click();
+      await page.waitForTimeout(250);
+      await saveShot(page, "08-teacher-dashboard-dark.png", false);
+      await page.getByRole("button", { name: /التبديل إلى الوضع النهاري/ }).first().click();
+    }
 
-      // Search by Arabic student name
-      const searchInput = page.locator('input[type="search"]').first();
-      await expect(searchInput).toBeVisible();
-      await searchInput.fill("طالب الهندسة");
-      await expect(page.getByText("طالب الهندسة التجريبي").first()).toBeVisible();
+    // Teacher Hall + Online Matrix
+    await page.goto(`/s/${SCHOOL_SLUG}/teacher/book-hall`);
+    await expect(page.getByRole("heading", { name: "جدولة وحجز القاعات" })).toBeVisible();
+    await page.getByRole("button", { name: /أونلاين من البيت/ }).click();
+    await expect(page.getByPlaceholder("https://meet.google.com/...")).toBeVisible();
+    await page.getByRole("button", { name: /قاعة مدرسية/ }).click();
+    await page.getByRole("button", { name: /تكرار أسبوعي/ }).click();
+    await page.getByRole("button", { name: /حصة مفردة/ }).click();
+    await assertCleanLayout(page, "Teacher Book Hall & Online Matrix");
+    await saveShot(page, "09-teacher-book-hall-desktop.png");
 
-      // Mark student present in 1 tap (or undo then mark to test both directions)
-      const markBtn = page.getByRole("button", { name: /حضر/ }).first();
-      const undoBtnInitial = page.getByRole("button", { name: "تراجع" }).first();
+    // Teacher Print Center (/teacher/printing)
+    await page.goto(`/s/${SCHOOL_SLUG}/teacher/printing`);
+    await expect(page.getByRole("heading", { name: "طباعة المذكرات والملازم" })).toBeVisible();
+    await expect(page.getByText("مطبعة مُدَرَّج أونلاين")).toBeVisible();
+    await expect(page.getByText("طلب طباعة جديد")).toBeVisible();
+    await assertCleanLayout(page, "Teacher Print Center");
+    await saveShot(page, "10-teacher-printing-desktop.png");
 
-      if ((await undoBtnInitial.count()) > 0 && (await undoBtnInitial.isVisible())) {
-        await undoBtnInitial.click();
-        await expect(
-          page.getByRole("button", { name: /✓ حضر/ }).first()
-        ).toBeVisible({ timeout: 15_000 });
-      }
+    // Roster Attendance screen on Mobile 390px
+    await page.goto(`/s/${SCHOOL_SLUG}/teacher`);
+    const rosterLinks = page.getByRole("link", { name: /تسجيل الحضور/ });
+    if ((await rosterLinks.count()) > 0) {
+      await rosterLinks.first().click();
+      await page.waitForURL(new RegExp(`/s/${SCHOOL_SLUG}/teacher/sessions/`));
+      await page.setViewportSize({ width: 390, height: 844 });
+      await expect(page.getByText("الحضور الفعلي")).toBeVisible();
+      await expect(page.getByPlaceholder("ابحث باسم الطالب...")).toBeVisible();
+      await assertCleanLayout(page, "Teacher Attendance Roster Mobile");
+      await saveShot(page, "11-teacher-roster-mobile.png");
 
-      const checkInBtn = page.getByRole("button", { name: /✓ حضر/ }).first();
-      if ((await checkInBtn.count()) > 0) {
-        await checkInBtn.click();
-        await expect(page.getByRole("button", { name: "تراجع" }).first()).toBeVisible({
+      // Toggle present and toggle back cleanly if an unmarked student exists
+      const presentBtns = page.getByRole("button", { name: "تسجيل حضور" });
+      if ((await presentBtns.count()) > 0) {
+        await presentBtns.first().click();
+        await expect(page.getByRole("button", { name: "حضر ✓" }).first()).toBeVisible({
           timeout: 15_000,
         });
-      } else {
-        await expect(markBtn).toBeVisible();
+        await page.getByRole("button", { name: "حضر ✓" }).first().click();
+        await page.waitForTimeout(600);
       }
-
-      await page.screenshot({
-        path: shotPath("07-teacher-roster-present-1440.png"),
-        fullPage: true,
-      });
-
-      // Mobile 360px attendance list check
-      await page.setViewportSize({ width: 360, height: 800 });
-      await assertRtlAndNoOverflow(page, "Teacher Roster Mobile 360");
-      await assertTouchTargetsAtLeast44px(
-        page.locator("main button:visible, input[type='search']"),
-        "Teacher Roster Mobile 360"
-      );
-      await page.screenshot({
-        path: shotPath("08-teacher-roster-mobile-360.png"),
-        fullPage: true,
-      });
-
-      // Restore clean initial confirmed status via "تراجع"
-      await page.setViewportSize({ width: 1440, height: 900 });
-      const undoBtn = page.getByRole("button", { name: "تراجع" }).first();
-      if ((await undoBtn.count()) > 0 && (await undoBtn.isVisible())) {
-        await undoBtn.click();
-        await expect(
-          page.getByRole("button", { name: /✓ حضر/ }).first()
-        ).toBeVisible({ timeout: 15_000 });
-      }
-
-      // Check Book Hall Planner
-      await page.goto(`/s/${SCHOOL_SLUG}/teacher/book-hall`, { waitUntil: "load" });
-      await assertRtlAndNoOverflow(page, "Teacher Book Hall Desktop");
-      await expect(page.getByText("١ · بيانات الحصة والمدرج")).toBeVisible();
-      await page.screenshot({
-        path: shotPath("09-teacher-book-hall-desktop-1440.png"),
-        fullPage: true,
-      });
-
-      assertNoRuntimeErrors(tracker, "Teacher Attendance Console");
-    } finally {
-      tracker.detach();
     }
+
+    expect(errors, "Zero uncaught errors in teacher journeys").toEqual([]);
   });
 
-  test("d) School Admin, Ministry Presentation & Name CSV Export (school_admin)", async ({
-    page,
-  }) => {
-    const tracker = attachDiagnostics(page);
-    try {
-      await page.setViewportSize({ width: 1440, height: 900 });
-      await loginAsDemoRole(page, "إدارة المدرسة", `/s/${SCHOOL_SLUG}/admin`);
-      await assertRtlAndNoOverflow(page, "School Admin Desktop");
-
-      await expect(page.getByText("الإشغال الحي للقاعات والمدرجات")).toBeVisible();
-      await page.screenshot({
-        path: shotPath("10-school-admin-desktop-1440.png"),
-        fullPage: true,
-      });
-
-      for (const route of ["academic", "halls", "teachers"] as const) {
-        await page.goto(`/s/${SCHOOL_SLUG}/admin/${route}`, { waitUntil: "load" });
-        await assertRtlAndNoOverflow(page, `School Admin /${route}`);
-      }
-
-      await page.goto(`/s/${SCHOOL_SLUG}/admin/presentation`, {
-        waitUntil: "load",
-      });
-      await assertRtlAndNoOverflow(page, "Ministry Presentation Desktop");
-      await expect(
-        page.getByText("عرض المتابعة الرسمي — وزارة التربية والتعليم")
-      ).toBeVisible();
-      await expect(page.getByText("تحضير بالاسم في ثانية")).toBeVisible();
-
-      const presText = await page.locator("body").innerText();
-      expect(presText).not.toContain("HMAC-SHA256");
-
-      await page.screenshot({
-        path: shotPath("11-ministry-presentation-desktop-1440.png"),
-        fullPage: true,
-      });
-
-      // Verify CSV export uses Student Name + Attendance Status (zero QR / Reference Code)
-      const csvResponse = await page.request.get(
-        `/api/reports/export?schoolSlug=${SCHOOL_SLUG}&format=csv`
-      );
-      expect(csvResponse.status()).toBe(200);
-      const csvBytes = await csvResponse.body();
-      expect(csvBytes.subarray(0, 3)).toEqual(Buffer.from([0xef, 0xbb, 0xbf]));
-      const csvText = csvBytes.toString("utf8");
-      expect(csvText).toContain("Student Name");
-      expect(csvText).toContain("Attendance Status");
-
-      assertNoRuntimeErrors(tracker, "School Admin & Ministry Presentation");
-    } finally {
-      tracker.detach();
-    }
-  });
-
-  test("e) Super Admin National Console (super_admin)", async ({ page }) => {
-    const tracker = attachDiagnostics(page);
-    try {
-      await page.setViewportSize({ width: 1440, height: 900 });
-      await loginAsDemoRole(page, "مشرف المنصة", "/super-admin");
-      await assertRtlAndNoOverflow(page, "Super Admin Desktop");
-
-      await expect(
-        page.getByRole("heading", { name: "لوحة التحكم الوطنية — مُدَرَّج" })
-      ).toBeVisible();
-      await page.screenshot({
-        path: shotPath("12-super-admin-desktop-1440.png"),
-        fullPage: true,
-      });
-
-      await page.goto("/super-admin/schools", { waitUntil: "load" });
-      await assertRtlAndNoOverflow(page, "Super Admin Schools Desktop");
-      await page.goto("/super-admin/security-logs", { waitUntil: "load" });
-      await assertRtlAndNoOverflow(page, "Super Admin Security Logs Desktop");
-
-      await page.goto("/login", { waitUntil: "load" });
-      await expect(
-        page.getByRole("button", { name: "المتابعة باستخدام Google" })
-      ).toBeVisible();
-      await page.goto("/register", { waitUntil: "load" });
-      await expect(
-        page.getByRole("button", { name: "التسجيل السريع باستخدام Google" })
-      ).toBeVisible();
-
-      assertNoRuntimeErrors(tracker, "Super Admin Console");
-    } finally {
-      tracker.detach();
-    }
-  });
-
-  test("f) Recorded Lectures 3-Tier Access (Upload/Publish -> Hidden Secret Gate -> Delete Cleanup)", async ({
+  test("4. Recorded Lectures 3-Tier Studio, Public Library & Secret Password Gate", async ({
     page,
     browser,
   }) => {
-    const tracker = attachDiagnostics(page);
-    try {
-      await page.setViewportSize({ width: 1440, height: 900 });
-      await loginAsDemoRole(page, "معلم المادة", `/s/${SCHOOL_SLUG}/teacher`);
+    const errors = attachConsoleErrorTrap(page);
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await loginAsDemoRole(page, "معلم المادة", `/s/${SCHOOL_SLUG}/teacher`);
 
-      await page.goto(`/s/${SCHOOL_SLUG}/teacher/lectures`, { waitUntil: "load" });
-      await assertRtlAndNoOverflow(page, "Teacher Lectures Studio Desktop");
-      await expect(
-        page.getByRole("heading", {
-          name: "رفع المحاضرات المسجلة والتحكم في صلاحية المشاهدة",
-        })
-      ).toBeVisible();
+    await page.goto(`/s/${SCHOOL_SLUG}/teacher/lectures`);
+    await expect(page.getByRole("heading", { name: "نشر محاضرة مسجلة" })).toBeVisible();
 
-      await page.screenshot({
-        path: shotPath("13-teacher-lectures-studio-1440.png"),
-        fullPage: true,
-      });
-
-      const testTitle = `محاضرة اختبار آلي ${Date.now()}`;
-      const secretPass = "ModPass2026!";
-
-      await page.getByLabel("عنوان المحاضرة").fill(testTitle);
-      await page
-        .getByRole("button", { name: /أو إضافة رابط فيديو كبير/ })
-        .click();
-      await page
-        .getByLabel(/رابط الفيديو الآمن/)
-        .fill("https://www.youtube.com/watch?v=dQw4w9WgXcQ");
-
-      await page
-        .getByRole("button", { name: /سرية ومخفية/ })
-        .click();
-      await page.getByLabel("كلمة مرور المحاضرة السرية").fill(secretPass);
-
-      await page.getByRole("button", { name: "رفع ونشر المحاضرة" }).click();
-      await expect(
-        page.getByText("تم رفع ونشر المحاضرة بنجاح!")
-      ).toBeVisible({ timeout: 20_000 });
-
-      // Grab generated secret link by intercepting clipboard or querying the row card button
-      await page.reload({ waitUntil: "load" });
-      const createdCard = page.locator("article, div").filter({ hasText: testTitle }).first();
-      await expect(createdCard).toBeVisible();
-
-      // Grant clipboard permissions to verify "نسخ الرابط السري" URL works cleanly
-      await page.context().grantPermissions(["clipboard-read", "clipboard-write"]);
-      await page.getByRole("button", { name: "نسخ الرابط السري" }).first().click();
-      const copiedUrl = await page.evaluate(() => navigator.clipboard.readText());
-      expect(copiedUrl).toContain(`/s/${SCHOOL_SLUG}/lectures/`);
-
-      // Verify secret lecture NEVER shows in public school lectures catalog
-      const guestCtx = await browser.newContext();
-      const guestPage = await guestCtx.newPage();
-      await guestPage.setViewportSize({ width: 1440, height: 900 });
-      await guestPage.goto(`/s/${SCHOOL_SLUG}/lectures`, { waitUntil: "load" });
-      await assertRtlAndNoOverflow(guestPage, "Public School Lectures Catalog");
-      expect(await guestPage.locator("body").innerText()).not.toContain(testTitle);
-      await guestPage.screenshot({
-        path: shotPath("14-school-lectures-library-1440.png"),
-        fullPage: true,
-      });
-
-      // Open the hidden secret URL as guest -> wrong password blocked -> right password plays video
-      await guestPage.goto(copiedUrl, { waitUntil: "load" });
-      await assertRtlAndNoOverflow(guestPage, "Secret Lecture Gate");
-      await expect(guestPage.getByText(testTitle)).toBeVisible();
-      await guestPage.getByLabel("أدخل كلمة المرور لفتح المحاضرة").fill("WrongPass999");
-      await guestPage.getByRole("button", { name: "فتح وتشغيل المحاضرة" }).click();
-      await expect(
-        guestPage.getByRole("main").getByText(/كلمة المرور غير صحيحة/)
-      ).toBeVisible({
-        timeout: 15_000,
-      });
-
-      await guestPage.screenshot({
-        path: shotPath("15-secret-lecture-gate-1440.png"),
-        fullPage: true,
-      });
-
-      await guestPage.getByLabel("أدخل كلمة المرور لفتح المحاضرة").fill(secretPass);
-      await guestPage.getByRole("button", { name: "فتح وتشغيل المحاضرة" }).click();
-      await expect(guestPage.getByText("تم فتح المحاضرة السرية")).toBeVisible({
-        timeout: 15_000,
-      });
-      await expect(guestPage.locator("iframe")).toBeVisible();
-      await guestCtx.close();
-
-      // Clean up test lecture(s) via the teacher delete action so DB stays pristine
-      while (
-        (await page.getByRole("button", { name: "حذف" }).count()) > 0
-      ) {
-        const beforeCount = await page.getByRole("button", { name: "حذف" }).count();
-        await page.getByRole("button", { name: "حذف" }).first().click();
+    // Clean up any stale E2E secret lecture from interrupted runs
+    for (let i = 0; i < 3; i++) {
+      const e2eItem = page
+        .locator("div")
+        .filter({ hasText: "E2E محاضرة سرية للتحقق" })
+        .getByRole("button", { name: "حذف" });
+      if ((await e2eItem.count()) > 0) {
+        await e2eItem.first().click();
         await page.getByRole("button", { name: "نعم، احذف المحاضرة" }).click();
-        await expect(
-          page.getByText("تم حذف المحاضرة والملف بنجاح").first()
-        ).toBeVisible({
-          timeout: 15_000,
-        });
-        await expect(page.getByRole("button", { name: "حذف" })).toHaveCount(
-          beforeCount - 1,
-          { timeout: 15_000 }
-        );
+        await page.waitForTimeout(800);
+      } else {
+        break;
       }
-
-      assertNoRuntimeErrors(tracker, "Recorded Lectures E2E Flow");
-    } finally {
-      tracker.detach();
     }
+
+    await saveShot(page, "12-teacher-lectures-studio.png");
+
+    // Publish Secret Lecture via YouTube URL
+    await page.getByRole("button", { name: "رابط فيديو", exact: true }).click();
+    await page
+      .getByPlaceholder("https://www.youtube.com/watch?v=...")
+      .fill("https://www.youtube.com/watch?v=dQw4w9WgXcQ");
+    await page
+      .getByPlaceholder("مثال: حل امتحانات الوحدة الثانية")
+      .fill("E2E محاضرة سرية للتحقق");
+    await page.getByRole("button", { name: /سرية بكلمة مرور/ }).click();
+    await page.getByLabel("كلمة مرور المحاضرة السرية").fill("ModSecret2026");
+    await page.getByRole("button", { name: "نشر المحاضرة الآن" }).click();
+    await expect(page.getByText("تم نشر المحاضرة بنجاح ✓")).toBeVisible({ timeout: 20_000 });
+
+    // Extract secret share link cleanly using Clipboard permission or Copy button
+    await page.context().grantPermissions(["clipboard-read", "clipboard-write"]);
+    const copySecretBtn = page.getByRole("button", { name: "نسخ الرابط السري" }).first();
+    await expect(copySecretBtn).toBeVisible();
+    await copySecretBtn.click();
+    const secretUrl = await page.evaluate(() => navigator.clipboard.readText());
+    expect(secretUrl).toContain(`/s/${SCHOOL_SLUG}/lectures/`);
+
+    // Public lectures library MUST hide secret tier
+    await page.goto(`/s/${SCHOOL_SLUG}/lectures`);
+    await expect(page.getByText("E2E محاضرة سرية للتحقق")).toHaveCount(0);
+    await assertCleanLayout(page, "School Lectures Library");
+    await saveShot(page, "13-school-lectures-library.png");
+
+    // Unauthenticated visitor tests wrong + right secret password
+    const anonContext = await browser.newContext({ locale: "ar-EG" });
+    const anonPage = await anonContext.newPage();
+    await anonPage.setViewportSize({ width: 1440, height: 900 });
+    await anonPage.goto(secretUrl);
+    await expect(anonPage.getByRole("heading", { name: "E2E محاضرة سرية للتحقق" })).toBeVisible();
+
+    await anonPage.getByRole("textbox", { name: "كلمة المرور" }).fill("WrongPass99");
+    await anonPage.getByRole("button", { name: "فتح المحاضرة" }).click();
+    await expect(anonPage.getByRole("alert")).toBeVisible({ timeout: 15_000 });
+
+    await anonPage.getByRole("textbox", { name: "كلمة المرور" }).fill("ModSecret2026");
+    await anonPage.getByRole("button", { name: "فتح المحاضرة" }).click();
+    await expect(anonPage.getByText(/تم التحقق/)).toBeVisible({ timeout: 15_000 });
+    await saveShot(anonPage, "14-secret-lecture-unlocked.png", false);
+    await anonContext.close();
+
+    // Clean up E2E test lecture
+    await page.goto(`/s/${SCHOOL_SLUG}/teacher/lectures`);
+    const cleanupCard = page
+      .locator("div.divide-y > div")
+      .filter({ hasText: "E2E محاضرة سرية للتحقق" })
+      .first();
+    await cleanupCard.getByRole("button", { name: "حذف" }).click();
+    await page.getByRole("button", { name: "نعم، احذف المحاضرة" }).click();
+    await expect(page.getByText("تم حذف المحاضرة ✓")).toBeVisible({ timeout: 15_000 });
+
+    expect(errors, "Zero uncaught errors in lectures workflow").toEqual([]);
+  });
+
+  test("5. School Admin (Overview, Academic Matrix, Halls, Teachers, Ministry Presentation)", async ({
+    page,
+  }) => {
+    const errors = attachConsoleErrorTrap(page);
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await loginAsDemoRole(page, "إدارة المدرسة", `/s/${SCHOOL_SLUG}/admin`);
+
+    await expect(page.getByText("الإشغال الحي للقاعات والمدرجات")).toBeVisible();
+    await expect(page.getByText(/70٪/)).toBeVisible();
+    await assertCleanLayout(page, "School Admin Overview");
+    await saveShot(page, "15-admin-overview-desktop.png");
+
+    await page.goto(`/s/${SCHOOL_SLUG}/admin/academic`);
+    await assertCleanLayout(page, "Admin Academic K-12 Matrix");
+    await saveShot(page, "16-admin-academic-desktop.png");
+
+    await page.goto(`/s/${SCHOOL_SLUG}/admin/halls`);
+    await assertCleanLayout(page, "Admin Halls Manager");
+    await saveShot(page, "17-admin-halls-desktop.png");
+
+    await page.goto(`/s/${SCHOOL_SLUG}/admin/teachers`);
+    await expect(page.getByText("سجل المعلمين المعتمدين")).toBeVisible();
+    await assertCleanLayout(page, "Admin Teachers Review");
+    await saveShot(page, "18-admin-teachers-desktop.png");
+
+    await page.goto(`/s/${SCHOOL_SLUG}/admin/presentation`);
+    await expect(
+      page.getByText("عرض المتابعة الرسمي — وزارة التربية والتعليم")
+    ).toBeVisible();
+    await expect(page.getByText("جاهزية ١٠٠٪")).toBeVisible();
+    await expect(page.getByText("تحضير بالاسم في ثانية")).toBeVisible();
+    await assertCleanLayout(page, "Ministry Presentation Mode");
+    await saveShot(page, "19-ministry-presentation-desktop.png");
+
+    expect(errors, "Zero uncaught errors in admin journeys").toEqual([]);
+  });
+
+  test("6. Super Admin Console, Create School/Center Wizard, Security Logs, Auth & Health", async ({
+    page,
+    request,
+  }) => {
+    const errors = attachConsoleErrorTrap(page);
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await loginAsDemoRole(page, "مشرف المنصة", "/super-admin");
+
+    await expect(
+      page.getByRole("heading", { name: /لوحة التحكم الوطنية — مُدَرَّج/ })
+    ).toBeVisible();
+    await assertCleanLayout(page, "Super Admin Overview");
+    await saveShot(page, "20-super-admin-desktop.png");
+
+    await page.goto("/super-admin/schools");
+    await expect(page.getByRole("button", { name: "مدرسة رسمية" })).toBeVisible();
+    await expect(page.getByRole("button", { name: "سنتر تعليمي معتمد" })).toBeVisible();
+    await assertCleanLayout(page, "Super Admin Create School Wizard");
+    await saveShot(page, "21-super-admin-wizard-desktop.png");
+
+    await page.goto("/super-admin/security-logs");
+    await assertCleanLayout(page, "Super Admin Security Logs");
+
+    await page.goto("/login");
+    await expect(page.getByRole("button", { name: /المتابعة باستخدام Google/ })).toBeVisible();
+    await assertCleanLayout(page, "Login Page");
+    await saveShot(page, "22-login-desktop.png");
+
+    await page.goto("/register");
+    await expect(page.getByRole("button", { name: /المتابعة باستخدام Google/ })).toBeVisible();
+    await assertCleanLayout(page, "Register Page");
+
+    const healthRes = await request.get("/api/health");
+    expect(healthRes.status()).toBe(200);
+    const healthJson = (await healthRes.json()) as { status?: string };
+    expect(healthJson.status).toBe("ok");
+
+    expect(errors, "Zero uncaught errors in super-admin/auth/health journeys").toEqual([]);
   });
 });

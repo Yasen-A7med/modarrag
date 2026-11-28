@@ -5,9 +5,11 @@ import { z } from "zod";
 import { createSupabaseServerClient, getAuthenticatedUser } from "@/infrastructure/supabase/server";
 import { ok, err, type ActionResult } from "@/domain/common/result";
 import type {
+  BookingAttendanceFlag,
   BookingStatus,
   Database,
   MarkStudentAttendanceRpcResult,
+  RecordBookingComplianceRpcResult,
 } from "@/infrastructure/supabase/database.types";
 
 const sessionQuerySchema = z.object({
@@ -72,6 +74,9 @@ export interface AttendanceStudentEntry {
   readonly seatNumber: string | null;
   readonly waitlistPosition: number | null;
   readonly status: BookingStatus;
+  readonly attendanceFlag: BookingAttendanceFlag;
+  readonly lateMinutes: number;
+  readonly deductionEgp: number;
   readonly checkedInAt: string | null;
   readonly bookedAt: string;
 }
@@ -85,6 +90,8 @@ export interface SessionAttendanceData {
     readonly maxCapacity: number;
     readonly bookedSeatsCount: number;
     readonly status: string;
+    readonly deliveryMode: "in_person" | "online";
+    readonly priceEgp: number;
     readonly hallNameAr: string;
     readonly subjectNameAr: string;
     readonly teacherSpecialtyAr: string;
@@ -124,7 +131,7 @@ export async function getSessionAttendanceData(
   const { data: sessionRow } = await supabase
     .from("sessions")
     .select(`
-      id, teacher_id, title_ar, starts_at, ends_at, max_capacity, booked_seats_count, status,
+      id, teacher_id, title_ar, starts_at, ends_at, max_capacity, booked_seats_count, status, delivery_mode, price_egp,
       halls!sessions_hall_id_fkey ( name_ar ),
       subjects!sessions_subject_id_fkey ( name_ar ),
       teacher_profiles!sessions_teacher_id_fkey ( specialty_ar )
@@ -144,7 +151,7 @@ export async function getSessionAttendanceData(
   const { data: bookingsData, error: bookingsError } = await supabase
     .from("bookings")
     .select(`
-      id, student_id, status, seat_number, waitlist_position, checked_in_at, booked_at,
+      id, student_id, status, attendance_flag, late_minutes, deduction_egp, seat_number, waitlist_position, checked_in_at, booked_at,
       profiles!bookings_student_id_fkey ( full_name, phone )
     `)
     .eq("session_id", parsed.data.sessionId)
@@ -175,6 +182,9 @@ export async function getSessionAttendanceData(
         seatNumber: b.seat_number,
         waitlistPosition: b.waitlist_position,
         status: b.status,
+        attendanceFlag: b.attendance_flag ?? "on_time",
+        lateMinutes: b.late_minutes ?? 0,
+        deductionEgp: b.deduction_egp ?? 0,
         checkedInAt: b.checked_in_at,
         bookedAt: b.booked_at,
       };
@@ -195,7 +205,12 @@ export async function getSessionAttendanceData(
       maxCapacity: sessionRow.max_capacity,
       bookedSeatsCount: sessionRow.booked_seats_count,
       status: sessionRow.status,
-      hallNameAr: hall?.name_ar ?? "",
+      deliveryMode: sessionRow.delivery_mode ?? "in_person",
+      priceEgp: sessionRow.price_egp ?? 0,
+      hallNameAr:
+        sessionRow.delivery_mode === "online"
+          ? "بث مباشر أونلاين"
+          : (hall?.name_ar ?? ""),
       subjectNameAr: subject?.name_ar ?? "",
       teacherSpecialtyAr: teacher?.specialty_ar ?? "معلم المادة",
     },
@@ -274,4 +289,48 @@ export async function markStudentAttendanceAction(input: {
     status: successResult.status,
     checkedInAt: successResult.checked_in_at,
   });
+}
+
+const recordComplianceSchema = z.object({
+  schoolSlug: z.string().min(1),
+  sessionId: z.string().uuid(),
+  bookingId: z.string().uuid(),
+  attendanceFlag: z.enum(["on_time", "late", "absent_deducted"]),
+  lateMinutes: z.number().int().min(0).max(240).default(0),
+  deductionEgp: z.number().int().min(0).max(5000).default(0),
+});
+
+export async function recordStudentComplianceAction(
+  input: z.infer<typeof recordComplianceSchema>
+): Promise<ActionResult<{ flag: BookingAttendanceFlag; deductionEgp: number }>> {
+  const parsed = recordComplianceSchema.safeParse(input);
+  if (!parsed.success) return err("VALIDATION_ERROR", "بيانات الالتزام غير صالحة.");
+
+  const user = await getAuthenticatedUser();
+  if (!user) return err("UNAUTHORIZED", "يرجى تسجيل الدخول أولاً.");
+
+  const supabase = await createSupabaseServerClient();
+  const schoolId = await resolveSchoolIdFromSlug(supabase, parsed.data.schoolSlug);
+  if (!schoolId) return err("NOT_FOUND", "المدرسة غير موجودة.");
+
+  const { data: rpcResult, error: rpcError } = await supabase.rpc(
+    "record_booking_compliance",
+    {
+      p_booking_id: parsed.data.bookingId,
+      p_attendance_flag: parsed.data.attendanceFlag,
+      p_late_minutes: parsed.data.lateMinutes,
+      p_deduction_egp: parsed.data.deductionEgp,
+    }
+  );
+
+  if (rpcError) return err("INTERNAL_ERROR", rpcError.message);
+  const res = rpcResult as unknown as RecordBookingComplianceRpcResult;
+  if (!res || !res.ok) {
+    const fail = res as Extract<RecordBookingComplianceRpcResult, { ok: false }>;
+    return err("FORBIDDEN", fail?.message_ar ?? "تعذر تسجيل حالة الالتزام.");
+  }
+
+  revalidatePath(`/s/${parsed.data.schoolSlug}/teacher/sessions/${parsed.data.sessionId}`);
+  revalidatePath(`/s/${parsed.data.schoolSlug}/teacher`);
+  return ok({ flag: res.flag, deductionEgp: res.deduction_egp });
 }

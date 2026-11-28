@@ -5,11 +5,13 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
   AlertCircle,
-  ArrowLeft,
   ArrowRight,
   Building2,
   CheckCircle2,
+  Laptop,
   Layers,
+  MapPin,
+  Smartphone,
   Sparkles,
 } from "lucide-react";
 import {
@@ -24,15 +26,8 @@ import { useToast } from "@/components/ui/Toast";
 import { formatArabicNumber } from "@/lib/formatters";
 import { cn } from "@/lib/utils";
 
-const BRAND_COLORS = ["#1E3A8A", "#059669", "#D97706", "#0F766E", "#4338CA"] as const;
+const BRAND_COLORS = ["#2563EB", "#0A1F44", "#22D3EE", "#D4AF37", "#16A34A"] as const;
 const BUFFER_PRESETS = [10, 15, 20, 30] as const;
-
-const TEMPLATE_TRACKS_PREVIEW = [
-  { code: "ENGINEERING", label: "الهندسة والتكنولوجيا" },
-  { code: "MEDICINE_LIFE", label: "الطب وعلوم الحياة" },
-  { code: "BUSINESS", label: "الاقتصاد والأعمال" },
-  { code: "ARTS_HUMANITIES", label: "الآداب والعلوم الإنسانية" },
-] as const;
 
 function slugifyEnglish(value: string): string {
   return value
@@ -48,7 +43,8 @@ export interface CreateSchoolWizardClientProps {
 }
 
 /**
- * 2-Step Create Tenant School Wizard with optional instant SEC_2_BACC template seeding.
+ * Slide 12 Blueprint: Split-Screen Create School / Center Tenant Wizard
+ * (Right: Config Form with K-12 & Baccalaureate presets; Left: Real-Time Mobile Phone Preview).
  */
 export function CreateSchoolWizardClient({
   existingSchools,
@@ -56,18 +52,18 @@ export function CreateSchoolWizardClient({
   const router = useRouter();
   const { toast } = useToast();
 
-  const [step, setStep] = React.useState<1 | 2>(1);
   const [nameAr, setNameAr] = React.useState("");
   const [nameEn, setNameEn] = React.useState("");
   const [slug, setSlug] = React.useState("");
+  const [tenantType, setTenantType] = React.useState<"school" | "center">("school");
   const [governorate, setGovernorate] = React.useState("القاهرة");
-  const [directorate, setDirectorate] = React.useState("");
+  const [directorate, setDirectorate] = React.useState("مدينة نصر");
 
-  const [brandColorHex, setBrandColorHex] = React.useState("#1E3A8A");
+  const [brandColorHex, setBrandColorHex] = React.useState("#2563EB");
   const [logoUrl, setLogoUrl] = React.useState("");
   const [defaultBufferMinutes, setDefaultBufferMinutes] = React.useState<number>(15);
-  const [withBaccalaureateTemplate, setWithBaccalaureateTemplate] =
-    React.useState<boolean>(true);
+  const [withBaccalaureateTemplate, setWithBaccalaureateTemplate] = React.useState(true);
+  const [withK12Template, setWithK12Template] = React.useState(true);
 
   const [errorMsg, setErrorMsg] = React.useState<string | null>(null);
   const [submitting, setSubmitting] = React.useState(false);
@@ -76,28 +72,20 @@ export function CreateSchoolWizardClient({
     readonly slug: string;
   } | null>(null);
 
-  const handleNextStep = () => {
-    setErrorMsg(null);
-    if (nameAr.trim().length < 2 || nameEn.trim().length < 2) {
-      setErrorMsg("يرجى كتابة اسم المدرسة باللغتين العربية والإنجليزية (حرفان على الأقل).");
-      return;
-    }
-    if (!/^[a-z0-9-]{2,80}$/.test(slug.trim())) {
-      setErrorMsg("المعرف الفريد (Slug) يجب أن يحتوي على حروف إنجليزية صغيرة وأرقام وشرطات (-) فقط.");
-      return;
-    }
-    if (!governorate.trim() || !directorate.trim()) {
-      setErrorMsg("يرجى إدخال المحافظة والإدارة التعليمية.");
-      return;
-    }
-    setStep(2);
-  };
-
   const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     setErrorMsg(null);
-    setSubmitting(true);
 
+    if (nameAr.trim().length < 2 || nameEn.trim().length < 2) {
+      setErrorMsg("يرجى إدخال اسم المنشأة بالعربية والإنجليزية.");
+      return;
+    }
+    if (!/^[a-z0-9-]{2,80}$/.test(slug.trim())) {
+      setErrorMsg("المعرف الفريد (Slug) يجب أن يكون أحرفاً إنجليزية صغيرة وأرقاماً و(-) فقط.");
+      return;
+    }
+
+    setSubmitting(true);
     try {
       const trimmedLogo = logoUrl.trim();
       const result = await createSchoolTenantAction({
@@ -106,16 +94,18 @@ export function CreateSchoolWizardClient({
         nameEn: nameEn.trim(),
         governorate: governorate.trim(),
         directorate: directorate.trim(),
+        tenantType,
         brandColorHex,
         ...(trimmedLogo ? { logoUrl: trimmedLogo } : {}),
         defaultBufferMinutes,
         withBaccalaureateTemplate,
+        withK12Template,
       });
 
       if (!result.ok) {
         setErrorMsg(result.error.message);
         toast({
-          title: "تعذر إنشاء المدرسة",
+          title: "تعذر إنشاء المنشأة",
           description: result.error.message,
           variant: "error",
         });
@@ -124,411 +114,370 @@ export function CreateSchoolWizardClient({
 
       setCreatedResult(result.data);
       toast({
-        title: "تم إنشاء المدرسة وتجهيز البوابة بنجاح",
+        title: "تم إطلاق البوابة بنجاح ✓",
         description: result.data.slug,
         variant: "success",
       });
       router.refresh();
     } catch {
-      setErrorMsg("حدث خطأ غير متوقع أثناء إنشاء المدرسة.");
+      setErrorMsg("حدث خطأ غير متوقع أثناء الإنشاء.");
     } finally {
       setSubmitting(false);
     }
-  };
-
-  const resetWizard = () => {
-    setStep(1);
-    setNameAr("");
-    setNameEn("");
-    setSlug("");
-    setDirectorate("");
-    setLogoUrl("");
-    setErrorMsg(null);
-    setCreatedResult(null);
   };
 
   return (
     <div className="flex flex-col gap-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h1 className="text-xl font-bold text-[var(--text-primary)] sm:text-2xl">
-            معالج إنشاء مدرسة جديدة (Multi-Tenant)
+          <Badge variant="info" size="md">
+            معالج التأسيس الفوري
+          </Badge>
+          <h1 className="mt-2 text-2xl font-extrabold text-[var(--text-primary)]">
+            إنشاء مدرسة أو سنتر معتمد
           </h1>
-          <p className="mt-0.5 text-xs sm:text-sm text-[var(--text-muted)]">
-            إطلاق بوابة مدرسة مستقلة خلال ثوانٍ مع تهيئة مسارات البكالوريا المصرية تلقائياً
+          <p className="mt-0.5 text-sm text-[var(--text-secondary)]">
+            أطلق بوابة جديدة معزولة البيانات مع قوالب الصفوف K-12 والبكالوريا خلال ثوانٍ
           </p>
         </div>
+
         <Link
           href="/super-admin"
-          className={buttonVariants({
-            variant: "outline",
-            size: "md",
-            className: "min-h-[44px]",
-          })}
+          className={buttonVariants({ variant: "outline", size: "md" })}
         >
           <ArrowRight className="h-4 w-4" />
-          <span>العودة للنظرة الوطنية</span>
+          <span>النظرة الوطنية</span>
         </Link>
       </div>
 
       {createdResult ? (
         <Card className="border-emerald-300 p-6 dark:border-emerald-500/40">
           <div className="flex items-start gap-3">
-            <span className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-500/30 dark:bg-emerald-500/15 dark:text-emerald-300">
+            <span className="inline-flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-emerald-600 text-white">
               <CheckCircle2 className="h-6 w-6" />
             </span>
             <div>
-              <h2 className="text-lg font-bold text-[var(--text-primary)]">
-                تم إطلاق بوابة المدرسة بنجاح
+              <h2 className="text-lg font-extrabold text-[var(--text-primary)]">
+                تم إطلاق بوابة «{nameAr}» بنجاح
               </h2>
-              <p className="mt-1 text-xs text-[var(--text-secondary)]">
-                المعرف:{" "}
-                <span className="font-mono font-semibold" dir="ltr">
-                  /s/{createdResult.slug}
-                </span>
-                {withBaccalaureateTemplate && " · تم تفعيل قالب البكالوريا المصرية تلقائياً"}
+              <p className="mt-1 text-xs font-mono text-[var(--text-secondary)]" dir="ltr">
+                /s/{createdResult.slug}
               </p>
             </div>
           </div>
 
-          <div className="mt-5 flex flex-wrap items-center gap-2.5">
+          <div className="mt-5 flex flex-wrap gap-2.5">
             <Link
               href={`/s/${createdResult.slug}`}
-              className={buttonVariants({
-                variant: "primary",
-                size: "md",
-                className: "min-h-[44px]",
-              })}
+              className={buttonVariants({ variant: "primary", size: "md" })}
             >
-              فتح بوابة المدرسة
-            </Link>
-            <Link
-              href={`/s/${createdResult.slug}/admin/presentation`}
-              className={buttonVariants({
-                variant: "outline",
-                size: "md",
-                className: "min-h-[44px]",
-              })}
-            >
-              معاينة عرض الوزارة
+              فتح البوابة الجديدة
             </Link>
             <Button
-              variant="secondary"
-              size="md"
-              className="min-h-[44px]"
-              onClick={resetWizard}
+              variant="outline"
+              onClick={() => {
+                setCreatedResult(null);
+                setNameAr("");
+                setNameEn("");
+                setSlug("");
+              }}
             >
-              إنشاء مدرسة أخرى
+              إنشاء منشأة أخرى
             </Button>
           </div>
         </Card>
       ) : (
-        <Card>
-          <CardHeader className="border-b border-[var(--border-hairline)] pb-4">
-            {/* 2-Step Progress Header */}
-            <div className="grid grid-cols-2 gap-3">
-              <div
-                className={cn(
-                  "rounded-lg border p-3 transition-colors",
-                  step === 1
-                    ? "border-[#1E3A8A] bg-blue-50/70 dark:border-blue-500 dark:bg-blue-500/15"
-                    : "border-[var(--border-hairline)] bg-[var(--bg-sunken)]"
-                )}
-              >
-                <div className="flex items-center justify-between">
-                  <span className="text-xs font-bold text-[var(--text-primary)]">
-                    الخطوة ١ · الهوية والبيانات
-                  </span>
-                  <Badge variant={step === 1 ? "primary" : "success"}>
-                    {step === 1 ? "الحالية" : "مكتمل"}
-                  </Badge>
-                </div>
-                <p className="mt-1 text-[11px] text-[var(--text-muted)]">
-                  الاسم، المعرف الفريد، المحافظة والإدارة
-                </p>
-              </div>
+        <div className="grid grid-cols-1 gap-6 lg:grid-cols-12">
+          {/* Right Form Column */}
+          <Card className="lg:col-span-7">
+            <CardHeader className="border-b border-[var(--border-hairline)] pb-4">
+              <CardTitle className="flex items-center gap-2 text-base font-extrabold">
+                <Building2 className="h-4 w-4 text-[#2563EB]" />
+                <span>بيانات المنشأة والهوية</span>
+              </CardTitle>
+            </CardHeader>
 
-              <div
-                className={cn(
-                  "rounded-lg border p-3 transition-colors",
-                  step === 2
-                    ? "border-[#1E3A8A] bg-blue-50/70 dark:border-blue-500 dark:bg-blue-500/15"
-                    : "border-[var(--border-hairline)] bg-[var(--bg-sunken)]"
-                )}
-              >
-                <div className="flex items-center justify-between">
-                  <span className="text-xs font-bold text-[var(--text-primary)]">
-                    الخطوة ٢ · قالب البكالوريا
-                  </span>
-                  <Badge variant={step === 2 ? "primary" : "neutral"}>
-                    {step === 2 ? "الحالية" : "التالية"}
-                  </Badge>
-                </div>
-                <p className="mt-1 text-[11px] text-[var(--text-muted)]">
-                  البذور التلقائية للمناهج والفاصل الزمني
-                </p>
-              </div>
-            </div>
-          </CardHeader>
-
-          <CardContent className="pt-5">
-            <form onSubmit={handleSubmit} className="flex flex-col gap-4">
-              {errorMsg && (
-                <div
-                  role="alert"
-                  className="flex items-start gap-2 rounded-lg border border-red-300 bg-red-50 px-3 py-2.5 text-xs text-red-800 dark:border-red-500/40 dark:bg-red-500/10 dark:text-red-300"
-                >
-                  <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
-                  <span>{errorMsg}</span>
-                </div>
-              )}
-
-              {step === 1 ? (
-                <>
-                  <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                    <Input
-                      label="اسم المدرسة بالعربية"
-                      required
-                      placeholder="مدرسة النهضة الثانوية الرسمية"
-                      value={nameAr}
-                      onChange={(e) => setNameAr(e.target.value)}
-                    />
-                    <Input
-                      label="اسم المدرسة بالإنجليزية"
-                      dir="ltr"
-                      required
-                      placeholder="Al-Nahda Official Secondary School"
-                      value={nameEn}
-                      onChange={(e) => {
-                        const val = e.target.value;
-                        setNameEn(val);
-                        if (!slug) {
-                          setSlug(slugifyEnglish(val));
-                        }
-                      }}
-                    />
+            <CardContent className="pt-5">
+              <form onSubmit={handleSubmit} className="flex flex-col gap-4">
+                {errorMsg && (
+                  <div
+                    role="alert"
+                    className="flex items-start gap-2 rounded-xl border border-red-300 bg-red-50 px-3.5 py-2.5 text-xs font-semibold text-red-800 dark:bg-red-500/10 dark:text-red-300"
+                  >
+                    <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
+                    <span>{errorMsg}</span>
                   </div>
+                )}
 
-                  <div className="flex flex-col gap-1.5">
-                    <div className="flex items-end gap-2">
-                      <Input
-                        label="المعرف الفريد للرابط (Slug)"
-                        dir="ltr"
-                        required
-                        placeholder="al-nahda-secondary"
-                        value={slug}
-                        onChange={(e) => setSlug(e.target.value.toLowerCase())}
-                        containerClassName="flex-1"
-                        hint="يُستخدم في عنوان البوابة: /s/<slug>"
-                      />
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="md"
-                        className="mb-5 min-h-[40px]"
-                        onClick={() => setSlug(slugifyEnglish(nameEn))}
-                      >
-                        توليد تلقائي
-                      </Button>
+                <div className="inline-flex w-fit rounded-xl border border-[var(--border-hairline)] bg-[var(--bg-sunken)] p-1 text-xs">
+                  <button
+                    type="button"
+                    onClick={() => setTenantType("school")}
+                    className={cn(
+                      "min-h-[38px] rounded-lg px-4 font-bold cursor-pointer",
+                      tenantType === "school"
+                        ? "bg-[#0A1F44] text-white dark:bg-blue-600"
+                        : "text-[var(--text-secondary)]"
+                    )}
+                  >
+                    مدرسة رسمية
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setTenantType("center")}
+                    className={cn(
+                      "min-h-[38px] rounded-lg px-4 font-bold cursor-pointer",
+                      tenantType === "center"
+                        ? "bg-[#2563EB] text-white"
+                        : "text-[var(--text-secondary)]"
+                    )}
+                  >
+                    سنتر تعليمي معتمد
+                  </button>
+                </div>
+
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                  <Input
+                    label="الاسم بالعربية"
+                    required
+                    placeholder="مثال: مدرسة النهضة الثانوية"
+                    value={nameAr}
+                    onChange={(e) => setNameAr(e.target.value)}
+                  />
+                  <Input
+                    label="الاسم بالإنجليزية"
+                    required
+                    dir="ltr"
+                    placeholder="Al-Nahda High School"
+                    value={nameEn}
+                    onChange={(e) => {
+                      const v = e.target.value;
+                      setNameEn(v);
+                      if (!slug || slug === slugifyEnglish(nameEn)) {
+                        setSlug(slugifyEnglish(v));
+                      }
+                    }}
+                  />
+                </div>
+
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+                  <Input
+                    label="المعرف الفريد (Slug)"
+                    required
+                    dir="ltr"
+                    placeholder="al-nahda"
+                    value={slug}
+                    onChange={(e) => setSlug(slugifyEnglish(e.target.value))}
+                  />
+                  <Input
+                    label="المحافظة"
+                    required
+                    value={governorate}
+                    onChange={(e) => setGovernorate(e.target.value)}
+                  />
+                  <Input
+                    label="الإدارة التعليمية"
+                    required
+                    value={directorate}
+                    onChange={(e) => setDirectorate(e.target.value)}
+                  />
+                </div>
+
+                <Input
+                  label="رابط الشعار (اختياري)"
+                  dir="ltr"
+                  placeholder="https://... أو /tenants/..."
+                  value={logoUrl}
+                  onChange={(e) => setLogoUrl(e.target.value)}
+                />
+
+                {/* Color Swatches */}
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <div>
+                    <span className="text-xs font-bold text-[var(--text-primary)]">
+                      لون الهوية الرئيسي
+                    </span>
+                    <div className="mt-2 flex gap-2.5">
+                      {BRAND_COLORS.map((hex) => (
+                        <button
+                          key={hex}
+                          type="button"
+                          onClick={() => setBrandColorHex(hex)}
+                          className={cn(
+                            "h-9 w-9 rounded-full border-2 transition-transform cursor-pointer",
+                            brandColorHex === hex
+                              ? "scale-110 border-white ring-2 ring-[#2563EB]"
+                              : "border-transparent"
+                          )}
+                          style={{ backgroundColor: hex }}
+                          aria-label={`اختر اللون ${hex}`}
+                        />
+                      ))}
                     </div>
                   </div>
 
-                  <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                    <Input
-                      label="المحافظة"
-                      required
-                      placeholder="القاهرة"
-                      value={governorate}
-                      onChange={(e) => setGovernorate(e.target.value)}
-                    />
-                    <Input
-                      label="الإدارة التعليمية"
-                      required
-                      placeholder="إدارة شرق مدينة نصر"
-                      value={directorate}
-                      onChange={(e) => setDirectorate(e.target.value)}
-                    />
+                  <div>
+                    <span className="text-xs font-bold text-[var(--text-primary)]">
+                      فاصل الصيانة (دقائق)
+                    </span>
+                    <div className="mt-2 flex gap-1.5">
+                      {BUFFER_PRESETS.map((m) => (
+                        <button
+                          key={m}
+                          type="button"
+                          onClick={() => setDefaultBufferMinutes(m)}
+                          className={cn(
+                            "h-9 rounded-lg border px-2.5 text-xs font-bold cursor-pointer tabular-nums",
+                            defaultBufferMinutes === m
+                              ? "border-[#2563EB] bg-[#2563EB] text-white"
+                              : "border-[var(--border-hairline)] bg-[var(--bg-sunken)] text-[var(--text-secondary)]"
+                          )}
+                        >
+                          {formatArabicNumber(m)} د
+                        </button>
+                      ))}
+                    </div>
                   </div>
+                </div>
 
-                  <div className="flex justify-end pt-2">
-                    <Button
-                      type="button"
-                      variant="primary"
-                      size="lg"
-                      className="min-h-[48px]"
-                      onClick={handleNextStep}
-                      rightIcon={<ArrowLeft className="h-4 w-4" />}
-                    >
-                      التالي: إعداد القالب الأكاديمي
-                    </Button>
-                  </div>
-                </>
-              ) : (
-                <>
-                  {/* Baccalaureate Template Switch Card */}
-                  <div
+                {/* Preset Switches */}
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 pt-1">
+                  <button
+                    type="button"
+                    onClick={() => setWithBaccalaureateTemplate((v) => !v)}
                     className={cn(
-                      "rounded-xl border p-4 transition-colors",
+                      "flex items-center justify-between gap-2 rounded-2xl border p-3.5 text-start cursor-pointer",
                       withBaccalaureateTemplate
-                        ? "border-[#1E3A8A] bg-blue-50/60 dark:border-blue-500 dark:bg-blue-500/10"
+                        ? "border-[#2563EB] bg-blue-50/70 dark:bg-blue-500/15"
                         : "border-[var(--border-hairline)] bg-[var(--bg-sunken)]"
                     )}
                   >
-                    <div className="flex flex-wrap items-center justify-between gap-3">
-                      <div className="flex items-center gap-2.5">
-                        <Sparkles className="h-5 w-5 text-[#1E3A8A] dark:text-blue-400" />
-                        <div>
-                          <p className="text-sm font-bold text-[var(--text-primary)]">
-                            تفعيل قالب البكالوريا المصرية تلقائياً
-                          </p>
-                          <p className="text-xs text-[var(--text-secondary)]">
-                            إنشاء الصف الثاني الثانوي بكالوريا مع ٤ مسارات و ٤ مواد مشتركة فورياً
-                          </p>
-                        </div>
-                      </div>
-
-                      <button
-                        type="button"
-                        role="switch"
-                        aria-checked={withBaccalaureateTemplate}
-                        onClick={() =>
-                          setWithBaccalaureateTemplate((prev) => !prev)
-                        }
-                        className={cn(
-                          "min-h-[40px] rounded-lg border px-4 text-xs font-semibold cursor-pointer",
-                          withBaccalaureateTemplate
-                            ? "border-[#1E3A8A] bg-[#1E3A8A] text-white dark:border-blue-500 dark:bg-blue-600"
-                            : "border-[var(--border-hairline)] bg-[var(--bg-surface)] text-[var(--text-secondary)]"
-                        )}
-                      >
-                        {withBaccalaureateTemplate ? "مفعّل (موصى به)" : "بدون قالب"}
-                      </button>
+                    <div className="flex items-center gap-2.5">
+                      <Sparkles className="h-4 w-4 text-[#2563EB]" />
+                      <span className="text-xs font-bold text-[var(--text-primary)]">
+                        تطبيق قالب البكالوريا
+                      </span>
                     </div>
+                    <Badge variant={withBaccalaureateTemplate ? "primary" : "neutral"}>
+                      {withBaccalaureateTemplate ? "مفعل ✓" : "معطل"}
+                    </Badge>
+                  </button>
 
-                    {withBaccalaureateTemplate && (
-                      <div className="mt-3 grid grid-cols-1 gap-2 border-t border-[var(--border-hairline)] pt-3 sm:grid-cols-2">
-                        {TEMPLATE_TRACKS_PREVIEW.map((t) => (
-                          <div
-                            key={t.code}
-                            className="flex items-center justify-between rounded-md border border-[var(--border-hairline)] bg-[var(--bg-surface)] px-3 py-2 text-xs"
-                          >
-                            <span className="font-semibold text-[var(--text-primary)]">
-                              {t.label}
-                            </span>
-                            <span className="font-mono text-[10px] text-[var(--text-muted)]" dir="ltr">
-                              {t.code}
-                            </span>
-                          </div>
-                        ))}
-                      </div>
+                  <button
+                    type="button"
+                    onClick={() => setWithK12Template((v) => !v)}
+                    className={cn(
+                      "flex items-center justify-between gap-2 rounded-2xl border p-3.5 text-start cursor-pointer",
+                      withK12Template
+                        ? "border-emerald-500 bg-emerald-50/70 dark:bg-emerald-500/15"
+                        : "border-[var(--border-hairline)] bg-[var(--bg-sunken)]"
+                    )}
+                  >
+                    <div className="flex items-center gap-2.5">
+                      <Layers className="h-4 w-4 text-emerald-600" />
+                      <span className="text-xs font-bold text-[var(--text-primary)]">
+                        صفوف K-12 الكاملة
+                      </span>
+                    </div>
+                    <Badge variant={withK12Template ? "success" : "neutral"}>
+                      {withK12Template ? "مفعل ✓" : "معطل"}
+                    </Badge>
+                  </button>
+                </div>
+
+                <Button
+                  type="submit"
+                  variant="primary"
+                  size="lg"
+                  fullWidth
+                  loading={submitting}
+                >
+                  إطلاق البوابة وحفظ المنشأة
+                </Button>
+              </form>
+            </CardContent>
+          </Card>
+
+          {/* Slide 12 Signature Left Column: Real-Time Live Mobile Phone Frame Preview */}
+          <div className="lg:col-span-5 flex flex-col items-center justify-start">
+            <div className="sticky top-6 w-full max-w-[330px] rounded-[2.75rem] border-[8px] border-[#0A1F44] bg-[var(--bg-canvas)] p-4 shadow-[0_24px_60px_-18px_rgba(10,31,68,0.35)]">
+              {/* Notch + Status Indicator */}
+              <div className="mx-auto mb-4 flex w-24 items-center justify-center rounded-full bg-[#0A1F44] py-1">
+                <Smartphone className="h-3 w-3 text-cyan-300" />
+              </div>
+
+              {/* Dynamic Preview Header */}
+              <div
+                className="rounded-2xl p-4 text-white shadow-sm transition-colors"
+                style={{ backgroundColor: brandColorHex }}
+              >
+                <div className="flex items-center gap-3">
+                  <div className="flex h-11 w-11 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-white p-1">
+                    {logoUrl ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img
+                        src={logoUrl}
+                        alt="معاينة"
+                        className="h-full w-full object-contain"
+                      />
+                    ) : (
+                      <Building2 className="h-6 w-6 text-[#0A1F44]" />
                     )}
                   </div>
-
-                  {/* Buffer & Visual Config */}
-                  <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                    <div className="flex flex-col gap-1.5">
-                      <span className="text-xs sm:text-sm font-medium text-[var(--text-primary)]">
-                        فاصل الانتقال الافتراضي بين الحصص (دقيقة)
-                      </span>
-                      <div className="grid grid-cols-4 gap-1.5">
-                        {BUFFER_PRESETS.map((mins) => (
-                          <button
-                            key={mins}
-                            type="button"
-                            onClick={() => setDefaultBufferMinutes(mins)}
-                            className={cn(
-                              "min-h-[44px] rounded-lg border text-xs font-semibold tabular-nums cursor-pointer",
-                              defaultBufferMinutes === mins
-                                ? "border-[#1E3A8A] bg-[#1E3A8A] text-white dark:border-blue-500 dark:bg-blue-600"
-                                : "border-[var(--border-hairline)] bg-[var(--bg-surface)] text-[var(--text-secondary)]"
-                            )}
-                          >
-                            {formatArabicNumber(mins)} د
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-
-                    <div className="flex flex-col gap-1.5">
-                      <span className="text-xs sm:text-sm font-medium text-[var(--text-primary)]">
-                        اللون المؤسسي للمدرسة
-                      </span>
-                      <div className="flex flex-wrap items-center gap-2">
-                        {BRAND_COLORS.map((hex) => (
-                          <button
-                            key={hex}
-                            type="button"
-                            onClick={() => setBrandColorHex(hex)}
-                            className={cn(
-                              "h-9 w-9 rounded-md border-2 cursor-pointer",
-                              brandColorHex === hex
-                                ? "border-slate-900 dark:border-white"
-                                : "border-transparent"
-                            )}
-                            style={{ backgroundColor: hex }}
-                            aria-label={hex}
-                          />
-                        ))}
-                      </div>
-                    </div>
+                  <div className="min-w-0">
+                    <span className="inline-block rounded-md bg-white/20 px-2 py-0.5 text-[10px] font-bold">
+                      {tenantType === "center" ? "سنتر تعليمي معتمد" : "بوابة مدرسة"}
+                    </span>
+                    <p className="mt-1 truncate text-sm font-extrabold">
+                      {nameAr || "اسم المدرسة يظهر هنا"}
+                    </p>
                   </div>
+                </div>
+                <p className="mt-2 flex items-center gap-1 text-[11px] text-white/85">
+                  <MapPin className="h-3 w-3" />
+                  <span>
+                    {governorate || "المحافظة"} · {directorate || "الإدارة"}
+                  </span>
+                </p>
+              </div>
 
-                  <Input
-                    label="رابط شعار المدرسة (اختياري)"
-                    dir="ltr"
-                    placeholder="/tenants/ali-bin-abi-talib/logo.webp"
-                    value={logoUrl}
-                    onChange={(e) => setLogoUrl(e.target.value)}
-                    hint="مسار محلي يبدأ بـ / أو رابط https://"
-                  />
+              {/* Preview Sample Session Cards */}
+              <div className="mt-4 flex flex-col gap-2.5">
+                <div className="flex items-center justify-between text-[11px] font-bold text-[var(--text-muted)]">
+                  <span>معاينة شاشة الطالب</span>
+                  <span dir="ltr" className="font-mono">
+                    /s/{slug || "school"}
+                  </span>
+                </div>
 
-                  <div className="flex flex-wrap items-center justify-between gap-2 border-t border-[var(--border-hairline)] pt-4">
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="md"
-                      className="min-h-[44px]"
-                      onClick={() => setStep(1)}
-                      leftIcon={<ArrowRight className="h-4 w-4" />}
-                    >
-                      السابق
-                    </Button>
-                    <Button
-                      type="submit"
-                      variant="primary"
-                      size="lg"
-                      loading={submitting}
-                      className="min-h-[48px]"
-                      leftIcon={<Layers className="h-4 w-4" />}
-                    >
-                      إنشاء المدرسة وتفعيل البوابة
-                    </Button>
+                <div className="rounded-xl border border-[var(--border-hairline)] bg-[var(--bg-surface)] p-3">
+                  <div className="flex items-center justify-between">
+                    <Badge variant="primary" size="sm">
+                      حصة المراجعة
+                    </Badge>
+                    <Badge variant="info" size="sm">
+                      <Laptop className="h-3 w-3" /> حضوري وأونلاين
+                    </Badge>
                   </div>
-                </>
-              )}
-            </form>
-          </CardContent>
-        </Card>
-      )}
+                  <p className="mt-2 text-xs font-extrabold text-[var(--text-primary)]">
+                    الرياضيات — {withK12Template ? "كافة الصفوف K-12" : "البكالوريا"}
+                  </p>
+                  <div
+                    className="mt-2.5 flex h-8 items-center justify-center rounded-lg text-xs font-bold text-white"
+                    style={{ backgroundColor: brandColorHex }}
+                  >
+                    احجز مقعدك
+                  </div>
+                </div>
 
-      {/* Existing Tenants Reference List */}
-      <Card>
-        <CardHeader className="border-b border-[var(--border-hairline)] pb-3">
-          <div className="flex items-center gap-2">
-            <Building2 className="h-4 w-4 text-[var(--text-muted)]" />
-            <CardTitle className="text-sm">
-              المعرفات المستخدمة حالياً ({formatArabicNumber(existingSchools.length)})
-            </CardTitle>
+                <div className="rounded-xl border border-[var(--border-hairline)] bg-[var(--bg-sunken)] px-3 py-2 text-[11px] text-[var(--text-secondary)]">
+                  إجمالي المنشآت المفعلة حالياً: {formatArabicNumber(existingSchools.length)}
+                </div>
+              </div>
+            </div>
           </div>
-        </CardHeader>
-        <CardContent className="flex flex-wrap gap-2 pt-3">
-          {existingSchools.map((s) => (
-            <Badge key={s.id} variant="mono" dir="ltr">
-              {s.slug}
-            </Badge>
-          ))}
-        </CardContent>
-      </Card>
+        </div>
+      )}
     </div>
   );
 }

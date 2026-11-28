@@ -1,6 +1,9 @@
 import * as React from "react";
 import { getCurrentUserContext } from "@/application/auth/actions";
-import { TopNavbar } from "@/components/layout/TopNavbar";
+import {
+  PortalSidebarShell,
+  type PortalSidebarNavItem,
+} from "@/components/layout/PortalSidebarShell";
 import { getUserRoleLabel } from "@/lib/formatters";
 
 export interface SuperAdminLayoutProps {
@@ -12,30 +15,27 @@ export default async function SuperAdminLayout({
 }: SuperAdminLayoutProps) {
   const userCtx = await getCurrentUserContext().catch(() => null);
 
-  const navLinks = [
-    { href: "/super-admin", label: "النظرة الوطنية" },
-    { href: "/super-admin/schools", label: "المدارس والإنشاء" },
-    { href: "/super-admin/security-logs", label: "سجلات التدقيق" },
-    { href: "/s/ali-bin-abi-talib", label: "بوابة علي بن أبي طالب" },
-  ] as const;
+  const navItems: readonly PortalSidebarNavItem[] = [
+    { href: "/super-admin", label: "النظرة الوطنية", icon: "building" },
+    { href: "/super-admin/schools", label: "إنشاء مدرسة", icon: "plus" },
+    { href: "/super-admin/security-logs", label: "سجلات التدقيق", icon: "shield" },
+    { href: "/s/ali-bin-abi-talib", label: "المدرسة الافتراضية", icon: "home" },
+  ];
 
   return (
-    <div className="min-h-screen bg-[var(--bg-canvas)] text-[var(--text-primary)]">
-      <TopNavbar
-        brandHref="/"
-        links={navLinks}
-        user={
-          userCtx
-            ? {
-                role: userCtx.role,
-                roleLabelAr: getUserRoleLabel(userCtx.role, "ar"),
-                codeLabel: userCtx.fullName,
-              }
-            : null
-        }
-      />
-
-      <main className="mx-auto max-w-7xl px-4 py-6 sm:px-6">{children}</main>
-    </div>
+    <PortalSidebarShell
+      brandSubtitle="المركز الوطني — مُدَرَّج"
+      schoolNameAr="القيادة الوطنية للمنصة"
+      schoolMeta="المدارس · السناتر · الإيرادات"
+      roleBadgeAr={
+        userCtx ? getUserRoleLabel(userCtx.role, "ar") : "مشرف المنصة"
+      }
+      userCodeLabel={userCtx?.fullName ?? null}
+      navItems={navItems}
+      backHref="/"
+      backLabel="الرئيسية"
+    >
+      {children}
+    </PortalSidebarShell>
   );
 }
