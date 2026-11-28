@@ -10,6 +10,7 @@ import {
   CheckCircle2,
   Clock,
   MapPin,
+  PlayCircle,
   Trash2,
 } from "lucide-react";
 import {
@@ -325,25 +326,38 @@ export function StudentPortalClient({
             </div>
           </div>
 
-          {initialData.enrollment ? (
+          <div className="flex flex-wrap items-center gap-2.5">
             <Link
-              href="/onboarding"
+              href={`/s/${schoolSlug}/lectures`}
               className={buttonVariants({
-                variant: "outline",
+                variant: "primary",
                 size: "md",
-                className: "bg-[var(--bg-surface)]/90",
+                className: "gap-2",
               })}
             >
-              تغيير المسار أو البيانات
+              <PlayCircle className="h-4 w-4" />
+              <span>المحاضرات المسجلة</span>
             </Link>
-          ) : isStudentAccount ? (
-            <Link
-              href="/onboarding"
-              className={buttonVariants({ variant: "emerald", size: "lg" })}
-            >
-              اختر مسارك الدراسي أولاً
-            </Link>
-          ) : null}
+            {initialData.enrollment ? (
+              <Link
+                href="/onboarding"
+                className={buttonVariants({
+                  variant: "outline",
+                  size: "md",
+                  className: "bg-[var(--bg-surface)]/90",
+                })}
+              >
+                تغيير المسار أو البيانات
+              </Link>
+            ) : isStudentAccount ? (
+              <Link
+                href="/onboarding"
+                className={buttonVariants({ variant: "emerald", size: "lg" })}
+              >
+                اختر مسارك الدراسي أولاً
+              </Link>
+            ) : null}
+          </div>
         </div>
 
         {!isStudentAccount && (

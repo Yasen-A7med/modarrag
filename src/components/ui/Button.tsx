@@ -16,9 +16,9 @@ export interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElemen
 
 const VARIANT_CLASSES: Readonly<Record<ButtonVariant, string>> = {
   primary:
-    "border border-[#0B63CE] bg-[#0B63CE] text-white hover:bg-[#0950A8] hover:border-[#0950A8] dark:border-blue-500 dark:bg-blue-600 dark:hover:bg-blue-500",
+    "border border-[#2563EB] bg-gradient-to-l from-[#1D4ED8] to-[#2563EB] text-white hover:from-[#1E40AF] hover:to-[#1D4ED8] hover:border-[#1E40AF] dark:border-blue-500 dark:from-blue-600 dark:to-blue-500 dark:hover:from-blue-500 dark:hover:to-blue-400",
   emerald:
-    "border border-[#16A34A] bg-[#16A34A] text-white hover:bg-[#15803D] hover:border-[#15803D] dark:border-emerald-500 dark:bg-emerald-600 dark:hover:bg-emerald-500",
+    "border border-[#16A34A] bg-gradient-to-l from-[#15803D] to-[#16A34A] text-white hover:from-[#166534] hover:to-[#15803D] hover:border-[#166534] dark:border-emerald-500 dark:from-emerald-600 dark:to-emerald-500 dark:hover:from-emerald-500 dark:hover:to-emerald-400",
   secondary:
     "border border-[var(--border-hairline)] bg-[var(--bg-sunken)] text-[var(--text-primary)] hover:border-[var(--border-strong)] hover:bg-slate-200/70 dark:hover:bg-slate-800/80",
   outline:

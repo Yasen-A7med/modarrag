@@ -60,15 +60,23 @@ export default async function SchoolPortalPage({ params }: SchoolPortalPageProps
       description: "تصفّح حصص موادك واحجز مقعدك باسمك بضغطة واحدة",
       ctaLabel: "احجز حصتك",
       artwork: "/images/role-student-3d.webp",
-      accentClass: "border-t-4 border-t-[#16A34A] dark:border-t-emerald-500",
+      accentClass: "border-t-4 border-t-[#2563EB] dark:border-t-blue-500",
+    },
+    {
+      href: `/s/${school.slug}/lectures`,
+      title: "المحاضرات المسجلة",
+      description: "شاهد فيديوهات المراجعة والمحاضرات المرفوعة من معلمي المدرسة",
+      ctaLabel: "مكتبة الفيديو",
+      artwork: "/images/step-attend-3d.webp",
+      accentClass: "border-t-4 border-t-[#0891B2] dark:border-t-cyan-400",
     },
     {
       href: `/s/${school.slug}/teacher`,
       title: "بوابة المعلم",
-      description: "افتح كشف أسماء الطلاب وسجّل الحضور بالاسم أو احجز مدرجاً",
-      ctaLabel: "كشوف الحضور",
+      description: "سجّل الحضور بالاسم، ارفع محاضرات مسجلة، أو احجز مدرجاً",
+      ctaLabel: "كشوف الحضور والفيديو",
       artwork: "/images/role-teacher-3d.webp",
-      accentClass: "border-t-4 border-t-[#0B63CE] dark:border-t-blue-500",
+      accentClass: "border-t-4 border-t-[#16A34A] dark:border-t-emerald-500",
     },
     {
       href: `/s/${school.slug}/admin`,
@@ -83,13 +91,13 @@ export default async function SchoolPortalPage({ params }: SchoolPortalPageProps
   return (
     <div className="flex flex-col gap-6">
       {/* Friendly School Welcome Card with ambient backdrop */}
-      <MotionReveal className="ambient-mesh rounded-3xl border border-[var(--border-hairline)] p-6 hairline-lift">
+      <MotionReveal className="ambient-mesh rounded-3xl border border-[#2563EB]/20 p-6 hairline-lift dark:border-cyan-500/25">
         <div className="flex flex-col gap-5 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex items-center gap-4 min-w-0">
-            <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-2xl border border-[var(--border-hairline)] bg-[var(--bg-surface)] p-2 shadow-xs">
+            <div className="flex h-20 w-20 shrink-0 items-center justify-center rounded-2xl border border-[#0A1F44]/10 bg-white p-1.5 shadow-sm">
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img
-                src={school.logo_url || "/tenants/ali-bin-abi-talib/logo.svg"}
+                src={school.logo_url || "/tenants/ali-bin-abi-talib/logo.webp"}
                 alt={school.name_ar}
                 className="h-full w-full object-contain"
               />
@@ -114,8 +122,8 @@ export default async function SchoolPortalPage({ params }: SchoolPortalPageProps
         </div>
       </MotionReveal>
 
-      {/* 3 Big Clear Doorway Cards with 3D Sculptures */}
-      <MotionStaggerGrid className="grid grid-cols-1 gap-4 md:grid-cols-3">
+      {/* 4 Big Clear Doorway Cards with 3D Sculptures */}
+      <MotionStaggerGrid className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
         {portalDoorways.map((doorway) => (
           <MotionStaggerCard key={doorway.href}>
             <Link

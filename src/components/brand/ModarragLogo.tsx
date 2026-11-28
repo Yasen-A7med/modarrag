@@ -1,3 +1,4 @@
+import Image from "next/image";
 import { cn } from "@/lib/utils";
 
 export interface ModarragLogoProps {
@@ -8,13 +9,13 @@ export interface ModarragLogoProps {
 }
 
 const SIZE_MAP = {
-  sm: { box: "h-9 w-9", title: "text-lg", sub: "text-xs" },
-  md: { box: "h-10 w-10", title: "text-xl", sub: "text-xs" },
-  lg: { box: "h-12 w-12", title: "text-2xl", sub: "text-sm" },
+  sm: { box: "h-10 w-10", imgPx: 40, title: "text-lg", sub: "text-xs" },
+  md: { box: "h-11 w-11", imgPx: 44, title: "text-xl", sub: "text-xs" },
+  lg: { box: "h-14 w-14", imgPx: 56, title: "text-2xl", sub: "text-sm" },
 } as const;
 
 /**
- * Clean geometric stepped-amphitheater mark for Modarrag (مُدَرَّج).
+ * Official Modarrag (مُدَرَّج) emblem mark and Arabic+Latin lockup aligned with brand guidelines.
  */
 export function ModarragLogo({
   size = "md",
@@ -28,47 +29,33 @@ export function ModarragLogo({
     <span className={cn("inline-flex items-center gap-3 select-none", className)}>
       <span
         className={cn(
-          "inline-flex shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-[#254EDB] to-[#0B63CE] text-white shadow-md shadow-blue-900/20 dark:from-[#3B66F5] dark:to-[#1D3FA8]",
+          "inline-flex shrink-0 items-center justify-center overflow-hidden rounded-xl bg-white p-1 shadow-sm ring-1 ring-[#0A1F44]/10 dark:bg-white/95 dark:ring-white/25",
           dims.box
         )}
         aria-hidden="true"
       >
-        <svg viewBox="0 0 32 32" className="h-5 w-5" fill="none">
-          <path
-            d="M5.5 24.5V14.5C5.5 8.701 10.201 4 16 4C21.799 4 26.5 8.701 26.5 14.5V24.5"
-            stroke="currentColor"
-            strokeWidth="2.1"
-            strokeLinecap="round"
-          />
-          <path
-            d="M8.5 24.5H23.5"
-            stroke="currentColor"
-            strokeWidth="2.1"
-            strokeLinecap="round"
-          />
-          <path
-            d="M10.5 20H21.5"
-            stroke="currentColor"
-            strokeOpacity="0.9"
-            strokeWidth="2.1"
-            strokeLinecap="round"
-          />
-          <path
-            d="M13 15.5H19"
-            stroke="#4ADE80"
-            strokeWidth="2.2"
-            strokeLinecap="round"
-          />
-        </svg>
+        <Image
+          src="/images/modarrag-mark.webp"
+          alt="شعار مُدَرَّج"
+          width={dims.imgPx}
+          height={dims.imgPx}
+          priority
+          className="h-full w-full object-contain"
+        />
       </span>
 
       {showWordmark && (
         <span className="flex flex-col leading-tight">
-          <span className={cn("font-bold text-[var(--text-primary)]", dims.title)}>
+          <span
+            className={cn(
+              "font-bold text-[#0A1F44] dark:text-white",
+              dims.title
+            )}
+          >
             مُدَرَّج
           </span>
           {showSubtitle && (
-            <span className={cn("font-medium text-[var(--text-muted)]", dims.sub)}>
+            <span className={cn("font-semibold text-[#2563EB] dark:text-cyan-300", dims.sub)}>
               السنتر المدرسي الرسمي
             </span>
           )}

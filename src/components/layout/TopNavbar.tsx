@@ -98,7 +98,7 @@ export function TopNavbar({
                     <img
                       src={school.logoUrl}
                       alt={school.nameAr}
-                      className="h-5 w-5 shrink-0 rounded-md object-contain"
+                      className="h-6 w-6 shrink-0 rounded-lg bg-white p-0.5 object-contain"
                     />
                   )}
                   <span className="max-w-[220px] truncate">{school.nameAr}</span>

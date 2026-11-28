@@ -3,7 +3,7 @@
 import Image from "next/image";
 import Link from "next/link";
 import { motion } from "framer-motion";
-import { ArrowLeft, CheckCircle2, ShieldCheck, Users } from "lucide-react";
+import { ArrowLeft, CheckCircle2, PlayCircle, ShieldCheck } from "lucide-react";
 import { SPRING_EASE } from "@/components/motion/MotionPrimitives";
 import { buttonVariants } from "@/components/ui/Button";
 
@@ -12,8 +12,8 @@ export interface HeroShowcaseProps {
 }
 
 /**
- * Animated Ruwaq-inspired Hero section featuring frosted 3D amphitheater render,
- * staggered editorial copy, and gently floating safe-capacity reassurance chips.
+ * Animated Hero section featuring the clean 3D amphitheater sculpture,
+ * Logo Idea navy-royal-cyan typography accents, and ultra-clear actions.
  */
 export function HeroShowcase({ schoolSlug }: HeroShowcaseProps) {
   return (
@@ -25,10 +25,10 @@ export function HeroShowcase({ schoolSlug }: HeroShowcaseProps) {
             initial={{ opacity: 0, y: 12 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.36, ease: SPRING_EASE }}
-            className="inline-flex items-center gap-2 rounded-full border border-blue-200/80 bg-[var(--bg-surface)]/90 px-4 py-1.5 text-sm font-semibold text-[#0B63CE] shadow-xs backdrop-blur-sm dark:border-blue-500/35 dark:text-blue-300"
+            className="inline-flex items-center gap-2 rounded-full border border-[#2563EB]/25 bg-[var(--bg-surface)]/95 px-4 py-1.5 text-sm font-bold text-[#0A1F44] shadow-xs backdrop-blur-sm dark:border-cyan-400/35 dark:text-cyan-200"
           >
-            <span className="h-2 w-2 rounded-full bg-teal-500" aria-hidden="true" />
-            <ShieldCheck className="h-4 w-4 shrink-0" />
+            <span className="h-2.5 w-2.5 rounded-full bg-[#22D3EE]" aria-hidden="true" />
+            <ShieldCheck className="h-4 w-4 shrink-0 text-[#2563EB] dark:text-cyan-300" />
             <span>السنتر المدرسي الرسمي الآمن</span>
           </motion.div>
 
@@ -36,10 +36,10 @@ export function HeroShowcase({ schoolSlug }: HeroShowcaseProps) {
             initial={{ opacity: 0, y: 16 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.44, delay: 0.06, ease: SPRING_EASE }}
-            className="mt-5 text-3xl font-bold leading-[1.24] text-[var(--text-primary)] sm:text-4xl lg:text-[2.85rem]"
+            className="mt-5 text-3xl font-bold leading-[1.24] text-[#0A1F44] dark:text-[var(--text-primary)] sm:text-4xl lg:text-[2.85rem]"
           >
             احجز مكانك في مدرج مدرستك{" "}
-            <span className="bg-gradient-to-l from-[#254EDB] to-[#0D9488] bg-clip-text text-transparent dark:from-[#6C8CFF] dark:to-[#2DD4BF]">
+            <span className="bg-gradient-to-l from-[#0A1F44] via-[#2563EB] to-[#0891B2] bg-clip-text text-transparent dark:from-[#60A5FA] dark:via-[#38BDF8] dark:to-[#22D3EE]">
               باسمك وفي ثانية واحدة
             </span>
           </motion.h1>
@@ -50,21 +50,21 @@ export function HeroShowcase({ schoolSlug }: HeroShowcaseProps) {
             transition={{ duration: 0.44, delay: 0.12, ease: SPRING_EASE }}
             className="mt-4 max-w-xl text-base leading-relaxed text-[var(--text-secondary)] sm:text-lg"
           >
-            تنظيم رسمي لحصص المراجعة داخل قاعات المدرسة بسعة آمنة ومعلمين معتمدين — بدون تكدس السناتر، وبدون تذاكر معقدة.
+            تنظيم رسمي لحصص المراجعة والمحاضرات المسجلة داخل قاعات المدرسة بسعة آمنة ومعلمين معتمدين — بدون تكدس السناتر، وبدون تذاكر معقدة.
           </motion.p>
 
           <motion.div
             initial={{ opacity: 0, y: 16 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.44, delay: 0.18, ease: SPRING_EASE }}
-            className="mt-7 flex w-full flex-col gap-3 sm:w-auto sm:flex-row sm:items-center"
+            className="mt-7 flex w-full flex-col gap-3 sm:w-auto sm:flex-row sm:flex-wrap sm:items-center"
           >
             <Link
               href={`/s/${schoolSlug}`}
               className={buttonVariants({
-                variant: "emerald",
+                variant: "primary",
                 size: "lg",
-                className: "w-full sm:w-auto shadow-md shadow-emerald-600/15",
+                className: "w-full sm:w-auto shadow-md shadow-blue-600/20",
               })}
             >
               <span>ابدأ الحجز الآن</span>
@@ -72,11 +72,23 @@ export function HeroShowcase({ schoolSlug }: HeroShowcaseProps) {
             </Link>
 
             <Link
+              href={`/s/${schoolSlug}/lectures`}
+              className={buttonVariants({
+                variant: "emerald",
+                size: "lg",
+                className: "w-full sm:w-auto shadow-md shadow-emerald-600/15",
+              })}
+            >
+              <PlayCircle className="h-5 w-5" />
+              <span>المحاضرات المسجلة</span>
+            </Link>
+
+            <Link
               href="/login"
               className={buttonVariants({
                 variant: "outline",
                 size: "lg",
-                className: "w-full sm:w-auto bg-[var(--bg-surface)]/90 backdrop-blur-sm",
+                className: "w-full sm:w-auto bg-[var(--bg-surface)]/95 backdrop-blur-sm",
               })}
             >
               <span>جرّب الحسابات الجاهزة</span>
@@ -94,13 +106,17 @@ export function HeroShowcase({ schoolSlug }: HeroShowcaseProps) {
               تسجيل حضور بالاسم مباشرة
             </span>
             <span className="inline-flex items-center gap-2">
-              <CheckCircle2 className="h-4 w-4 text-[#16A34A] dark:text-emerald-400" />
+              <CheckCircle2 className="h-4 w-4 text-[#2563EB] dark:text-cyan-400" />
               مقاعد آمنة ومحددة السعة
+            </span>
+            <span className="inline-flex items-center gap-2">
+              <CheckCircle2 className="h-4 w-4 text-[#0891B2] dark:text-teal-400" />
+              محاضرات مسجلة بخصوصية مرنة
             </span>
           </motion.div>
         </div>
 
-        {/* 3D Frosted Amphitheater Visual + Floating Glass Reassurance Chips */}
+        {/* Clean 3D Frosted Amphitheater Visual without distracting floating overlays */}
         <motion.div
           initial={{ opacity: 0, scale: 0.96, y: 14 }}
           animate={{ opacity: 1, scale: 1, y: 0 }}
@@ -118,47 +134,6 @@ export function HeroShowcase({ schoolSlug }: HeroShowcaseProps) {
                 className="h-auto w-full object-cover transition-transform duration-700 ease-out hover:scale-[1.02]"
               />
             </div>
-
-            {/* Floating Chip 1: Safe Organized Capacity */}
-            <motion.div
-              initial={{ opacity: 0, y: 12 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.45, delay: 0.34, ease: SPRING_EASE }}
-              className="float-slow glass-bar hidden sm:flex absolute top-5 start-5 items-center gap-3 rounded-2xl px-3.5 py-2.5"
-            >
-              <span className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-[#254EDB] to-[#0D9488] text-white shadow-xs">
-                <Users className="h-4 w-4" />
-              </span>
-              <div className="min-w-0">
-                <p className="text-xs font-bold text-[var(--text-primary)]">
-                  سعة قاعات آمنة ١٠٠٪
-                </p>
-                <p className="text-[11px] font-medium text-[var(--text-secondary)]">
-                  مقعد مخصص بدون تكدس
-                </p>
-              </div>
-            </motion.div>
-
-            {/* Floating Chip 2: Effortless Name Attendance */}
-            <motion.div
-              initial={{ opacity: 0, y: 12 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.45, delay: 0.44, ease: SPRING_EASE }}
-              className="float-delayed glass-bar hidden sm:flex absolute bottom-5 end-5 items-center gap-3 rounded-2xl px-3.5 py-2.5"
-            >
-              <span className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-emerald-500/15 text-[#16A34A] dark:text-emerald-300">
-                <CheckCircle2 className="h-5 w-5" />
-              </span>
-              <div className="min-w-0">
-                <p className="flex items-center gap-1.5 text-xs font-bold text-[var(--text-primary)]">
-                  <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
-                  <span>الحضور بالاسم فوراً</span>
-                </p>
-                <p className="text-[11px] font-medium text-[var(--text-secondary)]">
-                  بدون تذاكر أو خطوات صعبة
-                </p>
-              </div>
-            </motion.div>
           </div>
         </motion.div>
       </div>

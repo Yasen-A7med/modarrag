@@ -30,7 +30,7 @@ export default async function SchoolSlugLayout({
         nameAr: school.name_ar,
         governorate: school.governorate,
         directorate: school.directorate,
-        logoUrl: school.logo_url || "/tenants/ali-bin-abi-talib/logo.svg",
+        logoUrl: school.logo_url || "/tenants/ali-bin-abi-talib/logo.webp",
         defaultBufferMinutes: school.default_buffer_minutes,
       }}
       userContext={

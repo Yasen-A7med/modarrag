@@ -14,6 +14,7 @@ import {
   Clock,
   ShieldAlert,
   Users,
+  Video,
   XCircle,
 } from "lucide-react";
 import {
@@ -78,7 +79,7 @@ export interface TeacherSubNavProps {
 }
 
 /**
- * Simple 2-button Teacher Workspace switcher (My Classes & Attendance | Book Hall).
+ * Simple 3-button Teacher Workspace switcher (Attendance | Upload Recorded Lectures | Book Hall).
  */
 export function TeacherSubNav({ schoolSlug }: TeacherSubNavProps) {
   const pathname = usePathname();
@@ -90,6 +91,12 @@ export function TeacherSubNav({ schoolSlug }: TeacherSubNavProps) {
       label: "حصصي وكشوف الحضور",
       icon: ClipboardCheck,
       active: pathname === base || pathname.startsWith(`${base}/sessions/`),
+    },
+    {
+      href: `${base}/lectures`,
+      label: "رفع محاضرة مسجلة",
+      icon: Video,
+      active: pathname.startsWith(`${base}/lectures`),
     },
     {
       href: `${base}/book-hall`,

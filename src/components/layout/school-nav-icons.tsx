@@ -8,6 +8,7 @@ import {
   PlusSquare,
   Shield,
   Users,
+  Video,
 } from "lucide-react";
 
 export type SchoolShellNavIcon =
@@ -19,6 +20,7 @@ export type SchoolShellNavIcon =
   | "building"
   | "book"
   | "shield"
+  | "video"
   | "home";
 
 export interface SchoolShellNavItem {
@@ -50,6 +52,8 @@ export function renderSchoolNavIcon(
       return <BookOpen className={className} strokeWidth={2} />;
     case "shield":
       return <Shield className={className} strokeWidth={2} />;
+    case "video":
+      return <Video className={className} strokeWidth={2} />;
     case "home":
     default:
       return <Home className={className} strokeWidth={2} />;

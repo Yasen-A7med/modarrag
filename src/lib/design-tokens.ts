@@ -11,15 +11,17 @@ export const MODARRAG_RADII = {
 } as const;
 
 export const MODARRAG_BRAND = {
-  primary: "#0B63CE",
-  primaryHover: "#0950A8",
+  navy: "#0A1F44",
+  primary: "#2563EB",
+  primaryHover: "#1D4ED8",
+  cyan: "#22D3EE",
   primarySoftLight: "#EEF5FF",
-  primarySoftDark: "rgba(37, 99, 235, 0.16)",
+  primarySoftDark: "rgba(37, 99, 235, 0.18)",
   emerald: "#16A34A",
   emeraldHover: "#15803D",
   accent: "#D97706",
   danger: "#DC2626",
-  info: "#0284C7",
+  info: "#0891B2",
 } as const;
 
 export const MODARRAG_SURFACES = {

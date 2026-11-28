@@ -193,11 +193,11 @@ export async function getTeacherConsoleData(
     status: h.status,
   }));
 
-  // Fetch all school sessions for the next 14 days so the Cal.com grid shows real hall slots & 15m buffers
+  // Fetch recent past 7 days + next 14 days so teachers can manage attendance rosters and Cal.com hall slots
   const now = new Date();
   const twoWeeksLater = new Date(now.getTime() + 14 * 86_400_000);
 
-  const recentCutoff = new Date(now.getTime() - 12 * 3_600_000);
+  const recentCutoff = new Date(now.getTime() - 7 * 86_400_000);
   const { data: sessionsData } = await supabase
     .from("sessions")
     .select(`

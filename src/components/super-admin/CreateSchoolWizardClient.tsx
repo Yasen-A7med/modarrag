@@ -476,7 +476,7 @@ export function CreateSchoolWizardClient({
                   <Input
                     label="رابط شعار المدرسة (اختياري)"
                     dir="ltr"
-                    placeholder="/tenants/ali-bin-abi-talib/logo.svg"
+                    placeholder="/tenants/ali-bin-abi-talib/logo.webp"
                     value={logoUrl}
                     onChange={(e) => setLogoUrl(e.target.value)}
                     hint="مسار محلي يبدأ بـ / أو رابط https://"

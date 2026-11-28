@@ -65,8 +65,8 @@ BEGIN
     'Ali Ibn Abi Talib Boys Secondary School',
     'القاهرة',
     'إدارة المرج التعليمية',
-    '/tenants/ali-bin-abi-talib/logo.svg',
-    '#1E3A8A',
+    '/tenants/ali-bin-abi-talib/logo.webp',
+    '#0A1F44',
     15,
     true
   )

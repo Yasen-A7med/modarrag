@@ -201,6 +201,17 @@ test.describe("Modarrag Redesigned E2E Verification", () => {
       await assertRtlAndNoOverflow(page, "Landing Desktop 1440");
       await assertImagesAndSvgsHealthy(page, "Landing Desktop 1440");
 
+      // Verify the 2 old floating overlay chips on the hero image were removed
+      await expect(page.getByText("سعة قاعات آمنة ١٠٠٪")).toHaveCount(0);
+      await expect(page.getByText("الحضور بالاسم فوراً")).toHaveCount(0);
+
+      // Verify official Modarrag mark + Ali Bin Abi Talib crest image loaded
+      const logoSrcs = await page.evaluate(() =>
+        Array.from(document.querySelectorAll("img")).map((img) => img.getAttribute("src") ?? "")
+      );
+      expect(logoSrcs.some((src) => src.includes("modarrag-mark"))).toBe(true);
+      expect(logoSrcs.some((src) => src.includes("ali-bin-abi-talib/logo"))).toBe(true);
+
       await expect(page.getByText("الموضوع بسيط جداً.. ٣ خطوات فقط")).toBeVisible();
       await expect(page.getByText("احضر باسمك فقط")).toBeVisible();
       await expect(
@@ -508,7 +519,131 @@ test.describe("Modarrag Redesigned E2E Verification", () => {
       await page.goto("/super-admin/security-logs", { waitUntil: "load" });
       await assertRtlAndNoOverflow(page, "Super Admin Security Logs Desktop");
 
+      await page.goto("/login", { waitUntil: "load" });
+      await expect(
+        page.getByRole("button", { name: "المتابعة باستخدام Google" })
+      ).toBeVisible();
+      await page.goto("/register", { waitUntil: "load" });
+      await expect(
+        page.getByRole("button", { name: "التسجيل السريع باستخدام Google" })
+      ).toBeVisible();
+
       assertNoRuntimeErrors(tracker, "Super Admin Console");
+    } finally {
+      tracker.detach();
+    }
+  });
+
+  test("f) Recorded Lectures 3-Tier Access (Upload/Publish -> Hidden Secret Gate -> Delete Cleanup)", async ({
+    page,
+    browser,
+  }) => {
+    const tracker = attachDiagnostics(page);
+    try {
+      await page.setViewportSize({ width: 1440, height: 900 });
+      await loginAsDemoRole(page, "معلم المادة", `/s/${SCHOOL_SLUG}/teacher`);
+
+      await page.goto(`/s/${SCHOOL_SLUG}/teacher/lectures`, { waitUntil: "load" });
+      await assertRtlAndNoOverflow(page, "Teacher Lectures Studio Desktop");
+      await expect(
+        page.getByRole("heading", {
+          name: "رفع المحاضرات المسجلة والتحكم في صلاحية المشاهدة",
+        })
+      ).toBeVisible();
+
+      await page.screenshot({
+        path: shotPath("13-teacher-lectures-studio-1440.png"),
+        fullPage: true,
+      });
+
+      const testTitle = `محاضرة اختبار آلي ${Date.now()}`;
+      const secretPass = "ModPass2026!";
+
+      await page.getByLabel("عنوان المحاضرة").fill(testTitle);
+      await page
+        .getByRole("button", { name: /أو إضافة رابط فيديو كبير/ })
+        .click();
+      await page
+        .getByLabel(/رابط الفيديو الآمن/)
+        .fill("https://www.youtube.com/watch?v=dQw4w9WgXcQ");
+
+      await page
+        .getByRole("button", { name: /سرية ومخفية/ })
+        .click();
+      await page.getByLabel("كلمة مرور المحاضرة السرية").fill(secretPass);
+
+      await page.getByRole("button", { name: "رفع ونشر المحاضرة" }).click();
+      await expect(
+        page.getByText("تم رفع ونشر المحاضرة بنجاح!")
+      ).toBeVisible({ timeout: 20_000 });
+
+      // Grab generated secret link by intercepting clipboard or querying the row card button
+      await page.reload({ waitUntil: "load" });
+      const createdCard = page.locator("article, div").filter({ hasText: testTitle }).first();
+      await expect(createdCard).toBeVisible();
+
+      // Grant clipboard permissions to verify "نسخ الرابط السري" URL works cleanly
+      await page.context().grantPermissions(["clipboard-read", "clipboard-write"]);
+      await page.getByRole("button", { name: "نسخ الرابط السري" }).first().click();
+      const copiedUrl = await page.evaluate(() => navigator.clipboard.readText());
+      expect(copiedUrl).toContain(`/s/${SCHOOL_SLUG}/lectures/`);
+
+      // Verify secret lecture NEVER shows in public school lectures catalog
+      const guestCtx = await browser.newContext();
+      const guestPage = await guestCtx.newPage();
+      await guestPage.setViewportSize({ width: 1440, height: 900 });
+      await guestPage.goto(`/s/${SCHOOL_SLUG}/lectures`, { waitUntil: "load" });
+      await assertRtlAndNoOverflow(guestPage, "Public School Lectures Catalog");
+      expect(await guestPage.locator("body").innerText()).not.toContain(testTitle);
+      await guestPage.screenshot({
+        path: shotPath("14-school-lectures-library-1440.png"),
+        fullPage: true,
+      });
+
+      // Open the hidden secret URL as guest -> wrong password blocked -> right password plays video
+      await guestPage.goto(copiedUrl, { waitUntil: "load" });
+      await assertRtlAndNoOverflow(guestPage, "Secret Lecture Gate");
+      await expect(guestPage.getByText(testTitle)).toBeVisible();
+      await guestPage.getByLabel("أدخل كلمة المرور لفتح المحاضرة").fill("WrongPass999");
+      await guestPage.getByRole("button", { name: "فتح وتشغيل المحاضرة" }).click();
+      await expect(
+        guestPage.getByRole("main").getByText(/كلمة المرور غير صحيحة/)
+      ).toBeVisible({
+        timeout: 15_000,
+      });
+
+      await guestPage.screenshot({
+        path: shotPath("15-secret-lecture-gate-1440.png"),
+        fullPage: true,
+      });
+
+      await guestPage.getByLabel("أدخل كلمة المرور لفتح المحاضرة").fill(secretPass);
+      await guestPage.getByRole("button", { name: "فتح وتشغيل المحاضرة" }).click();
+      await expect(guestPage.getByText("تم فتح المحاضرة السرية")).toBeVisible({
+        timeout: 15_000,
+      });
+      await expect(guestPage.locator("iframe")).toBeVisible();
+      await guestCtx.close();
+
+      // Clean up test lecture(s) via the teacher delete action so DB stays pristine
+      while (
+        (await page.getByRole("button", { name: "حذف" }).count()) > 0
+      ) {
+        const beforeCount = await page.getByRole("button", { name: "حذف" }).count();
+        await page.getByRole("button", { name: "حذف" }).first().click();
+        await page.getByRole("button", { name: "نعم، احذف المحاضرة" }).click();
+        await expect(
+          page.getByText("تم حذف المحاضرة والملف بنجاح").first()
+        ).toBeVisible({
+          timeout: 15_000,
+        });
+        await expect(page.getByRole("button", { name: "حذف" })).toHaveCount(
+          beforeCount - 1,
+          { timeout: 15_000 }
+        );
+      }
+
+      assertNoRuntimeErrors(tracker, "Recorded Lectures E2E Flow");
     } finally {
       tracker.detach();
     }

@@ -16,6 +16,7 @@ import {
   signInDemoRoleAction,
   signInWithPasswordAction,
 } from "@/application/auth/actions";
+import { GoogleSignInButton } from "@/components/auth/GoogleSignInButton";
 import {
   MotionReveal,
   MotionStaggerCard,
@@ -73,7 +74,15 @@ const PRIMARY_DEMO_ROLES: readonly DemoAccountCard[] = [
   },
 ] as const;
 
-export function LoginClient() {
+export interface LoginClientProps {
+  readonly initialGoogleEnabled?: boolean;
+  readonly initialErrorCode?: string | null;
+}
+
+export function LoginClient({
+  initialGoogleEnabled,
+  initialErrorCode,
+}: LoginClientProps = {}) {
   const router = useRouter();
   const { toast } = useToast();
 
@@ -82,7 +91,11 @@ export function LoginClient() {
   const [showPassword, setShowPassword] = React.useState(false);
   const [submitting, setSubmitting] = React.useState(false);
   const [loadingRole, setLoadingRole] = React.useState<DemoRoleKey | null>(null);
-  const [errorMsg, setErrorMsg] = React.useState<string | null>(null);
+  const [errorMsg, setErrorMsg] = React.useState<string | null>(
+    initialErrorCode === "oauth"
+      ? "تعذر إكمال تسجيل الدخول عبر Google. يرجى المحاولة مرة أخرى."
+      : null
+  );
 
   const handlePasswordSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -217,13 +230,23 @@ export function LoginClient() {
         </CardContent>
       </Card>
 
-      {/* Standard Email / Password Sign-In */}
+      {/* Standard Google OAuth & Email / Password Sign-In */}
       <Card>
         <CardHeader className="pb-3">
-          <CardTitle className="text-xl">أو ادخل بحسابك المسجل</CardTitle>
+          <CardTitle className="text-xl">أو ادخل بحسابك الشخصي</CardTitle>
         </CardHeader>
 
-        <CardContent>
+        <CardContent className="flex flex-col gap-4">
+          <GoogleSignInButton initialGoogleEnabled={initialGoogleEnabled} />
+
+          <div className="relative flex items-center py-1">
+            <div className="flex-grow border-t border-[var(--border-hairline)]" />
+            <span className="mx-3 shrink-0 text-xs font-semibold text-[var(--text-muted)]">
+              أو بالبريد الإلكتروني
+            </span>
+            <div className="flex-grow border-t border-[var(--border-hairline)]" />
+          </div>
+
           <form onSubmit={handlePasswordSubmit} className="flex flex-col gap-4">
             {errorMsg && (
               <div

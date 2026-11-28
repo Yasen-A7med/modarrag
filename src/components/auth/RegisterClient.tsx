@@ -15,13 +15,20 @@ import {
   UserCheck,
 } from "lucide-react";
 import { signUpStudentAction } from "@/application/auth/actions";
+import { GoogleSignInButton } from "@/components/auth/GoogleSignInButton";
 import { MotionReveal } from "@/components/motion/MotionPrimitives";
 import { Button } from "@/components/ui/Button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/Card";
 import { Input } from "@/components/ui/Input";
 import { useToast } from "@/components/ui/Toast";
 
-export function RegisterClient() {
+export interface RegisterClientProps {
+  readonly initialGoogleEnabled?: boolean;
+}
+
+export function RegisterClient({
+  initialGoogleEnabled,
+}: RegisterClientProps = {}) {
   const router = useRouter();
   const { toast } = useToast();
 
@@ -93,7 +100,20 @@ export function RegisterClient() {
           </div>
         </CardHeader>
 
-      <CardContent>
+      <CardContent className="flex flex-col gap-4">
+        <GoogleSignInButton
+          label="التسجيل السريع باستخدام Google"
+          initialGoogleEnabled={initialGoogleEnabled}
+        />
+
+        <div className="relative flex items-center py-1">
+          <div className="flex-grow border-t border-[var(--border-hairline)]" />
+          <span className="mx-3 shrink-0 text-xs font-semibold text-[var(--text-muted)]">
+            أو املأ بياناتك يدوياً
+          </span>
+          <div className="flex-grow border-t border-[var(--border-hairline)]" />
+        </div>
+
         <form onSubmit={handleSubmit} className="flex flex-col gap-4">
           {errorMsg && (
             <div

@@ -46,6 +46,7 @@ export function buildDefaultSchoolNavItems(
       return [
         { href: base, label: "المدرسة", icon: "home" },
         { href: `${base}/student`, label: "حصصي", icon: "calendar" },
+        { href: `${base}/lectures`, label: "المحاضرات", icon: "video" },
         { href: "/onboarding", label: "المسار الدراسي", icon: "book" },
       ];
     case "teacher":
@@ -53,24 +54,28 @@ export function buildDefaultSchoolNavItems(
       return [
         { href: base, label: "المدرسة", icon: "home" },
         { href: `${base}/teacher`, label: "كشوف الحضور", icon: "check" },
+        { href: `${base}/teacher/lectures`, label: "رفع محاضرة", icon: "video" },
         { href: `${base}/teacher/book-hall`, label: "حجز قاعة", icon: "plus" },
       ];
     case "school_admin":
       return [
         { href: base, label: "المدرسة", icon: "home" },
         { href: `${base}/admin`, label: "إدارة المدرسة", icon: "building" },
+        { href: `${base}/lectures`, label: "المحاضرات", icon: "video" },
         { href: `${base}/teacher`, label: "الحصص", icon: "calendar" },
       ];
     case "super_admin":
       return [
         { href: base, label: "المدرسة", icon: "home" },
         { href: "/super-admin", label: "لوحة المنصة", icon: "shield" },
+        { href: `${base}/lectures`, label: "المحاضرات", icon: "video" },
         { href: `${base}/admin`, label: "إدارة المدرسة", icon: "building" },
       ];
     default:
       return [
         { href: base, label: "المدرسة", icon: "home" },
         { href: `${base}/student`, label: "الحصص المتاحة", icon: "calendar" },
+        { href: `${base}/lectures`, label: "المحاضرات", icon: "video" },
         { href: "/login", label: "تسجيل الدخول", icon: "shield" },
       ];
   }
@@ -126,7 +131,7 @@ export function SchoolShell({
                   <img
                     src={school.logoUrl}
                     alt={school.nameAr}
-                    className="h-11 w-11 shrink-0 rounded-xl border border-[var(--border-hairline)] bg-[var(--bg-sunken)] p-1 object-contain"
+                    className="h-12 w-12 shrink-0 rounded-xl border border-[#0A1F44]/10 bg-white p-1 object-contain shadow-xs"
                   />
                 )}
                 <div className="min-w-0">

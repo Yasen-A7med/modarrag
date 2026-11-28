@@ -42,6 +42,47 @@ export type NotificationType =
   | "teacher_approved"
   | "system";
 
+export type LectureVisibility = "public" | "attendees_only" | "secret";
+
+export interface SetLectureSecretPasswordRpcResult {
+  readonly ok: boolean;
+  readonly code?: "unauthenticated" | "weak_password" | "not_found" | "forbidden";
+  readonly message_ar?: string;
+}
+
+export type SecretLecturePreviewRpcResult =
+  | { readonly found: false }
+  | {
+      readonly found: true;
+      readonly lecture_id: string;
+      readonly title_ar: string;
+      readonly description_ar: string | null;
+      readonly visibility: LectureVisibility;
+      readonly duration_minutes: number | null;
+      readonly file_size_bytes: number | null;
+      readonly mime_type: string | null;
+      readonly created_at: string;
+      readonly school_name_ar: string;
+      readonly school_slug: string;
+      readonly subject_name_ar: string;
+      readonly teacher_code: string;
+      readonly specialty_ar: string;
+      readonly already_unlocked: boolean;
+    };
+
+export type UnlockSecretLectureRpcResult =
+  | {
+      readonly ok: true;
+      readonly lecture_id: string;
+      readonly storage_path: string | null;
+      readonly external_video_url: string | null;
+    }
+  | {
+      readonly ok: false;
+      readonly code: "not_found" | "invalid_password";
+      readonly message_ar: string;
+    };
+
 export type BookStudentSeatRpcResult =
   | {
       readonly ok: true;
@@ -1052,6 +1093,186 @@ export interface Database {
           },
         ];
       };
+      lectures: {
+        Row: {
+          id: string;
+          school_id: string;
+          subject_id: string;
+          session_id: string | null;
+          teacher_id: string;
+          title_ar: string;
+          description_ar: string | null;
+          visibility: LectureVisibility;
+          file_size_bytes: number | null;
+          mime_type: string | null;
+          duration_minutes: number | null;
+          share_token: string;
+          is_published: boolean;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          school_id: string;
+          subject_id: string;
+          session_id?: string | null;
+          teacher_id: string;
+          title_ar: string;
+          description_ar?: string | null;
+          visibility?: LectureVisibility;
+          file_size_bytes?: number | null;
+          mime_type?: string | null;
+          duration_minutes?: number | null;
+          share_token: string;
+          is_published?: boolean;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          school_id?: string;
+          subject_id?: string;
+          session_id?: string | null;
+          teacher_id?: string;
+          title_ar?: string;
+          description_ar?: string | null;
+          visibility?: LectureVisibility;
+          file_size_bytes?: number | null;
+          mime_type?: string | null;
+          duration_minutes?: number | null;
+          share_token?: string;
+          is_published?: boolean;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "lectures_school_id_fkey";
+            columns: ["school_id"];
+            isOneToOne: false;
+            referencedRelation: "schools";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "lectures_subject_id_fkey";
+            columns: ["subject_id"];
+            isOneToOne: false;
+            referencedRelation: "subjects";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "lectures_session_id_fkey";
+            columns: ["session_id"];
+            isOneToOne: false;
+            referencedRelation: "sessions";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "lectures_teacher_id_fkey";
+            columns: ["teacher_id"];
+            isOneToOne: false;
+            referencedRelation: "profiles";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      lecture_media: {
+        Row: {
+          lecture_id: string;
+          storage_path: string | null;
+          external_video_url: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          lecture_id: string;
+          storage_path?: string | null;
+          external_video_url?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          lecture_id?: string;
+          storage_path?: string | null;
+          external_video_url?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "lecture_media_lecture_id_fkey";
+            columns: ["lecture_id"];
+            isOneToOne: true;
+            referencedRelation: "lectures";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      lecture_secrets: {
+        Row: {
+          lecture_id: string;
+          password_hash: string;
+          updated_at: string;
+        };
+        Insert: {
+          lecture_id: string;
+          password_hash: string;
+          updated_at?: string;
+        };
+        Update: {
+          lecture_id?: string;
+          password_hash?: string;
+          updated_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "lecture_secrets_lecture_id_fkey";
+            columns: ["lecture_id"];
+            isOneToOne: true;
+            referencedRelation: "lectures";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      lecture_access_grants: {
+        Row: {
+          id: string;
+          lecture_id: string;
+          user_id: string;
+          expires_at: string;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          lecture_id: string;
+          user_id: string;
+          expires_at?: string;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          lecture_id?: string;
+          user_id?: string;
+          expires_at?: string;
+          created_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "lecture_access_grants_lecture_id_fkey";
+            columns: ["lecture_id"];
+            isOneToOne: false;
+            referencedRelation: "lectures";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "lecture_access_grants_user_id_fkey";
+            columns: ["user_id"];
+            isOneToOne: false;
+            referencedRelation: "profiles";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
     };
     Views: Record<string, never>;
     Functions: {
@@ -1086,6 +1307,28 @@ export interface Database {
         };
         Returns: CompleteStudentOnboardingRpcResult;
       };
+      set_lecture_secret_password: {
+        Args: {
+          p_lecture_id: string;
+          p_password: string;
+        };
+        Returns: SetLectureSecretPasswordRpcResult;
+      };
+      get_secret_lecture_preview: {
+        Args: {
+          p_school_slug: string;
+          p_share_token: string;
+        };
+        Returns: SecretLecturePreviewRpcResult;
+      };
+      unlock_secret_lecture: {
+        Args: {
+          p_school_slug: string;
+          p_share_token: string;
+          p_password: string;
+        };
+        Returns: UnlockSecretLectureRpcResult;
+      };
     };
     Enums: {
       user_role_enum: UserRole;
@@ -1093,6 +1336,7 @@ export interface Database {
       hall_status_enum: HallStatus;
       session_status_enum: SessionStatus;
       booking_status_enum: BookingStatus;
+      lecture_visibility_enum: LectureVisibility;
     };
     CompositeTypes: Record<string, never>;
   };

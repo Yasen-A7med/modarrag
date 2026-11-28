@@ -368,20 +368,31 @@ export default async function HomePage() {
           </MotionStaggerGrid>
 
           {/* Common Subjects */}
-          <MotionReveal className="mt-5 rounded-3xl border border-[var(--border-hairline)] bg-[var(--bg-surface)] p-5 hairline-lift">
+          <MotionReveal className="mt-5 rounded-3xl border border-[#2563EB]/20 bg-gradient-to-l from-[#EEF5FF]/80 via-[var(--bg-surface)] to-[#ECFEFF]/70 p-5 dark:border-cyan-500/25 dark:from-[#0A1F44]/60 dark:via-[var(--bg-surface)] dark:to-[#083344]/40 hairline-lift">
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-              <span className="text-base font-bold text-[var(--text-primary)]">
+              <span className="text-base font-bold text-[#0A1F44] dark:text-[var(--text-primary)]">
                 المواد المشتركة لجميع الطلاب:
               </span>
               <div className="flex flex-wrap gap-2">
-                {commonSubjects.map((name) => (
-                  <span
-                    key={name}
-                    className="rounded-xl border border-blue-200 bg-[#EEF5FF] px-3.5 py-1.5 text-sm font-semibold text-[#0B63CE] dark:border-blue-500/30 dark:bg-blue-500/15 dark:text-blue-300"
-                  >
-                    {name}
-                  </span>
-                ))}
+                {commonSubjects.map((name, idx) => {
+                  const pillColors = [
+                    "border-blue-200 bg-[#EEF5FF] text-[#1D4ED8] dark:border-blue-500/35 dark:bg-blue-500/15 dark:text-blue-200",
+                    "border-cyan-200 bg-cyan-50 text-cyan-800 dark:border-cyan-500/35 dark:bg-cyan-500/15 dark:text-cyan-200",
+                    "border-emerald-200 bg-emerald-50 text-emerald-800 dark:border-emerald-500/35 dark:bg-emerald-500/15 dark:text-emerald-200",
+                    "border-amber-200 bg-amber-50 text-amber-800 dark:border-amber-500/35 dark:bg-amber-500/15 dark:text-amber-200",
+                  ];
+                  return (
+                    <span
+                      key={name}
+                      className={cn(
+                        "rounded-xl border px-3.5 py-1.5 text-sm font-bold",
+                        pillColors[idx % pillColors.length]
+                      )}
+                    >
+                      {name}
+                    </span>
+                  );
+                })}
               </div>
             </div>
           </MotionReveal>
@@ -390,13 +401,13 @@ export default async function HomePage() {
 
       {/* Active School Callout */}
       <section className="mx-auto max-w-6xl px-4 py-14 sm:px-6 sm:py-16">
-        <MotionReveal className="hover-lift-card ambient-mesh rounded-3xl border border-[var(--border-hairline)] p-6 sm:p-8 hairline-lift">
+        <MotionReveal className="hover-lift-card ambient-mesh rounded-3xl border border-[#2563EB]/20 p-6 sm:p-8 hairline-lift dark:border-cyan-500/25">
           <div className="flex flex-col gap-6 lg:flex-row lg:items-center lg:justify-between">
             <div className="flex items-start gap-4 sm:items-center">
-              <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-2xl border border-[var(--border-hairline)] bg-[var(--bg-surface)] p-2 shadow-xs">
+              <div className="flex h-20 w-20 shrink-0 items-center justify-center rounded-2xl border border-[#0A1F44]/10 bg-white p-1.5 shadow-sm">
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img
-                  src={featuredSchool?.logo_url || "/tenants/ali-bin-abi-talib/logo.svg"}
+                  src={featuredSchool?.logo_url || "/tenants/ali-bin-abi-talib/logo.webp"}
                   alt={schoolNameAr}
                   className="h-full w-full object-contain"
                 />
@@ -415,20 +426,26 @@ export default async function HomePage() {
               </div>
             </div>
 
-            <div className="flex flex-col gap-3 sm:flex-row">
+            <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap">
               <Link
                 href={`/s/${schoolSlug}/student`}
-                className={buttonVariants({ variant: "emerald", size: "lg" })}
+                className={buttonVariants({ variant: "primary", size: "lg" })}
               >
                 <span>بوابة الطالب والحجز</span>
                 <ArrowLeft className="h-5 w-5" />
+              </Link>
+              <Link
+                href={`/s/${schoolSlug}/lectures`}
+                className={buttonVariants({ variant: "emerald", size: "lg" })}
+              >
+                <span>المحاضرات المسجلة</span>
               </Link>
               <Link
                 href={`/s/${schoolSlug}`}
                 className={buttonVariants({
                   variant: "outline",
                   size: "lg",
-                  className: "bg-[var(--bg-surface)]/90",
+                  className: "bg-[var(--bg-surface)]/95",
                 })}
               >
                 <span>صفحة المدرسة</span>
@@ -451,6 +468,9 @@ export default async function HomePage() {
           <nav className="flex flex-wrap gap-5 text-sm font-semibold text-[var(--text-secondary)]">
             <Link href={`/s/${schoolSlug}`} className="hover:text-[var(--text-primary)]">
               بوابة المدرسة
+            </Link>
+            <Link href={`/s/${schoolSlug}/lectures`} className="hover:text-[var(--text-primary)]">
+              المحاضرات المسجلة
             </Link>
             <Link href="/login" className="hover:text-[var(--text-primary)]">
               تسجيل الدخول
